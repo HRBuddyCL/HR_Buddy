@@ -1,0 +1,445 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum RequestType {
+  BUILDING
+  VEHICLE
+  MESSENGER
+  DOCUMENT
+}
+
+enum RequestStatus {
+  NEW
+  APPROVED
+  IN_PROGRESS
+  IN_TRANSIT
+  DONE
+  REJECTED
+  CANCELED
+}
+
+enum Urgency {
+  LOW
+  NORMAL
+  HIGH
+  CRITICAL
+}
+
+enum ActorRole {
+  EMPLOYEE
+  ADMIN
+  MESSENGER
+}
+
+enum ActivityAction {
+  CREATE
+  APPROVE
+  REJECT
+  STATUS_CHANGE
+  CANCEL
+  UPLOAD_ATTACHMENT
+  REPORT_PROBLEM
+  MESSENGER_PICKUP_EVENT
+}
+
+enum FileKind {
+  IMAGE
+  VIDEO
+  DOCUMENT
+}
+
+enum UploadedByRole {
+  EMPLOYEE
+  ADMIN
+}
+
+enum BuildingSide {
+  FRONT
+  BACK
+}
+
+enum ItemType {
+  DOCUMENT
+  PACKAGE
+}
+
+enum DeliveryService {
+  POST
+  NAKHONCHAI_AIR
+  OTHER
+}
+
+enum DeliveryMethod {
+  DIGITAL
+  POSTAL
+  PICKUP
+}
+
+enum RecipientRole {
+  EMPLOYEE
+  ADMIN
+}
+
+enum NotificationEventType {
+  APPROVED
+  REJECTED
+  DONE
+  CANCELED
+  SLA_NEAR
+  SLA_OVERDUE
+  MESSENGER_BOOKED
+  PROBLEM_REPORTED
+}
+
+enum SlaStatus {
+  ON_TRACK
+  NEAR_BREACH
+  OVERDUE
+}
+
+model Department {
+  id       String  @id @default(cuid())
+  name     String  @unique
+  isActive Boolean @default(true)
+
+  requests Request[]
+
+  @@map("departments")
+}
+
+model Request {
+  id        String        @id @default(cuid())
+  requestNo String        @unique @map("request_no")
+  type      RequestType
+  status    RequestStatus
+  urgency   Urgency
+
+  employeeName String     @map("employee_name")
+  departmentId String     @map("department_id")
+  department   Department @relation(fields: [departmentId], references: [id])
+  phone        String
+
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  closedAt         DateTime? @map("closed_at")
+  latestActivityAt DateTime  @default(now()) @map("latest_activity_at")
+  cancelReason     String?   @map("cancel_reason")
+  hrCloseNote      String?   @map("hr_close_note")
+
+  activityLogs RequestActivityLog[]
+  attachments  RequestAttachment[]
+
+  buildingRepairDetail   BuildingRepairDetail?
+  vehicleRepairDetail    VehicleRepairDetail?
+  messengerBookingDetail MessengerBookingDetail?
+  documentRequestDetail  DocumentRequestDetail?
+  magicLink              MagicLink?
+  notifications          Notification[]
+  requestSla             RequestSla?
+
+  @@map("requests")
+}
+
+model Operator {
+  id          String   @id @default(cuid())
+  displayName String   @unique @map("display_name")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  logs RequestActivityLog[]
+
+  @@map("operators")
+}
+
+model RequestActivityLog {
+  id        String  @id @default(cuid())
+  requestId String  @map("request_id")
+  request   Request @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  action     ActivityAction
+  fromStatus RequestStatus? @map("from_status")
+  toStatus   RequestStatus? @map("to_status")
+
+  note      String?
+  actorRole ActorRole @map("actor_role")
+
+  operatorId String?   @map("operator_id")
+  operator   Operator? @relation(fields: [operatorId], references: [id])
+
+  actorDisplayName String?  @map("actor_display_name")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  @@index([requestId, createdAt])
+  @@index([operatorId, createdAt])
+  @@map("request_activity_logs")
+}
+
+model RequestAttachment {
+  id        String  @id @default(cuid())
+  requestId String  @map("request_id")
+  request   Request @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  fileKind   FileKind @map("file_kind")
+  fileName   String   @map("file_name")
+  mimeType   String   @map("mime_type")
+  fileSize   Int      @map("file_size")
+  storageKey String   @map("storage_key")
+  publicUrl  String?  @map("public_url")
+
+  uploadedByRole UploadedByRole @map("uploaded_by_role")
+  createdAt      DateTime       @default(now()) @map("created_at")
+
+  documentDigitalFor DocumentRequestDetail[] @relation("DocumentDigitalFile")
+
+  @@index([requestId, createdAt])
+  @@index([storageKey])
+  @@map("request_attachments")
+}
+
+model ProblemCategory {
+  id         String  @id @default(cuid())
+  name       String
+  helperText String? @map("helper_text")
+  isActive   Boolean @default(true) @map("is_active")
+
+  buildingDetails BuildingRepairDetail[]
+
+  @@unique([name])
+  @@map("problem_categories")
+}
+
+model VehicleIssueCategory {
+  id       String  @id @default(cuid())
+  name     String
+  isActive Boolean @default(true) @map("is_active")
+
+  vehicleDetails VehicleRepairDetail[]
+
+  @@unique([name])
+  @@map("vehicle_issue_categories")
+}
+
+model BuildingRepairDetail {
+  requestId String  @id @map("request_id")
+  request   Request @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  building       BuildingSide
+  floor          Int
+  locationDetail String       @map("location_detail")
+
+  problemCategoryId String          @map("problem_category_id")
+  problemCategory   ProblemCategory @relation(fields: [problemCategoryId], references: [id])
+
+  problemCategoryOther String? @map("problem_category_other")
+  description          String
+  additionalDetails    String? @map("additional_details")
+
+  @@index([problemCategoryId])
+  @@map("building_repair_details")
+}
+
+model VehicleRepairDetail {
+  requestId String  @id @map("request_id")
+  request   Request @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  vehiclePlate String @map("vehicle_plate")
+
+  issueCategoryId String               @map("issue_category_id")
+  issueCategory   VehicleIssueCategory @relation(fields: [issueCategoryId], references: [id])
+
+  issueCategoryOther String? @map("issue_category_other")
+  symptom            String
+  additionalDetails  String? @map("additional_details")
+
+  @@index([issueCategoryId])
+  @@map("vehicle_repair_details")
+}
+
+model Address {
+  id    String @id @default(cuid())
+  name  String
+  phone String
+
+  province    String
+  district    String
+  subdistrict String
+  postalCode  String @map("postal_code")
+
+  houseNo String  @map("house_no")
+  soi     String?
+  road    String?
+  extra   String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  senderForMessenger   MessengerBookingDetail[] @relation("SenderAddress")
+  receiverForMessenger MessengerBookingDetail[] @relation("ReceiverAddress")
+
+  documentDeliveryFor DocumentRequestDetail[] @relation("DocumentDeliveryAddress")
+
+  @@index([province, district, subdistrict])
+  @@index([postalCode])
+  @@map("addresses")
+}
+
+model MessengerBookingDetail {
+  requestId String  @id @map("request_id")
+  request   Request @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  pickupDatetime DateTime @map("pickup_datetime")
+
+  itemType        ItemType @map("item_type")
+  itemDescription String   @map("item_description")
+
+  outsideBkkMetro Boolean @map("outside_bkk_metro")
+
+  deliveryService      DeliveryService? @map("delivery_service")
+  deliveryServiceOther String?          @map("delivery_service_other")
+
+  senderAddressId String  @map("sender_address_id")
+  senderAddress   Address @relation("SenderAddress", fields: [senderAddressId], references: [id])
+
+  receiverAddressId String  @map("receiver_address_id")
+  receiverAddress   Address @relation("ReceiverAddress", fields: [receiverAddressId], references: [id])
+
+  @@index([pickupDatetime])
+  @@index([outsideBkkMetro])
+  @@map("messenger_booking_details")
+}
+
+model DocumentRequestDetail {
+  requestId String  @id @map("request_id")
+  request   Request @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  siteNameRaw        String @map("site_name_raw")
+  siteNameNormalized String @map("site_name_normalized")
+
+  documentDescription String   @map("document_description")
+  purpose             String
+  neededDate          DateTime @map("needed_date")
+
+  deliveryMethod DeliveryMethod @map("delivery_method")
+  note           String?
+
+  // POSTAL
+  deliveryAddressId String?  @map("delivery_address_id")
+  deliveryAddress   Address? @relation("DocumentDeliveryAddress", fields: [deliveryAddressId], references: [id])
+
+  // DIGITAL (ชี้ไป request_attachments ที่ HR อัปโหลด)
+  digitalFileAttachmentId String?            @map("digital_file_attachment_id")
+  digitalFileAttachment   RequestAttachment? @relation("DocumentDigitalFile", fields: [digitalFileAttachmentId], references: [id])
+
+  // PICKUP
+  pickupNote String? @map("pickup_note")
+
+  @@index([deliveryMethod])
+  @@map("document_request_details")
+}
+
+model OtpSession {
+  id          String @id @default(cuid())
+  phone       String
+  email       String
+  otpCodeHash String @map("otp_code_hash")
+
+  expiresAt  DateTime  @map("expires_at")
+  verifiedAt DateTime? @map("verified_at")
+
+  attemptCount Int      @default(0) @map("attempt_count")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([phone, email, createdAt])
+  @@index([expiresAt])
+  @@map("otp_sessions")
+}
+
+model EmployeeAccessSession {
+  id               String @id @default(cuid())
+  phone            String
+  email            String
+  sessionTokenHash String @map("session_token_hash")
+
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([phone, email, expiresAt])
+  @@index([expiresAt])
+  @@map("employee_access_sessions")
+}
+
+model MagicLink {
+  id String @id @default(cuid())
+
+  requestId String  @map("request_id")
+  request   Request @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  tokenHash String   @map("token_hash")
+  expiresAt DateTime @map("expires_at")
+
+  revokedAt  DateTime? @map("revoked_at")
+  lastUsedAt DateTime? @map("last_used_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([requestId])
+  @@unique([tokenHash])
+  @@index([expiresAt])
+  @@map("magic_links")
+}
+
+model Notification {
+  id String @id @default(cuid())
+
+  recipientRole  RecipientRole @map("recipient_role")
+  recipientPhone String?       @map("recipient_phone")
+
+  requestId String?  @map("request_id")
+  request   Request? @relation(fields: [requestId], references: [id], onDelete: SetNull)
+
+  eventType NotificationEventType @map("event_type")
+  title     String
+  message   String
+
+  isRead    Boolean   @default(false) @map("is_read")
+  createdAt DateTime  @default(now()) @map("created_at")
+  readAt    DateTime? @map("read_at")
+
+  @@index([recipientRole, isRead, createdAt])
+  @@index([recipientPhone, isRead, createdAt])
+  @@index([requestId, createdAt])
+  @@map("notifications")
+}
+
+model SlaPolicy {
+  id          String      @id @default(cuid())
+  requestType RequestType @map("request_type")
+  urgency     Urgency
+
+  startWithinMinutes     Int @map("start_within_minutes")
+  resolveWithinMinutes   Int @map("resolve_within_minutes")
+  yellowThresholdPercent Int @map("yellow_threshold_percent")
+
+  isActive Boolean @default(true) @map("is_active")
+
+  @@unique([requestType, urgency, isActive])
+  @@index([requestType, urgency, isActive])
+  @@map("sla_policies")
+}
+
+model RequestSla {
+  requestId String  @id @map("request_id")
+  request   Request @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  slaStartAt       DateTime  @map("sla_start_at")
+  slaDueAt         DateTime  @map("sla_due_at")
+  slaStatus        SlaStatus @map("sla_status")
+  lastCalculatedAt DateTime  @map("last_calculated_at")
+
+  @@index([slaStatus, slaDueAt])
+  @@map("request_sla")
+}
