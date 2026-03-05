@@ -6,6 +6,7 @@ import { GeoModule } from './geo/geo.module';
 import { AppController } from './app.controller';
 import { PrismaModule } from './prisma/prisma.module';
 import { RequestsModule } from './modules/requests/requests.module';
+import { AdminRequestsModule } from './modules/admin-requests/admin-requests.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { RequestsModule } from './modules/requests/requests.module';
     GeoModule,
     PrismaModule,
     RequestsModule,
+    AdminRequestsModule,
   ],
   controllers: [AppController],
 })

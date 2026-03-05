@@ -8,12 +8,11 @@ export async function assertBuildingRefsExist(
   tx: Tx,
   dto: CreateBuildingRequestDto,
 ) {
-  const cat = await tx.problemCategory.findUnique({
+  const exists = await tx.problemCategory.count({
     where: { id: dto.problemCategoryId },
-    select: { id: true },
   });
 
-  if (!cat) {
+  if (!exists) {
     throw new BadRequestException({
       code: 'INVALID_PROBLEM_CATEGORY_ID',
       message: 'Invalid problemCategoryId',
@@ -24,7 +23,7 @@ export async function assertBuildingRefsExist(
 export function assertBuildingOtherRule(dto: CreateBuildingRequestDto) {
   if (
     dto.problemCategoryId === 'pc_other' &&
-    !dto.problemCategoryOther?.trim()
+    (!dto.problemCategoryOther || !dto.problemCategoryOther.trim())
   ) {
     throw new BadRequestException({
       code: 'PROBLEM_CATEGORY_OTHER_REQUIRED',

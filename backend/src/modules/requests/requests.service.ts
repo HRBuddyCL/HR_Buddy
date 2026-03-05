@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import {
   ActivityAction,
   ActorRole,
@@ -320,5 +325,72 @@ export class RequestsService {
         });
       },
     });
+  }
+
+  // -----------------------------
+  // Feature: MY REQUESTS
+  // -----------------------------
+  async getMyRequests(phone: string) {
+    const items = await this.prisma.request.findMany({
+      where: { phone },
+      orderBy: { latestActivityAt: 'desc' },
+      select: {
+        id: true,
+        requestNo: true,
+        type: true,
+        status: true,
+        urgency: true,
+        createdAt: true,
+        latestActivityAt: true,
+        closedAt: true,
+        requestSla: { select: { slaStatus: true, slaDueAt: true } },
+      },
+      take: 100,
+    });
+
+    return { items };
+  }
+
+  // -----------------------------
+  // Feature: REQUEST DETAIL
+  // -----------------------------
+  async getRequestDetail(id: string, phone?: string) {
+    const req = await this.prisma.request.findUnique({
+      where: { id },
+      include: {
+        department: { select: { id: true, name: true } },
+        requestSla: true,
+        attachments: { orderBy: { createdAt: 'asc' } },
+        activityLogs: {
+          orderBy: { createdAt: 'asc' },
+          include: { operator: true },
+        },
+
+        buildingRepairDetail: { include: { problemCategory: true } },
+        vehicleRepairDetail: { include: { issueCategory: true } },
+        messengerBookingDetail: {
+          include: { senderAddress: true, receiverAddress: true },
+        },
+        documentRequestDetail: {
+          include: { deliveryAddress: true, digitalFileAttachment: true },
+        },
+      },
+    });
+
+    if (!req) {
+      throw new NotFoundException({
+        code: 'NOT_FOUND',
+        message: 'Request not found',
+      });
+    }
+
+    if (phone && req.phone !== phone) {
+      throw new ForbiddenException({
+        code: 'FORBIDDEN',
+        message: 'Not your request',
+      });
+    }
+
+    return req;
   }
 }
