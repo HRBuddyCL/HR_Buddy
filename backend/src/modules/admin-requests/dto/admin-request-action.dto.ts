@@ -1,4 +1,4 @@
-import { IsEnum, IsOptional, IsString } from 'class-validator';
+import { IsEnum, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 import { RequestStatus } from '@prisma/client';
 
 export class AdminRequestActionDto {
@@ -9,7 +9,7 @@ export class AdminRequestActionDto {
   @IsString()
   note?: string;
 
-  @IsOptional()
   @IsString()
-  operatorId?: string;
+  @IsNotEmpty()
+  operatorId!: string;
 }

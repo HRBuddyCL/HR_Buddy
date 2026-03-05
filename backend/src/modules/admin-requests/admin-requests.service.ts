@@ -1,4 +1,4 @@
-import { NotFoundException, Injectable } from '@nestjs/common';
+import { BadRequestException, NotFoundException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AdminRequestsQueryDto } from './dto/admin-requests.query.dto';
@@ -121,7 +121,7 @@ export class AdminRequestsService {
     await this.prisma.$transaction(async (tx) => {
       const req = await tx.request.findUnique({
         where: { id },
-        select: { status: true },
+        select: { type: true, status: true },
       });
 
       if (!req) {
@@ -130,8 +130,26 @@ export class AdminRequestsService {
           message: 'Request not found',
         });
       }
+      const operator = await tx.operator.findUnique({
+        where: { id: dto.operatorId },
+        select: { id: true, isActive: true },
+      });
 
-      assertValidTransition(req.status, dto.status);
+      if (!operator) {
+        throw new BadRequestException({
+          code: 'INVALID_OPERATOR_ID',
+          message: 'Invalid operatorId',
+        });
+      }
+
+      if (!operator.isActive) {
+        throw new BadRequestException({
+          code: 'OPERATOR_INACTIVE',
+          message: 'operatorId is inactive',
+        });
+      }
+
+      assertValidTransition(req.type, req.status, dto.status);
 
       await tx.request.update({
         where: { id },
