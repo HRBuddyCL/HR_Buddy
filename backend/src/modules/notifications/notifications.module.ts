@@ -1,0 +1,14 @@
+import { Module } from '@nestjs/common';
+import { PrismaModule } from '../../prisma/prisma.module';
+import { AuthOtpModule } from '../auth-otp/auth-otp.module';
+import { AdminNotificationsController } from './admin-notifications.controller';
+import { NotificationsController } from './notifications.controller';
+import { NotificationsService } from './notifications.service';
+
+@Module({
+  imports: [PrismaModule, AuthOtpModule],
+  controllers: [NotificationsController, AdminNotificationsController],
+  providers: [NotificationsService],
+  exports: [NotificationsService],
+})
+export class NotificationsModule {}

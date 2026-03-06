@@ -28,15 +28,16 @@ import {
 } from './rules/vehicle.rules';
 import { assertMessengerDeliveryRule } from './rules/messenger.rules';
 import { assertDocumentCreateRule } from './rules/document.rules';
+import { NotificationsService } from '../notifications/notifications.service';
 
 function pad2(n: number) {
   return n.toString().padStart(2, '0');
 }
 
 /**
- * NOTE: requestNo ใน schema ไม่มี default
- * ตอนนี้ generate แบบ deterministic-ish ให้ unique พอใช้ dev
- * ถ้าโปรเจคมี format จริง (เช่น HRB-YYYYMM-000123) ค่อยเปลี่ยนทีหลัง
+ * NOTE: requestNo à¹ƒà¸™ schema à¹„à¸¡à¹ˆà¸¡à¸µ default
+ * à¸•à¸­à¸™à¸™à¸µà¹‰ generate à¹à¸šà¸š deterministic-ish à¹ƒà¸«à¹‰ unique à¸žà¸­à¹ƒà¸Šà¹‰ dev
+ * à¸–à¹‰à¸²à¹‚à¸›à¸£à¹€à¸ˆà¸„à¸¡à¸µ format à¸ˆà¸£à¸´à¸‡ (à¹€à¸Šà¹ˆà¸™ HRB-YYYYMM-000123) à¸„à¹ˆà¸­à¸¢à¹€à¸›à¸¥à¸µà¹ˆà¸¢à¸™à¸—à¸µà¸«à¸¥à¸±à¸‡
  */
 function generateRequestNo(now = new Date()) {
   const y = now.getFullYear();
@@ -58,7 +59,10 @@ type DetailCreator = (tx: Tx, requestId: string) => Promise<void>;
 
 @Injectable()
 export class RequestsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificationsService: NotificationsService,
+  ) {}
 
   /**
    * Core transaction creator:
@@ -119,6 +123,17 @@ export class RequestsService {
           actorRole: ActorRole.EMPLOYEE,
         },
       });
+
+      if (type === RequestType.MESSENGER) {
+        await this.notificationsService.notifyAdminMessengerBooked(
+          {
+            requestId: request.id,
+            requestNo: request.requestNo,
+            employeeName: request.employeeName,
+          },
+          tx,
+        );
+      }
 
       // 4) SLA (common)
       const policy = await tx.slaPolicy.findFirst({
@@ -284,7 +299,7 @@ export class RequestsService {
       departmentId: dto.departmentId,
       phone: dto.phone,
       detailCreator: async (tx, requestId) => {
-        // POSTAL: สร้าง address snapshot แล้วผูก deliveryAddressId
+        // POSTAL: à¸ªà¸£à¹‰à¸²à¸‡ address snapshot à¹à¸¥à¹‰à¸§à¸œà¸¹à¸ deliveryAddressId
         let deliveryAddressId: string | null = null;
 
         if (dto.deliveryMethod === 'POSTAL') {
@@ -318,9 +333,9 @@ export class RequestsService {
             deliveryMethod: dto.deliveryMethod,
             note: dto.note ?? null,
 
-            deliveryAddressId, // POSTAL เท่านั้น
-            digitalFileAttachmentId: null, // HR จะอัปโหลดตอน DONE (admin action step ถัดไป)
-            pickupNote: null, // HR จะใส่ตอน DONE (PICKUP)
+            deliveryAddressId, // POSTAL à¹€à¸—à¹ˆà¸²à¸™à¸±à¹‰à¸™
+            digitalFileAttachmentId: null, // HR à¸ˆà¸°à¸­à¸±à¸›à¹‚à¸«à¸¥à¸”à¸•à¸­à¸™ DONE (admin action step à¸–à¸±à¸”à¹„à¸›)
+            pickupNote: null, // HR à¸ˆà¸°à¹ƒà¸ªà¹ˆà¸•à¸­à¸™ DONE (PICKUP)
           },
         });
       },

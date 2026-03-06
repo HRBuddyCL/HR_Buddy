@@ -1,27 +1,29 @@
-import { BadRequestException, NotFoundException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, RequestStatus, RequestType } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { MessengerService } from '../messenger/messenger.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { AdminRequestActionDto } from './dto/admin-request-action.dto';
 import { AdminRequestsQueryDto } from './dto/admin-requests.query.dto';
 import {
   AdminRequestDetailResponse,
   AdminRequestListResponse,
 } from './admin-requests.types';
-import { AdminRequestActionDto } from './dto/admin-request-action.dto';
-import { assertValidTransition } from './rules/request-transition.rules';
-import { updateSlaOnStatusChange } from './rules/sla.rules';
 import { assertDocumentPreconditions } from './rules/document-precondition.rules';
 import {
   assertActionNoteRule,
   isTerminalStatus,
   normalizeNote,
 } from './rules/request-action.rules';
-import { MessengerService } from '../messenger/messenger.service';
+import { assertValidTransition } from './rules/request-transition.rules';
+import { updateSlaOnStatusChange } from './rules/sla.rules';
 
 @Injectable()
 export class AdminRequestsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly messengerService: MessengerService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async list(q: AdminRequestsQueryDto): Promise<AdminRequestListResponse> {
@@ -61,9 +63,7 @@ export class AdminRequestsService {
 
     const skip = (page - 1) * limit;
 
-    const total = await this.prisma.request.count({
-      where,
-    });
+    const total = await this.prisma.request.count({ where });
 
     const items = await this.prisma.request.findMany({
       where,
@@ -86,12 +86,7 @@ export class AdminRequestsService {
       },
     });
 
-    return {
-      items,
-      page,
-      limit,
-      total,
-    };
+    return { items, page, limit, total };
   }
 
   async detail(id: string): Promise<AdminRequestDetailResponse> {
@@ -134,6 +129,8 @@ export class AdminRequestsService {
         select: {
           type: true,
           status: true,
+          requestNo: true,
+          phone: true,
           documentRequestDetail: {
             select: {
               deliveryMethod: true,
@@ -249,10 +246,8 @@ export class AdminRequestsService {
         req.type === RequestType.MESSENGER &&
         dto.status === RequestStatus.APPROVED
       ) {
-        const generated = await this.messengerService.createOrRotateMagicLinkForRequest(
-          tx,
-          id,
-        );
+        const generated =
+          await this.messengerService.createOrRotateMagicLinkForRequest(tx, id);
 
         magicLinkPayload = {
           url: generated.url,
@@ -286,6 +281,17 @@ export class AdminRequestsService {
           note: normalizedNote,
         },
       });
+
+      await this.notificationsService.notifyEmployeeStatusChange(
+        {
+          requestId: id,
+          requestNo: req.requestNo,
+          phone: req.phone,
+          status: dto.status,
+          note: normalizedNote,
+        },
+        tx,
+      );
 
       return {
         id,

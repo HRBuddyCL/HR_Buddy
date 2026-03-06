@@ -5,11 +5,12 @@ import { envValidationSchema } from './config/env.validation';
 import { GeoModule } from './geo/geo.module';
 import { AppController } from './app.controller';
 import { PrismaModule } from './prisma/prisma.module';
-import { RequestsModule } from './modules/requests/requests.module';
 import { AdminRequestsModule } from './modules/admin-requests/admin-requests.module';
-import { ReferenceModule } from './modules/reference/reference.module';
 import { AuthOtpModule } from './modules/auth-otp/auth-otp.module';
 import { MessengerModule } from './modules/messenger/messenger.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
+import { ReferenceModule } from './modules/reference/reference.module';
+import { RequestsModule } from './modules/requests/requests.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { MessengerModule } from './modules/messenger/messenger.module';
     ReferenceModule,
     AuthOtpModule,
     MessengerModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
 })

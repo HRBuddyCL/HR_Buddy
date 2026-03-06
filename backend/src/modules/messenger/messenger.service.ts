@@ -7,17 +7,16 @@ import { ConfigService } from '@nestjs/config';
 import {
   ActivityAction,
   ActorRole,
-  NotificationEventType,
   Prisma,
-  RecipientRole,
   RequestStatus,
   RequestType,
 } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { updateSlaOnStatusChange } from '../admin-requests/rules/sla.rules';
-import { MessengerStatusUpdateDto } from './dto/messenger-status-update.dto';
-import { MessengerProblemReportDto } from './dto/messenger-problem-report.dto';
 import { MessengerPickupEventDto } from './dto/messenger-pickup-event.dto';
+import { MessengerProblemReportDto } from './dto/messenger-problem-report.dto';
+import { MessengerStatusUpdateDto } from './dto/messenger-status-update.dto';
 import {
   assertMessengerTargetStatus,
   assertMessengerTransition,
@@ -52,6 +51,7 @@ export class MessengerService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async getByToken(token: string) {
@@ -137,6 +137,17 @@ export class MessengerService {
         },
       });
 
+      await this.notificationsService.notifyEmployeeStatusChange(
+        {
+          requestId: link.requestId,
+          requestNo: link.request.requestNo,
+          phone: link.request.phone,
+          status: dto.status,
+          note: normalizedNote,
+        },
+        tx,
+      );
+
       return {
         id: link.request.id,
         requestNo: link.request.requestNo,
@@ -172,15 +183,14 @@ export class MessengerService {
         data: { lastUsedAt: now },
       });
 
-      await tx.notification.create({
-        data: {
-          recipientRole: RecipientRole.ADMIN,
+      await this.notificationsService.notifyAdminProblemReported(
+        {
           requestId: link.requestId,
-          eventType: NotificationEventType.PROBLEM_REPORTED,
-          title: 'Messenger reported a problem',
-          message: `Request ${link.request.requestNo}: ${normalizedNote}`,
+          requestNo: link.request.requestNo,
+          note: normalizedNote,
         },
-      });
+        tx,
+      );
 
       return { ok: true };
     });
@@ -287,7 +297,9 @@ export class MessengerService {
     return link;
   }
 
-  private assertLinkActive(link: LinkWithRequestBase | null): asserts link is LinkWithRequestBase {
+  private assertLinkActive(
+    link: LinkWithRequestBase | null,
+  ): asserts link is LinkWithRequestBase {
     if (!link) {
       throw new NotFoundException({
         code: 'MAGIC_LINK_NOT_FOUND',
