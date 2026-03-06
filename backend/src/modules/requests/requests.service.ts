@@ -18,6 +18,7 @@ import { CreateBuildingRequestDto } from './dto/create-building-request.dto';
 import { CreateVehicleRequestDto } from './dto/create-vehicle-request.dto';
 import { CreateMessengerRequestDto } from './dto/create-messenger-request.dto';
 import { CreateDocumentRequestDto } from './dto/create-document-request.dto';
+import { MyRequestsQueryDto } from './dto/my-requests.query.dto';
 import {
   assertBuildingOtherRule,
   assertBuildingRefsExist,
@@ -425,25 +426,62 @@ export class RequestsService {
   // -----------------------------
   // Feature: MY REQUESTS
   // -----------------------------
-  async getMyRequests(phone: string) {
-    const items = await this.prisma.request.findMany({
-      where: { phone },
-      orderBy: { latestActivityAt: 'desc' },
-      select: {
-        id: true,
-        requestNo: true,
-        type: true,
-        status: true,
-        urgency: true,
-        createdAt: true,
-        latestActivityAt: true,
-        closedAt: true,
-        requestSla: { select: { slaStatus: true, slaDueAt: true } },
-      },
-      take: 100,
-    });
+  async getMyRequests(phone: string, q: MyRequestsQueryDto) {
+    const where: Prisma.RequestWhereInput = {
+      phone,
+      ...(q.type ? { type: q.type } : {}),
+      ...(q.status ? { status: q.status } : {}),
+    };
 
-    return { items };
+    const query = q.q?.trim();
+
+    if (query) {
+      where.OR = [
+        { requestNo: { contains: query, mode: 'insensitive' } },
+        { employeeName: { contains: query, mode: 'insensitive' } },
+      ];
+    }
+
+    const MAX_LIMIT = 100;
+    const DEFAULT_LIMIT = 20;
+    const DEFAULT_PAGE = 1;
+
+    const limit = Math.min(q.limit ?? DEFAULT_LIMIT, MAX_LIMIT);
+    const page = q.page ?? DEFAULT_PAGE;
+    const skip = (page - 1) * limit;
+
+    const sortBy = q.sortBy ?? 'latestActivityAt';
+    const sortOrder = q.sortOrder ?? 'desc';
+
+    const [total, items] = await Promise.all([
+      this.prisma.request.count({ where }),
+      this.prisma.request.findMany({
+        where,
+        orderBy: {
+          [sortBy]: sortOrder,
+        },
+        skip,
+        take: limit,
+        select: {
+          id: true,
+          requestNo: true,
+          type: true,
+          status: true,
+          urgency: true,
+          createdAt: true,
+          latestActivityAt: true,
+          closedAt: true,
+          requestSla: { select: { slaStatus: true, slaDueAt: true } },
+        },
+      }),
+    ]);
+
+    return {
+      items,
+      page,
+      limit,
+      total,
+    };
   }
 
   // -----------------------------

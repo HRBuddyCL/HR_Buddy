@@ -5,6 +5,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { CreateAttachmentDto } from '../attachments/dto/create-attachment.dto';
@@ -17,6 +18,7 @@ import { CreateBuildingRequestDto } from './dto/create-building-request.dto';
 import { CreateDocumentRequestDto } from './dto/create-document-request.dto';
 import { CreateMessengerRequestDto } from './dto/create-messenger-request.dto';
 import { CreateVehicleRequestDto } from './dto/create-vehicle-request.dto';
+import { MyRequestsQueryDto } from './dto/my-requests.query.dto';
 import { RequestsService } from './requests.service';
 
 @Controller('requests')
@@ -72,8 +74,11 @@ export class RequestsController {
 
   @UseGuards(EmployeeSessionGuard)
   @Get('my')
-  myRequests(@EmployeeSession() session: EmployeeSessionPrincipal) {
-    return this.requestsService.getMyRequests(session.phone);
+  myRequests(
+    @EmployeeSession() session: EmployeeSessionPrincipal,
+    @Query() q: MyRequestsQueryDto,
+  ) {
+    return this.requestsService.getMyRequests(session.phone, q);
   }
 
   @UseGuards(EmployeeSessionGuard)
