@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../../prisma/prisma.module';
+import { AdminAuthModule } from '../admin-auth/admin-auth.module';
 import { AttachmentsModule } from '../attachments/attachments.module';
 import { MessengerModule } from '../messenger/messenger.module';
 import { NotificationsModule } from '../notifications/notifications.module';
@@ -9,6 +10,7 @@ import { AdminRequestsService } from './admin-requests.service';
 @Module({
   imports: [
     PrismaModule,
+    AdminAuthModule,
     MessengerModule,
     NotificationsModule,
     AttachmentsModule,

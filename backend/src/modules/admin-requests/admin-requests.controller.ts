@@ -1,6 +1,16 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { CreateAttachmentDto } from '../attachments/dto/create-attachment.dto';
 import { AttachmentsService } from '../attachments/attachments.service';
+import { AdminSessionGuard } from '../admin-auth/admin-session.guard';
 import { AdminRequestActionDto } from './dto/admin-request-action.dto';
 import { AdminRequestsQueryDto } from './dto/admin-requests.query.dto';
 import {
@@ -10,6 +20,7 @@ import {
 import { AdminRequestsService } from './admin-requests.service';
 
 @Controller('admin/requests')
+@UseGuards(AdminSessionGuard)
 export class AdminRequestsController {
   constructor(
     private readonly svc: AdminRequestsService,

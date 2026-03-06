@@ -1,7 +1,9 @@
-import { Controller, Get, Post } from '@nestjs/common';
+import { Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { AdminSessionGuard } from '../admin-auth/admin-session.guard';
 import { SlaService } from './sla.service';
 
 @Controller('admin/sla')
+@UseGuards(AdminSessionGuard)
 export class SlaController {
   constructor(private readonly slaService: SlaService) {}
 
