@@ -6,4 +6,14 @@ export default () => ({
     .filter(Boolean),
   otpHashSecret:
     process.env.OTP_HASH_SECRET ?? 'dev-only-change-this-otp-hash-secret',
+  messengerMagicLinkSecret:
+    process.env.MESSENGER_MAGIC_LINK_SECRET ??
+    'dev-only-change-this-messenger-magic-link-secret',
+  messengerMagicLinkTtlHours: parseInt(
+    process.env.MESSENGER_MAGIC_LINK_TTL_HOURS ?? '72',
+    10,
+  ),
+  messengerMagicLinkBaseUrl:
+    process.env.MESSENGER_MAGIC_LINK_BASE_URL ??
+    'http://localhost:3000/messenger',
 });

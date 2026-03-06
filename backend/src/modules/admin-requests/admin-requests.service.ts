@@ -1,5 +1,5 @@
 import { BadRequestException, NotFoundException, Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, RequestStatus, RequestType } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AdminRequestsQueryDto } from './dto/admin-requests.query.dto';
 import {
@@ -15,10 +15,14 @@ import {
   isTerminalStatus,
   normalizeNote,
 } from './rules/request-action.rules';
+import { MessengerService } from '../messenger/messenger.service';
 
 @Injectable()
 export class AdminRequestsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly messengerService: MessengerService,
+  ) {}
 
   async list(q: AdminRequestsQueryDto): Promise<AdminRequestListResponse> {
     const where: Prisma.RequestWhereInput = {};
@@ -124,7 +128,7 @@ export class AdminRequestsService {
   }
 
   async updateStatus(id: string, dto: AdminRequestActionDto) {
-    await this.prisma.$transaction(async (tx) => {
+    return this.prisma.$transaction(async (tx) => {
       const req = await tx.request.findUnique({
         where: { id },
         select: {
@@ -172,7 +176,7 @@ export class AdminRequestsService {
       const normalizedNote = normalizeNote(dto.note);
       assertActionNoteRule(dto.status, normalizedNote);
 
-      if (req.type === 'DOCUMENT') {
+      if (req.type === RequestType.DOCUMENT) {
         const detail = req.documentRequestDetail;
 
         if (!detail) {
@@ -239,6 +243,23 @@ export class AdminRequestsService {
         }
       }
 
+      let magicLinkPayload: { url: string; expiresAt: Date } | null = null;
+
+      if (
+        req.type === RequestType.MESSENGER &&
+        dto.status === RequestStatus.APPROVED
+      ) {
+        const generated = await this.messengerService.createOrRotateMagicLinkForRequest(
+          tx,
+          id,
+        );
+
+        magicLinkPayload = {
+          url: generated.url,
+          expiresAt: generated.expiresAt,
+        };
+      }
+
       await tx.request.update({
         where: { id },
         data: {
@@ -249,6 +270,10 @@ export class AdminRequestsService {
       });
 
       await updateSlaOnStatusChange(tx, id, dto.status);
+
+      if (req.type === RequestType.MESSENGER && isTerminalStatus(dto.status)) {
+        await this.messengerService.revokeMagicLinkForRequest(tx, id);
+      }
 
       await tx.requestActivityLog.create({
         data: {
@@ -261,6 +286,12 @@ export class AdminRequestsService {
           note: normalizedNote,
         },
       });
+
+      return {
+        id,
+        status: dto.status,
+        ...(magicLinkPayload ? { magicLink: magicLinkPayload } : {}),
+      };
     });
   }
 }
