@@ -9,6 +9,7 @@ import {
 import { AdminRequestActionDto } from './dto/admin-request-action.dto';
 import { assertValidTransition } from './rules/request-transition.rules';
 import { updateSlaOnStatusChange } from './rules/sla.rules';
+import { assertDocumentPreconditions } from './rules/document-precondition.rules';
 
 @Injectable()
 export class AdminRequestsService {
@@ -121,7 +122,18 @@ export class AdminRequestsService {
     await this.prisma.$transaction(async (tx) => {
       const req = await tx.request.findUnique({
         where: { id },
-        select: { type: true, status: true },
+        select: {
+          type: true,
+          status: true,
+          documentRequestDetail: {
+            select: {
+              deliveryMethod: true,
+              deliveryAddressId: true,
+              digitalFileAttachmentId: true,
+              pickupNote: true,
+            },
+          },
+        },
       });
 
       if (!req) {
@@ -130,6 +142,7 @@ export class AdminRequestsService {
           message: 'Request not found',
         });
       }
+
       const operator = await tx.operator.findUnique({
         where: { id: dto.operatorId },
         select: { id: true, isActive: true },
@@ -150,6 +163,73 @@ export class AdminRequestsService {
       }
 
       assertValidTransition(req.type, req.status, dto.status);
+
+      if (req.type === 'DOCUMENT') {
+        const detail = req.documentRequestDetail;
+
+        if (!detail) {
+          throw new BadRequestException({
+            code: 'DOCUMENT_DETAIL_NOT_FOUND',
+            message: 'Document detail not found for this request',
+          });
+        }
+
+        let nextDigitalFileAttachmentId = detail.digitalFileAttachmentId;
+        let nextPickupNote = detail.pickupNote;
+
+        if (dto.digitalFileAttachmentId !== undefined) {
+          const attachment = await tx.requestAttachment.findUnique({
+            where: { id: dto.digitalFileAttachmentId },
+            select: { id: true, requestId: true, fileKind: true },
+          });
+
+          if (!attachment || attachment.requestId !== id) {
+            throw new BadRequestException({
+              code: 'INVALID_DIGITAL_FILE_ATTACHMENT_ID',
+              message:
+                'digitalFileAttachmentId must refer to an attachment of this request',
+            });
+          }
+
+          if (attachment.fileKind !== 'DOCUMENT') {
+            throw new BadRequestException({
+              code: 'DIGITAL_FILE_ATTACHMENT_MUST_BE_DOCUMENT',
+              message: 'digitalFileAttachmentId must be a DOCUMENT file kind',
+            });
+          }
+
+          nextDigitalFileAttachmentId = dto.digitalFileAttachmentId;
+        }
+
+        if (dto.pickupNote !== undefined) {
+          nextPickupNote = dto.pickupNote.trim() ? dto.pickupNote.trim() : null;
+        }
+
+        assertDocumentPreconditions({
+          toStatus: dto.status,
+          deliveryMethod: detail.deliveryMethod,
+          deliveryAddressId: detail.deliveryAddressId,
+          digitalFileAttachmentId: nextDigitalFileAttachmentId,
+          pickupNote: nextPickupNote,
+        });
+
+        if (
+          dto.pickupNote !== undefined ||
+          dto.digitalFileAttachmentId !== undefined
+        ) {
+          await tx.documentRequestDetail.update({
+            where: { requestId: id },
+            data: {
+              pickupNote:
+                dto.pickupNote !== undefined ? nextPickupNote : undefined,
+              digitalFileAttachmentId:
+                dto.digitalFileAttachmentId !== undefined
+                  ? nextDigitalFileAttachmentId
+                  : undefined,
+            },
+          });
+        }
+      }
 
       await tx.request.update({
         where: { id },
