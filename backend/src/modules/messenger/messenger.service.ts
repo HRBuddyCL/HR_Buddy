@@ -13,7 +13,6 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
-import { updateSlaOnStatusChange } from '../admin-requests/rules/sla.rules';
 import { MessengerPickupEventDto } from './dto/messenger-pickup-event.dto';
 import { MessengerProblemReportDto } from './dto/messenger-problem-report.dto';
 import { MessengerStatusUpdateDto } from './dto/messenger-status-update.dto';
@@ -115,8 +114,6 @@ export class MessengerService {
           closedAt: dto.status === RequestStatus.DONE ? now : null,
         },
       });
-
-      await updateSlaOnStatusChange(tx, link.requestId, dto.status);
 
       await tx.requestActivityLog.create({
         data: {

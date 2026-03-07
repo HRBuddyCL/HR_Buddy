@@ -1,4 +1,4 @@
-import { RequestStatus, RequestType, SlaStatus, Urgency } from '@prisma/client';
+import { RequestStatus, RequestType, Urgency } from '@prisma/client';
 
 export type AdminRequestListItem = {
   id: string;
@@ -12,7 +12,6 @@ export type AdminRequestListItem = {
   createdAt: Date;
   latestActivityAt: Date;
   closedAt: Date | null;
-  requestSla: { slaStatus: SlaStatus; slaDueAt: Date } | null;
 };
 
 export type AdminRequestListResponse = {
@@ -22,6 +21,20 @@ export type AdminRequestListResponse = {
   total: number;
 };
 
-// detail ให้เป็น unknown ไปก่อน (ดีกว่า any และไม่โดน no-unsafe)
-// เดี๋ยว Step 9–10 ค่อยทำ DTO detail จริง
+export type AdminRequestSummaryResponse = {
+  total: number;
+  byStatus: Record<RequestStatus, number>;
+  byType: Record<RequestType, number>;
+  byDay: Array<{
+    date: string;
+    total: number;
+  }>;
+};
+
+export type AdminRequestCsvExportResult = {
+  fileName: string;
+  rowCount: number;
+  csvContent: string;
+};
+
 export type AdminRequestDetailResponse = unknown;

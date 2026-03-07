@@ -1,10 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
-import {
-  ReferenceListQueryDto,
-  SlaPoliciesQueryDto,
-} from './dto/reference-list.query.dto';
+import { ReferenceListQueryDto } from './dto/reference-list.query.dto';
 
 @Injectable()
 export class ReferenceService {
@@ -116,30 +113,6 @@ export class ReferenceService {
       select: {
         id: true,
         displayName: true,
-        isActive: true,
-      },
-    });
-
-    return { items };
-  }
-
-  async getSlaPolicies(q: SlaPoliciesQueryDto) {
-    const where: Prisma.SlaPolicyWhereInput = {
-      ...this.buildActiveFilter(q.isActive),
-      ...(q.type ? { requestType: q.type } : {}),
-      ...(q.urgency ? { urgency: q.urgency } : {}),
-    };
-
-    const items = await this.prisma.slaPolicy.findMany({
-      where,
-      orderBy: [{ requestType: 'asc' }, { urgency: 'asc' }],
-      select: {
-        id: true,
-        requestType: true,
-        urgency: true,
-        startWithinMinutes: true,
-        resolveWithinMinutes: true,
-        yellowThresholdPercent: true,
         isActive: true,
       },
     });

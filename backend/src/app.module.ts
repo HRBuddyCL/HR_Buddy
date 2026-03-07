@@ -11,7 +11,6 @@ import { MessengerModule } from './modules/messenger/messenger.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { ReferenceModule } from './modules/reference/reference.module';
 import { RequestsModule } from './modules/requests/requests.module';
-import { SlaModule } from './modules/sla/sla.module';
 import { PrismaModule } from './prisma/prisma.module';
 
 @Module({
@@ -30,7 +29,6 @@ import { PrismaModule } from './prisma/prisma.module';
     AuthOtpModule,
     MessengerModule,
     NotificationsModule,
-    SlaModule,
   ],
   controllers: [AppController],
 })

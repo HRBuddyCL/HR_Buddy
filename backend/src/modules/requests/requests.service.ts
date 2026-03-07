@@ -10,7 +10,6 @@ import {
   Prisma,
   RequestStatus,
   RequestType,
-  SlaStatus,
   Urgency,
 } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -33,7 +32,6 @@ import {
   assertEmployeeCancelableStatus,
   normalizeCancelReason,
 } from './rules/cancel-request.rules';
-import { updateSlaOnStatusChange } from '../admin-requests/rules/sla.rules';
 import { MessengerService } from '../messenger/messenger.service';
 import { NotificationsService } from '../notifications/notifications.service';
 
@@ -77,7 +75,6 @@ export class RequestsService {
    * - create Request
    * - call feature detailCreator (create detail table)
    * - create CREATE log
-   * - create SLA
    * - update latestActivityAt
    * - return minimal response
    */
@@ -141,35 +138,7 @@ export class RequestsService {
           tx,
         );
       }
-
-      // 4) SLA (common)
-      const policy = await tx.slaPolicy.findFirst({
-        where: {
-          requestType: type,
-          urgency,
-          isActive: true,
-        },
-        orderBy: { id: 'desc' },
-      });
-
-      const slaStartAt = request.createdAt;
-      const resolveMinutes = policy?.resolveWithinMinutes ?? 0;
-      const slaDueAt =
-        resolveMinutes > 0
-          ? new Date(slaStartAt.getTime() + resolveMinutes * 60_000)
-          : slaStartAt;
-
-      await tx.requestSla.create({
-        data: {
-          requestId: request.id,
-          slaStartAt,
-          slaDueAt,
-          slaStatus: SlaStatus.ON_TRACK,
-          lastCalculatedAt: new Date(),
-        },
-      });
-
-      // 5) latestActivityAt (common)
+      // 4) latestActivityAt (common)
       await tx.request.update({
         where: { id: request.id },
         data: { latestActivityAt: new Date() },
@@ -402,8 +371,6 @@ export class RequestsService {
         },
       });
 
-      await updateSlaOnStatusChange(tx, id, RequestStatus.CANCELED, now);
-
       if (req.type === RequestType.MESSENGER) {
         await this.messengerService.revokeMagicLinkForRequest(tx, id);
       }
@@ -471,7 +438,6 @@ export class RequestsService {
           createdAt: true,
           latestActivityAt: true,
           closedAt: true,
-          requestSla: { select: { slaStatus: true, slaDueAt: true } },
         },
       }),
     ]);
@@ -492,7 +458,6 @@ export class RequestsService {
       where: { id },
       include: {
         department: { select: { id: true, name: true } },
-        requestSla: true,
         attachments: { orderBy: { createdAt: 'asc' } },
         activityLogs: {
           orderBy: { createdAt: 'asc' },
@@ -527,3 +492,5 @@ export class RequestsService {
     return req;
   }
 }
+
+

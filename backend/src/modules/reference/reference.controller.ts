@@ -1,9 +1,6 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { ReferenceService } from './reference.service';
-import {
-  ReferenceListQueryDto,
-  SlaPoliciesQueryDto,
-} from './dto/reference-list.query.dto';
+import { ReferenceListQueryDto } from './dto/reference-list.query.dto';
 
 @Controller('reference')
 export class ReferenceController {
@@ -27,10 +24,5 @@ export class ReferenceController {
   @Get('operators')
   operators(@Query() q: ReferenceListQueryDto) {
     return this.referenceService.getOperators(q);
-  }
-
-  @Get('sla-policies')
-  slaPolicies(@Query() q: SlaPoliciesQueryDto) {
-    return this.referenceService.getSlaPolicies(q);
   }
 }
