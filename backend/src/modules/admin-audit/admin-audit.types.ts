@@ -1,0 +1,35 @@
+import {
+  ActivityAction,
+  ActorRole,
+  RequestStatus,
+  RequestType,
+} from '@prisma/client';
+
+export type AdminAuditLogItem = {
+  id: string;
+  requestId: string;
+  requestNo: string;
+  requestType: RequestType;
+  requestStatus: RequestStatus;
+  action: ActivityAction;
+  fromStatus: RequestStatus | null;
+  toStatus: RequestStatus | null;
+  actorRole: ActorRole;
+  operatorId: string | null;
+  operatorName: string | null;
+  note: string | null;
+  createdAt: Date;
+};
+
+export type AdminAuditLogListResponse = {
+  items: AdminAuditLogItem[];
+  page: number;
+  limit: number;
+  total: number;
+};
+
+export type AdminAuditCsvExportResult = {
+  fileName: string;
+  rowCount: number;
+  csvContent: string;
+};

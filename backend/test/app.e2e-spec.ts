@@ -3,6 +3,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import { AppModule } from './../src/app.module';
 import { AdminRequestsService } from '../src/modules/admin-requests/admin-requests.service';
+import { AdminAuditService } from '../src/modules/admin-audit/admin-audit.service';
 import { AdminSettingsService } from '../src/modules/admin-settings/admin-settings.service';
 import { AttachmentsService } from '../src/modules/attachments/attachments.service';
 import { AuthOtpService } from '../src/modules/auth-otp/auth-otp.service';
@@ -139,6 +140,36 @@ describe('HR Buddy API (e2e)', () => {
     updateStatus: jest.fn(async (id: string) => ({ id, status: 'DONE' })),
   };
 
+  
+  const adminAuditServiceMock = {
+    list: jest.fn(async () => ({
+      items: [
+        {
+          id: 'log-1',
+          requestId: 'req-1',
+          requestNo: 'HRB-20260308-REQ1',
+          requestType: 'BUILDING',
+          requestStatus: 'NEW',
+          action: 'CREATE',
+          fromStatus: null,
+          toStatus: null,
+          actorRole: 'EMPLOYEE',
+          operatorId: null,
+          operatorName: null,
+          note: null,
+          createdAt: new Date('2030-01-01T00:00:00.000Z'),
+        },
+      ],
+      page: 1,
+      limit: 20,
+      total: 1,
+    })),
+    exportCsv: jest.fn(async () => ({
+      fileName: 'audit-activity-export.csv',
+      rowCount: 1,
+      csvContent: 'createdAt,requestNo,action\n2030-01-01T00:00:00.000Z,HRB-20260308-REQ1,CREATE',
+    })),
+  };
   const adminSettingsServiceMock = {
     listDepartments: jest.fn(async () => ({ items: [] })),
     createDepartment: jest.fn(async () => ({
@@ -226,6 +257,8 @@ describe('HR Buddy API (e2e)', () => {
       .useValue(attachmentsServiceMock)
       .overrideProvider(AdminRequestsService)
       .useValue(adminRequestsServiceMock)
+      .overrideProvider(AdminAuditService)
+      .useValue(adminAuditServiceMock)
       .overrideProvider(AdminSettingsService)
       .useValue(adminSettingsServiceMock)
       .overrideProvider(MaintenanceService)
@@ -395,6 +428,7 @@ describe('HR Buddy API (e2e)', () => {
         expect(res.body.name).toBe('HR');
       });
 
+
     await request(app.getHttpServer())
       .get('/admin/requests/export/csv')
       .set('Authorization', `Bearer ${adminToken}`)
@@ -402,6 +436,23 @@ describe('HR Buddy API (e2e)', () => {
       .expect('Content-Type', /text\/csv/)
       .expect((res) => {
         expect(res.text).toContain('requestNo,status');
+      });
+
+    await request(app.getHttpServer())
+      .get('/admin/audit/activity-logs')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(200)
+      .expect((res) => {
+        expect(res.body.total).toBe(1);
+      });
+
+    await request(app.getHttpServer())
+      .get('/admin/audit/activity-logs/export/csv')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(200)
+      .expect('Content-Type', /text\/csv/)
+      .expect((res) => {
+        expect(res.text).toContain('createdAt,requestNo,action');
       });
 
     await request(app.getHttpServer())
@@ -422,3 +473,10 @@ describe('HR Buddy API (e2e)', () => {
       });
   });
 });
+
+
+
+
+
+
+

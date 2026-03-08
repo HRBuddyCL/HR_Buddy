@@ -97,3 +97,9 @@ npx ts-node scripts/seed-dev.ts
 - If client sends x-request-id, backend reuses that value.
 - Access and error logs are emitted as structured JSON events (http_request, http_exception).
 
+
+## Admin Audit APIs
+
+- GET /admin/audit/activity-logs (filter + pagination)
+- GET /admin/audit/activity-logs/export/csv (CSV export for compliance)
+
