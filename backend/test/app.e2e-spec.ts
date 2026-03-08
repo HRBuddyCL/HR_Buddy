@@ -330,13 +330,22 @@ describe('HR Buddy API (e2e)', () => {
   afterAll(async () => {
     await app.close();
   });
+
+  let cachedAdminToken: string | null = null;
+
   const loginAsAdmin = async () => {
+    if (cachedAdminToken) {
+      return cachedAdminToken;
+    }
+
     const response = await request(app.getHttpServer())
       .post('/admin/auth/login')
       .send({ username: 'admin', password: 'admin12345' })
       .expect(201);
 
-    return response.body.sessionToken as string;
+    cachedAdminToken = response.body.sessionToken as string;
+
+    return cachedAdminToken;
   };
 
   it('GET /health returns ok and sets request id header', async () => {
@@ -587,6 +596,109 @@ describe('HR Buddy API (e2e)', () => {
         });
       });
   });
+
+  it('POST /admin/requests/:id/attachments/presign validates body', async () => {
+    const adminToken = await loginAsAdmin();
+
+    await request(app.getHttpServer())
+      .post('/admin/requests/req-1/attachments/presign')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({})
+      .expect(400);
+  });
+
+  it('POST /admin/requests/:id/attachments/presign issues admin upload ticket', async () => {
+    const adminToken = await loginAsAdmin();
+
+    await request(app.getHttpServer())
+      .post('/admin/requests/req-1/attachments/presign')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        fileKind: 'DOCUMENT',
+        fileName: 'admin-proof.pdf',
+        mimeType: 'application/pdf',
+        fileSize: 2048,
+      })
+      .expect(201)
+      .expect((res) => {
+        expect(res.body.uploadToken).toBe('ticket-admin');
+      });
+
+    expect(attachmentsServiceMock.issueAdminUploadTicket).toHaveBeenCalledWith(
+      'req-1',
+      expect.objectContaining({
+        fileKind: 'DOCUMENT',
+        fileName: 'admin-proof.pdf',
+      }),
+    );
+  });
+
+  it('POST /admin/requests/:id/attachments/complete completes admin upload', async () => {
+    const adminToken = await loginAsAdmin();
+
+    await request(app.getHttpServer())
+      .post('/admin/requests/req-1/attachments/complete')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ uploadToken: 'ticket-admin' })
+      .expect(201)
+      .expect((res) => {
+        expect(res.body.id).toBe('att-admin-1');
+      });
+
+    expect(attachmentsServiceMock.completeAdminUpload).toHaveBeenCalledWith(
+      'req-1',
+      expect.objectContaining({ uploadToken: 'ticket-admin' }),
+    );
+  });
+
+  it('GET /admin/settings/departments validates boolean query', async () => {
+    const adminToken = await loginAsAdmin();
+
+    await request(app.getHttpServer())
+      .get('/admin/settings/departments?isActive=maybe')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(400);
+  });
+
+  it('PATCH /admin/settings/departments/:id updates with valid payload', async () => {
+    const adminToken = await loginAsAdmin();
+
+    await request(app.getHttpServer())
+      .patch('/admin/settings/departments/dept-1')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ name: 'Human Resource', isActive: true })
+      .expect(200)
+      .expect((res) => {
+        expect(res.body.id).toBe('dept-1');
+      });
+
+    expect(adminSettingsServiceMock.updateDepartment).toHaveBeenCalledWith(
+      'dept-1',
+      expect.objectContaining({
+        name: 'Human Resource',
+        isActive: true,
+      }),
+    );
+  });
+
+  it('GET /admin/audit/activity-logs validates dateFrom query', async () => {
+    const adminToken = await loginAsAdmin();
+
+    await request(app.getHttpServer())
+      .get('/admin/audit/activity-logs?dateFrom=not-a-date')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(400);
+  });
+
+  it('GET /admin/audit/activity-logs/export/csv validates limit upper bound', async () => {
+    const adminToken = await loginAsAdmin();
+
+    await request(app.getHttpServer())
+      .get('/admin/audit/activity-logs/export/csv?limit=10001')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(400);
+  });
+
   it('admin protected routes reject when session token is missing', async () => {
     await request(app.getHttpServer())
       .post('/admin/settings/departments')
