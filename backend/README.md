@@ -122,6 +122,7 @@ npx ts-node scripts/seed-dev.ts
 - `ABUSE_PROTECTION_POSTGRES_RETRY_AFTER_SECONDS`
 - `ABUSE_PROTECTION_POSTGRES_CLEANUP_INTERVAL_SECONDS`
 - `ABUSE_PROTECTION_POSTGRES_RETENTION_HOURS`
+- `GET /health/ready` verifies postgres store table readiness when `ABUSE_PROTECTION_STORE=postgres`
 
 ## PDPA Maintenance APIs
 

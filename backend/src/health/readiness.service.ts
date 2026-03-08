@@ -16,6 +16,10 @@ export type ReadinessReport = {
   checks: ReadinessCheck[];
 };
 
+type RegClassRow = {
+  tableExists: string | null;
+};
+
 @Injectable()
 export class ReadinessService {
   constructor(
@@ -28,6 +32,7 @@ export class ReadinessService {
       await this.checkDatabase(),
       this.checkOtpProvider(),
       this.checkAttachmentProvider(),
+      await this.checkAbuseProtectionStore(),
       this.checkProductionRuntimeConfig(),
     ];
 
@@ -137,6 +142,56 @@ export class ReadinessService {
       ok: true,
       message: 'attachment storage webhook provider is configured',
     };
+  }
+
+  private async checkAbuseProtectionStore(): Promise<ReadinessCheck> {
+    const enabled = this.config.get<boolean>('abuseProtection.enabled') ?? true;
+
+    if (!enabled) {
+      return {
+        name: 'abuse-protection-store',
+        ok: true,
+        skipped: true,
+        message: 'abuse protection is disabled',
+      };
+    }
+
+    const store = this.config.get<string>('abuseProtection.store') ?? 'memory';
+
+    if (store !== 'postgres') {
+      return {
+        name: 'abuse-protection-store',
+        ok: true,
+        message: `abuse protection store '${store}' is configured`,
+      };
+    }
+
+    try {
+      const rows = await this.prisma.$queryRaw<RegClassRow[]>`
+        SELECT to_regclass('public.abuse_rate_limit_counters') AS "tableExists"
+      `;
+
+      if (!rows[0]?.tableExists) {
+        return {
+          name: 'abuse-protection-store',
+          ok: false,
+          message:
+            'ABUSE_PROTECTION_STORE=postgres but table abuse_rate_limit_counters is missing',
+        };
+      }
+
+      return {
+        name: 'abuse-protection-store',
+        ok: true,
+        message: 'abuse protection postgres store is ready',
+      };
+    } catch {
+      return {
+        name: 'abuse-protection-store',
+        ok: false,
+        message: 'failed to verify abuse protection postgres store',
+      };
+    }
   }
 
   private checkProductionRuntimeConfig(): ReadinessCheck {
