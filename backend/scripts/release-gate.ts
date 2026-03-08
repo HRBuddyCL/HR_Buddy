@@ -29,6 +29,11 @@ async function main() {
 function buildSteps(includeSmoke: boolean): GateStep[] {
   const steps: GateStep[] = [
     {
+      label: 'Prisma generate',
+      command: npmCommand,
+      args: ['run', 'prisma:generate'],
+    },
+    {
       label: 'Build',
       command: npmCommand,
       args: ['run', 'build'],
