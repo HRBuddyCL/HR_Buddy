@@ -92,6 +92,7 @@ npx ts-node scripts/seed-dev.ts
 
 - `GET /health`
 - `GET /health/db`
+- `GET /health/ready` (readiness report + 503 when not ready)
 
 ## Observability Baseline
 

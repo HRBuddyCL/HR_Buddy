@@ -341,6 +341,16 @@ describe('HR Buddy API (e2e)', () => {
       });
   });
 
+  it('GET /health/ready returns readiness report', async () => {
+    await request(app.getHttpServer())
+      .get('/health/ready')
+      .expect(200)
+      .expect((res) => {
+        expect(res.body.ok).toBe(true);
+        expect(res.body).toHaveProperty('checkedAt');
+        expect(Array.isArray(res.body.checks)).toBe(true);
+      });
+  });
   it('POST /auth-otp/send returns otp session payload', async () => {
     await request(app.getHttpServer())
       .post('/auth-otp/send')

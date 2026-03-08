@@ -90,25 +90,31 @@ GET /health
 ```
 Expected: `ok: true`
 
-2. Database health endpoint:
+2. Readiness endpoint:
+```http
+GET /health/ready
+```
+Expected: `ok: true` and all checks healthy
+
+3. Database health endpoint:
 ```http
 GET /health/db
 ```
 Expected: `ok: true`
 
-3. Admin login:
+4. Admin login:
 ```http
 POST /admin/auth/login
 ```
 Expected: 200 and admin session token
 
-4. Employee OTP send (non-production console provider):
+5. Employee OTP send (non-production console provider):
 ```http
 POST /auth-otp/send
 ```
 Expected: 200 with OTP message accepted
 
-5. Admin export endpoint:
+6. Admin export endpoint:
 ```http
 GET /admin/requests/export/csv
 ```

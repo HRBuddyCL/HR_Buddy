@@ -12,6 +12,7 @@ import { RateLimitGuard } from './common/security/rate-limit.guard';
 import configuration from './config/configuration';
 import { envValidationSchema } from './config/env.validation';
 import { GeoModule } from './geo/geo.module';
+import { ReadinessService } from './health/readiness.service';
 import { AdminAuditModule } from './modules/admin-audit/admin-audit.module';
 import { AdminAuthModule } from './modules/admin-auth/admin-auth.module';
 import { AdminRequestsModule } from './modules/admin-requests/admin-requests.module';
@@ -46,6 +47,7 @@ import { PrismaModule } from './prisma/prisma.module';
   ],
   controllers: [AppController],
   providers: [
+    ReadinessService,
     AbuseProtectionService,
     MemoryRateLimitStore,
     PostgresRateLimitStore,

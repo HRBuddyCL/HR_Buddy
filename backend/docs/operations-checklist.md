@@ -6,6 +6,7 @@ Use this checklist to operate HR-Buddy backend in day-to-day production support.
 
 - Verify API liveness:
   - `GET /health`
+  - `GET /health/ready`
   - `GET /health/db`
 - Review admin login success/failure logs
 - Review error logs from OTP delivery pipeline
