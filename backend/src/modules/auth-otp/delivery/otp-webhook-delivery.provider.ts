@@ -4,6 +4,7 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { createWebhookHeaders } from '../../../common/security/webhook-signature.util';
 import {
   OtpDeliveryPayload,
   OtpDeliveryProvider,
@@ -26,9 +27,11 @@ export class OtpWebhookDeliveryProvider implements OtpDeliveryProvider {
     }
 
     const apiKey = this.config.get<string>('otp.webhookApiKey');
+    const signingSecret = this.config.get<string>('otp.webhookSigningSecret');
     const timeoutMs = this.config.get<number>('otp.webhookTimeoutMs') ?? 5000;
     const maxRetries = this.config.get<number>('otp.webhookMaxRetries') ?? 2;
-    const retryDelayMs = this.config.get<number>('otp.webhookRetryDelayMs') ?? 200;
+    const retryDelayMs =
+      this.config.get<number>('otp.webhookRetryDelayMs') ?? 200;
 
     const requestBody = {
       channel: 'email',
@@ -37,6 +40,8 @@ export class OtpWebhookDeliveryProvider implements OtpDeliveryProvider {
       otpCode: payload.otpCode,
       expiresAt: payload.expiresAt.toISOString(),
     };
+
+    const body = JSON.stringify(requestBody);
 
     for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
       const attemptNumber = attempt + 1;
@@ -47,11 +52,12 @@ export class OtpWebhookDeliveryProvider implements OtpDeliveryProvider {
       try {
         const response = await fetch(url, {
           method: 'POST',
-          headers: {
-            'content-type': 'application/json',
-            ...(apiKey ? { authorization: `Bearer ${apiKey}` } : {}),
-          },
-          body: JSON.stringify(requestBody),
+          headers: createWebhookHeaders({
+            apiKey,
+            signingSecret,
+            body,
+          }),
+          body,
           signal: controller.signal,
         });
 

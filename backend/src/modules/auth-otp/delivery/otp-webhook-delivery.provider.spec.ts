@@ -13,6 +13,7 @@ describe('OtpWebhookDeliveryProvider', () => {
   const configValues: Record<string, unknown> = {
     'otp.webhookUrl': 'https://example.com/otp',
     'otp.webhookApiKey': 'secret',
+    'otp.webhookSigningSecret': 'signing-secret-123456',
     'otp.webhookTimeoutMs': 5000,
     'otp.webhookMaxRetries': 2,
     'otp.webhookRetryDelayMs': 0,
@@ -42,6 +43,43 @@ describe('OtpWebhookDeliveryProvider', () => {
     await provider.sendOtp(payload);
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('includes webhook signature headers when signing secret is configured', async () => {
+    const fetchMock = jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce({ ok: true, status: 200 } as Response);
+
+    await provider.sendOtp(payload);
+
+    const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const headers = requestInit.headers as Record<string, string>;
+
+    expect(headers['x-hrbuddy-request-id']).toBeDefined();
+    expect(headers['x-hrbuddy-webhook-timestamp']).toBeDefined();
+    expect(headers['x-hrbuddy-webhook-signature']).toMatch(/^v1=[a-f0-9]{64}$/);
+  });
+
+  it('omits webhook signature headers when signing secret is missing', async () => {
+    (config.get as jest.Mock).mockImplementation((key: string) => {
+      if (key === 'otp.webhookSigningSecret') {
+        return '';
+      }
+
+      return configValues[key];
+    });
+
+    const fetchMock = jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce({ ok: true, status: 200 } as Response);
+
+    await provider.sendOtp(payload);
+
+    const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const headers = requestInit.headers as Record<string, string>;
+
+    expect(headers['x-hrbuddy-webhook-timestamp']).toBeUndefined();
+    expect(headers['x-hrbuddy-webhook-signature']).toBeUndefined();
   });
 
   it('does not retry on non-retryable status', async () => {

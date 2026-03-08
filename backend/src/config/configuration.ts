@@ -21,6 +21,7 @@ export default () => ({
     deliveryProvider: process.env.OTP_DELIVERY_PROVIDER ?? 'console',
     webhookUrl: process.env.OTP_WEBHOOK_URL ?? null,
     webhookApiKey: process.env.OTP_WEBHOOK_API_KEY ?? null,
+    webhookSigningSecret: process.env.OTP_WEBHOOK_SIGNING_SECRET || null,
     webhookTimeoutMs: parseInt(
       process.env.OTP_WEBHOOK_TIMEOUT_MS ?? '5000',
       10,
@@ -134,6 +135,8 @@ export default () => ({
         'http://localhost:3001/storage/mock',
       webhookUrl: process.env.ATTACHMENT_STORAGE_WEBHOOK_URL ?? null,
       webhookApiKey: process.env.ATTACHMENT_STORAGE_WEBHOOK_API_KEY ?? null,
+      webhookSigningSecret:
+        process.env.ATTACHMENT_STORAGE_WEBHOOK_SIGNING_SECRET || null,
       webhookTimeoutMs: parseInt(
         process.env.ATTACHMENT_STORAGE_WEBHOOK_TIMEOUT_MS ?? '5000',
         10,

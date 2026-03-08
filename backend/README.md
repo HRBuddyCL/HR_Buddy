@@ -125,3 +125,13 @@ npx ts-node scripts/seed-dev.ts
 
 - `POST /admin/maintenance/pdpa/requests/:id/anonymize` (request-level anonymization)
 - `POST /admin/maintenance/pdpa/subjects/anonymize` (subject-level anonymization by `phone+email`)
+
+## Webhook Provider Security
+
+- Outbound webhook calls (OTP + attachment storage) include `x-hrbuddy-request-id`.
+- If signing secret is configured, calls also include:
+- `x-hrbuddy-webhook-timestamp`
+- `x-hrbuddy-webhook-signature` (format `v1=<hmac_sha256(timestamp.body)>`)
+- Related env vars:
+- `OTP_WEBHOOK_SIGNING_SECRET`
+- `ATTACHMENT_STORAGE_WEBHOOK_SIGNING_SECRET`

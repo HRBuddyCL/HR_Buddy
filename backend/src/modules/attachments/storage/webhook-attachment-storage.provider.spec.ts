@@ -6,6 +6,7 @@ describe('WebhookAttachmentStorageProvider', () => {
   const configValues: Record<string, unknown> = {
     'attachments.storage.webhookUrl': 'https://example.com/attachments',
     'attachments.storage.webhookApiKey': 'secret',
+    'attachments.storage.webhookSigningSecret': 'signing-secret-123456',
     'attachments.storage.webhookTimeoutMs': 5000,
     'attachments.storage.webhookMaxRetries': 2,
     'attachments.storage.webhookRetryDelayMs': 0,
@@ -44,6 +45,55 @@ describe('WebhookAttachmentStorageProvider', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(result.url).toBe('https://signed.example/upload');
+  });
+
+  it('includes webhook signature headers when signing secret is configured', async () => {
+    const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ url: 'https://signed.example/download' }),
+    } as Response);
+
+    await provider.createDownloadPresign({
+      storageKey: 'requests/req-1/file.pdf',
+      fileName: 'file.pdf',
+      expiresAt: new Date('2030-01-01T00:10:00.000Z'),
+    });
+
+    const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const headers = requestInit.headers as Record<string, string>;
+
+    expect(headers['x-hrbuddy-request-id']).toBeDefined();
+    expect(headers['x-hrbuddy-webhook-timestamp']).toBeDefined();
+    expect(headers['x-hrbuddy-webhook-signature']).toMatch(/^v1=[a-f0-9]{64}$/);
+  });
+
+  it('omits webhook signature headers when signing secret is missing', async () => {
+    (config.get as jest.Mock).mockImplementation((key: string) => {
+      if (key === 'attachments.storage.webhookSigningSecret') {
+        return null;
+      }
+
+      return configValues[key];
+    });
+
+    const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ url: 'https://signed.example/download' }),
+    } as Response);
+
+    await provider.createDownloadPresign({
+      storageKey: 'requests/req-1/file.pdf',
+      fileName: 'file.pdf',
+      expiresAt: new Date('2030-01-01T00:10:00.000Z'),
+    });
+
+    const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const headers = requestInit.headers as Record<string, string>;
+
+    expect(headers['x-hrbuddy-webhook-timestamp']).toBeUndefined();
+    expect(headers['x-hrbuddy-webhook-signature']).toBeUndefined();
   });
 
   it('does not retry on non-retryable status', async () => {

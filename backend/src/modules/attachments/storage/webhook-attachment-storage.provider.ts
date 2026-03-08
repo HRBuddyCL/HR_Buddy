@@ -4,6 +4,7 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { createWebhookHeaders } from '../../../common/security/webhook-signature.util';
 import {
   AttachmentDownloadPresign,
   AttachmentStorageProvider,
@@ -18,9 +19,7 @@ type WebhookResponse = {
 };
 
 @Injectable()
-export class WebhookAttachmentStorageProvider
-  implements AttachmentStorageProvider
-{
+export class WebhookAttachmentStorageProvider implements AttachmentStorageProvider {
   private readonly logger = new Logger(WebhookAttachmentStorageProvider.name);
 
   constructor(private readonly config: ConfigService) {}
@@ -82,10 +81,15 @@ export class WebhookAttachmentStorageProvider
     const timeoutMs =
       this.config.get<number>('attachments.storage.webhookTimeoutMs') ?? 5000;
     const apiKey = this.config.get<string>('attachments.storage.webhookApiKey');
+    const signingSecret = this.config.get<string>(
+      'attachments.storage.webhookSigningSecret',
+    );
     const maxRetries =
       this.config.get<number>('attachments.storage.webhookMaxRetries') ?? 2;
     const retryDelayMs =
       this.config.get<number>('attachments.storage.webhookRetryDelayMs') ?? 200;
+
+    const body = JSON.stringify(payload);
 
     for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
       const attemptNumber = attempt + 1;
@@ -96,11 +100,12 @@ export class WebhookAttachmentStorageProvider
       try {
         const response = await fetch(url, {
           method: 'POST',
-          headers: {
-            'content-type': 'application/json',
-            ...(apiKey ? { authorization: `Bearer ${apiKey}` } : {}),
-          },
-          body: JSON.stringify(payload),
+          headers: createWebhookHeaders({
+            apiKey,
+            signingSecret,
+            body,
+          }),
+          body,
           signal: controller.signal,
         });
 
