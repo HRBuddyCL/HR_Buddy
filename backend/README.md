@@ -80,6 +80,7 @@ npm.cmd run lint
 ## Release Gate
 
 - `npm.cmd run release:gate` runs build + unit tests + e2e tests in sequence.
+- GitHub Actions workflow `Backend Release Gate` also runs the same `release:gate` command on backend PR/push.
 - To include smoke checks in the same gate, set `RELEASE_GATE_INCLUDE_SMOKE=true` and required smoke envs (at minimum `SMOKE_ADMIN_PASSWORD`).
 
 ## Optional Dev Seed
