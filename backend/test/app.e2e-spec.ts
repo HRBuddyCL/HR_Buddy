@@ -8,6 +8,7 @@ import { AdminSettingsService } from '../src/modules/admin-settings/admin-settin
 import { AttachmentsService } from '../src/modules/attachments/attachments.service';
 import { AuthOtpService } from '../src/modules/auth-otp/auth-otp.service';
 import { MaintenanceService } from '../src/modules/maintenance/maintenance.service';
+import { MessengerService } from '../src/modules/messenger/messenger.service';
 import { RequestsService } from '../src/modules/requests/requests.service';
 
 describe('HR Buddy API (e2e)', () => {
@@ -250,7 +251,27 @@ describe('HR Buddy API (e2e)', () => {
       deleted: { employeeSessions: 1, otpSessions: 1 },
     })),
   };
-
+  const messengerServiceMock = {
+    getByToken: jest.fn(async (token: string) => ({
+      requestId: 'req-1',
+      requestNo: 'HRB-20260308-REQ1',
+      token,
+      status: 'APPROVED',
+      pickupDatetime: new Date('2030-01-01T08:00:00.000Z'),
+    })),
+    updateStatus: jest.fn(async () => ({
+      id: 'req-1',
+      status: 'IN_TRANSIT',
+    })),
+    reportProblem: jest.fn(async () => ({
+      id: 'req-1',
+      status: 'IN_TRANSIT',
+    })),
+    pickupEvent: jest.fn(async () => ({
+      id: 'req-1',
+      status: 'IN_TRANSIT',
+    })),
+  };
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
@@ -269,6 +290,8 @@ describe('HR Buddy API (e2e)', () => {
       .useValue(adminSettingsServiceMock)
       .overrideProvider(MaintenanceService)
       .useValue(maintenanceServiceMock)
+      .overrideProvider(MessengerService)
+      .useValue(messengerServiceMock)
       .compile();
 
     app = moduleFixture.createNestApplication();
@@ -401,7 +424,50 @@ describe('HR Buddy API (e2e)', () => {
       .send({})
       .expect(400);
   });
+  it('GET /messenger/link/:token returns magic link payload', async () => {
+    await request(app.getHttpServer())
+      .get('/messenger/link/token-abc')
+      .expect(200)
+      .expect((res) => {
+        expect(res.body.requestNo).toBe('HRB-20260308-REQ1');
+      });
 
+    expect(messengerServiceMock.getByToken).toHaveBeenCalledWith('token-abc');
+  });
+
+  it('PATCH /messenger/link/:token/status validates status enum', async () => {
+    await request(app.getHttpServer())
+      .patch('/messenger/link/token-abc/status')
+      .send({ status: 'INVALID_STATUS' })
+      .expect(400);
+  });
+
+  it('PATCH /messenger/link/:token/status updates status', async () => {
+    await request(app.getHttpServer())
+      .patch('/messenger/link/token-abc/status')
+      .send({ status: 'IN_TRANSIT', note: 'Picked up package' })
+      .expect(200)
+      .expect((res) => {
+        expect(res.body.status).toBe('IN_TRANSIT');
+      });
+  });
+
+  it('POST /messenger/link/:token/report-problem validates body', async () => {
+    await request(app.getHttpServer())
+      .post('/messenger/link/token-abc/report-problem')
+      .send({})
+      .expect(400);
+  });
+
+  it('POST /messenger/link/:token/pickup-event accepts optional note', async () => {
+    await request(app.getHttpServer())
+      .post('/messenger/link/token-abc/pickup-event')
+      .send({ note: 'Package received at front desk' })
+      .expect(201)
+      .expect((res) => {
+        expect(res.body.id).toBe('req-1');
+      });
+  });
   it('admin protected routes reject when session token is missing', async () => {
     await request(app.getHttpServer())
       .post('/admin/settings/departments')
@@ -432,6 +498,14 @@ describe('HR Buddy API (e2e)', () => {
       .expect(201)
       .expect((res) => {
         expect(res.body.name).toBe('HR');
+      });
+
+    await request(app.getHttpServer())
+      .get('/admin/requests/report/summary')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(200)
+      .expect((res) => {
+        expect(res.body.total).toBe(0);
       });
 
     await request(app.getHttpServer())
