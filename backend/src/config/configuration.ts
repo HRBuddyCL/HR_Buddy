@@ -37,6 +37,7 @@ export default () => ({
     process.env.REQUEST_DEDUPE_WINDOW_SECONDS ?? '30',
     10,
   ),
+  requestCreateUseDbLock: process.env.REQUEST_CREATE_USE_DB_LOCK !== 'false',
   abuseProtection: {
     enabled: process.env.ABUSE_PROTECTION_ENABLED !== 'false',
     store: process.env.ABUSE_PROTECTION_STORE ?? 'memory',

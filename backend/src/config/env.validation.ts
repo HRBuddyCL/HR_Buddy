@@ -32,6 +32,7 @@ export const envValidationSchema = Joi.object({
   OTP_WEBHOOK_RETRY_DELAY_MS: Joi.number().integer().min(0).default(200),
 
   REQUEST_DEDUPE_WINDOW_SECONDS: Joi.number().integer().min(0).default(30),
+  REQUEST_CREATE_USE_DB_LOCK: Joi.boolean().default(true),
 
   ABUSE_PROTECTION_ENABLED: Joi.boolean().default(true),
   ABUSE_PROTECTION_STORE: Joi.string()

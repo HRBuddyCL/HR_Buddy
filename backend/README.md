@@ -161,3 +161,9 @@ npx ts-node scripts/seed-dev.ts
 - `OTP_DELIVERY_PROVIDER` must not be `console`
 - when `OTP_DELIVERY_PROVIDER=webhook`, `OTP_WEBHOOK_SIGNING_SECRET` is required
 - when `ATTACHMENT_STORAGE_PROVIDER=webhook`, `ATTACHMENT_STORAGE_WEBHOOK_SIGNING_SECRET` is required
+
+## Request Create Concurrency
+
+- Request creation can use PostgreSQL advisory transaction lock per `type+phone`.
+- This reduces duplicate race windows when multiple app instances process concurrent submits.
+- Configure with `REQUEST_CREATE_USE_DB_LOCK` (default `true`).

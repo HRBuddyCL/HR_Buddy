@@ -88,6 +88,10 @@ export class RequestsService {
     } = params;
 
     return this.prisma.$transaction(async (tx) => {
+      if (this.requestCreateUseDbLock()) {
+        await this.acquireRequestCreateLock(tx, type, phone);
+      }
+
       // common FK validate: department
       const dept = await tx.department.findUnique({
         where: { id: departmentId },
@@ -373,8 +377,27 @@ export class RequestsService {
     });
   }
 
+  private async acquireRequestCreateLock(
+    tx: Tx,
+    type: RequestType,
+    phone: string,
+  ) {
+    const lockKey = this.requestCreateLockKey(type, phone);
+
+    await tx.$queryRaw`
+      SELECT pg_advisory_xact_lock(hashtext(${lockKey}))
+    `;
+  }
+
+  private requestCreateLockKey(type: RequestType, phone: string) {
+    return `request_create:${type}:${phone.trim()}`;
+  }
   private requestDedupeWindowSeconds() {
     return this.config.get<number>('requestDedupeWindowSeconds') ?? 30;
+  }
+
+  private requestCreateUseDbLock() {
+    return this.config.get<boolean>('requestCreateUseDbLock') ?? true;
   }
 
   async cancelRequest(id: string, phone: string, reason: string) {
