@@ -25,6 +25,21 @@ export const envValidationSchema = Joi.object({
 
   REQUEST_DEDUPE_WINDOW_SECONDS: Joi.number().integer().min(0).default(30),
 
+  ABUSE_PROTECTION_ENABLED: Joi.boolean().default(true),
+  ABUSE_PROTECTION_MAX_ENTRIES: Joi.number().integer().min(1000).default(50000),
+  RATE_LIMIT_OTP_SEND_WINDOW_SECONDS: Joi.number().integer().min(1).default(60),
+  RATE_LIMIT_OTP_SEND_MAX_REQUESTS: Joi.number().integer().min(1).default(5),
+  RATE_LIMIT_OTP_SEND_BLOCK_SECONDS: Joi.number().integer().min(0).default(300),
+  RATE_LIMIT_OTP_VERIFY_WINDOW_SECONDS: Joi.number().integer().min(1).default(60),
+  RATE_LIMIT_OTP_VERIFY_MAX_REQUESTS: Joi.number().integer().min(1).default(10),
+  RATE_LIMIT_OTP_VERIFY_BLOCK_SECONDS: Joi.number().integer().min(0).default(300),
+  RATE_LIMIT_ADMIN_LOGIN_WINDOW_SECONDS: Joi.number().integer().min(1).default(60),
+  RATE_LIMIT_ADMIN_LOGIN_MAX_REQUESTS: Joi.number().integer().min(1).default(10),
+  RATE_LIMIT_ADMIN_LOGIN_BLOCK_SECONDS: Joi.number().integer().min(0).default(600),
+  RATE_LIMIT_REQUEST_CREATE_WINDOW_SECONDS: Joi.number().integer().min(1).default(60),
+  RATE_LIMIT_REQUEST_CREATE_MAX_REQUESTS: Joi.number().integer().min(1).default(30),
+  RATE_LIMIT_REQUEST_CREATE_BLOCK_SECONDS: Joi.number().integer().min(0).default(120),
+
   ATTACHMENT_UPLOAD_TICKET_SECRET: Joi.string()
     .min(16)
     .default('dev-only-change-this-attachment-upload-ticket-secret'),
@@ -74,5 +89,3 @@ export const envValidationSchema = Joi.object({
     .default('dev-only-change-this-admin-session-secret'),
   ADMIN_SESSION_TTL_MINUTES: Joi.number().integer().min(30).default(480),
 });
-
-

@@ -8,6 +8,7 @@ Implemented modules:
 - `requests`
 - `admin-auth`
 - `admin-requests`
+- `admin-audit`
 - `admin-settings`
 - `auth-otp`
 - `messenger`
@@ -93,13 +94,21 @@ npx ts-node scripts/seed-dev.ts
 
 ## Observability Baseline
 
-- Every response includes x-request-id for request correlation.
-- If client sends x-request-id, backend reuses that value.
-- Access and error logs are emitted as structured JSON events (http_request, http_exception).
-
+- Every response includes `x-request-id` for request correlation.
+- If client sends `x-request-id`, backend reuses that value.
+- Access and error logs are emitted as structured JSON events (`http_request`, `http_exception`).
 
 ## Admin Audit APIs
 
-- GET /admin/audit/activity-logs (filter + pagination)
-- GET /admin/audit/activity-logs/export/csv (CSV export for compliance)
+- `GET /admin/audit/activity-logs` (filter + pagination)
+- `GET /admin/audit/activity-logs/export/csv` (CSV export for compliance)
 
+## Rate Limiting / Abuse Protection
+
+- Global abuse protection guard is enabled by default (`ABUSE_PROTECTION_ENABLED=true`).
+- Policy-based limits are applied on high-risk routes:
+- `POST /auth-otp/send` (`otpSend`)
+- `POST /auth-otp/verify` (`otpVerify`)
+- `POST /admin/auth/login` (`adminLogin`)
+- `POST /requests/building|vehicle|messenger|document` (`requestCreate`)
+- Exceeded limits return `429` with `Retry-After` and rate limit headers.

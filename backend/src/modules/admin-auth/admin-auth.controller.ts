@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { RateLimitPolicy } from '../../common/security/rate-limit.decorator';
 import { AdminLoginDto } from './dto/admin-login.dto';
 import { AdminAuthService } from './admin-auth.service';
 import { AdminSession } from './admin-session.decorator';
@@ -9,6 +10,7 @@ import type { AdminSessionPrincipal } from './admin-session.types';
 export class AdminAuthController {
   constructor(private readonly adminAuthService: AdminAuthService) {}
 
+  @RateLimitPolicy('adminLogin')
   @Post('login')
   login(@Body() dto: AdminLoginDto) {
     return this.adminAuthService.login(dto.username, dto.password);

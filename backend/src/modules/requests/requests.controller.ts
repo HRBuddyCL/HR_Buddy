@@ -8,6 +8,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { RateLimitPolicy } from '../../common/security/rate-limit.decorator';
 import { CompleteAttachmentUploadDto } from '../attachments/dto/complete-attachment-upload.dto';
 import { CreateAttachmentDto } from '../attachments/dto/create-attachment.dto';
 import { CreateAttachmentUploadTicketDto } from '../attachments/dto/create-attachment-upload-ticket.dto';
@@ -30,21 +31,25 @@ export class RequestsController {
     private readonly attachmentsService: AttachmentsService,
   ) {}
 
+  @RateLimitPolicy('requestCreate')
   @Post('building')
   createBuilding(@Body() dto: CreateBuildingRequestDto) {
     return this.requestsService.createBuilding(dto);
   }
 
+  @RateLimitPolicy('requestCreate')
   @Post('vehicle')
   createVehicle(@Body() dto: CreateVehicleRequestDto) {
     return this.requestsService.createVehicle(dto);
   }
 
+  @RateLimitPolicy('requestCreate')
   @Post('messenger')
   createMessenger(@Body() dto: CreateMessengerRequestDto) {
     return this.requestsService.createMessenger(dto);
   }
 
+  @RateLimitPolicy('requestCreate')
   @Post('document')
   createDocument(@Body() dto: CreateDocumentRequestDto) {
     return this.requestsService.createDocument(dto);

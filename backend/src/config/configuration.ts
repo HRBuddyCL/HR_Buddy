@@ -29,6 +29,68 @@ export default () => ({
     process.env.REQUEST_DEDUPE_WINDOW_SECONDS ?? '30',
     10,
   ),
+  abuseProtection: {
+    enabled: process.env.ABUSE_PROTECTION_ENABLED !== 'false',
+    maxEntries: parseInt(process.env.ABUSE_PROTECTION_MAX_ENTRIES ?? '50000', 10),
+    policies: {
+      otpSend: {
+        windowSeconds: parseInt(
+          process.env.RATE_LIMIT_OTP_SEND_WINDOW_SECONDS ?? '60',
+          10,
+        ),
+        maxRequests: parseInt(
+          process.env.RATE_LIMIT_OTP_SEND_MAX_REQUESTS ?? '5',
+          10,
+        ),
+        blockSeconds: parseInt(
+          process.env.RATE_LIMIT_OTP_SEND_BLOCK_SECONDS ?? '300',
+          10,
+        ),
+      },
+      otpVerify: {
+        windowSeconds: parseInt(
+          process.env.RATE_LIMIT_OTP_VERIFY_WINDOW_SECONDS ?? '60',
+          10,
+        ),
+        maxRequests: parseInt(
+          process.env.RATE_LIMIT_OTP_VERIFY_MAX_REQUESTS ?? '10',
+          10,
+        ),
+        blockSeconds: parseInt(
+          process.env.RATE_LIMIT_OTP_VERIFY_BLOCK_SECONDS ?? '300',
+          10,
+        ),
+      },
+      adminLogin: {
+        windowSeconds: parseInt(
+          process.env.RATE_LIMIT_ADMIN_LOGIN_WINDOW_SECONDS ?? '60',
+          10,
+        ),
+        maxRequests: parseInt(
+          process.env.RATE_LIMIT_ADMIN_LOGIN_MAX_REQUESTS ?? '10',
+          10,
+        ),
+        blockSeconds: parseInt(
+          process.env.RATE_LIMIT_ADMIN_LOGIN_BLOCK_SECONDS ?? '600',
+          10,
+        ),
+      },
+      requestCreate: {
+        windowSeconds: parseInt(
+          process.env.RATE_LIMIT_REQUEST_CREATE_WINDOW_SECONDS ?? '60',
+          10,
+        ),
+        maxRequests: parseInt(
+          process.env.RATE_LIMIT_REQUEST_CREATE_MAX_REQUESTS ?? '30',
+          10,
+        ),
+        blockSeconds: parseInt(
+          process.env.RATE_LIMIT_REQUEST_CREATE_BLOCK_SECONDS ?? '120',
+          10,
+        ),
+      },
+    },
+  },
   attachments: {
     uploadTicketSecret:
       process.env.ATTACHMENT_UPLOAD_TICKET_SECRET ??
@@ -105,4 +167,3 @@ export default () => ({
     sessionTtlMinutes: parseInt(process.env.ADMIN_SESSION_TTL_MINUTES ?? '480', 10),
   },
 });
-
