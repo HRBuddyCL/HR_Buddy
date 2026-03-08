@@ -5,13 +5,22 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { AuthOtpService } from './auth-otp.service';
+import type { EmployeeSessionPrincipal } from './employee-session.types';
+
+type EmployeeRequestContext = {
+  headers?: {
+    authorization?: string;
+    'x-employee-session-token'?: string | string[];
+  };
+  employeeSession?: EmployeeSessionPrincipal;
+};
 
 @Injectable()
 export class EmployeeSessionGuard implements CanActivate {
   constructor(private readonly authOtpService: AuthOtpService) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const request = context.switchToHttp().getRequest();
+    const request = context.switchToHttp().getRequest<EmployeeRequestContext>();
 
     const token = this.extractToken(
       request.headers?.authorization,

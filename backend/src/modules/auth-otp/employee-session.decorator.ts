@@ -1,9 +1,14 @@
 import { createParamDecorator, ExecutionContext } from '@nestjs/common';
-import { EmployeeSessionPrincipal } from './employee-session.types';
+import type { EmployeeSessionPrincipal } from './employee-session.types';
+
+type EmployeeRequestContext = {
+  employeeSession?: EmployeeSessionPrincipal;
+};
 
 export const EmployeeSession = createParamDecorator(
   (_data: unknown, ctx: ExecutionContext): EmployeeSessionPrincipal => {
-    const request = ctx.switchToHttp().getRequest();
+    const request = ctx.switchToHttp().getRequest<EmployeeRequestContext>();
+
     return request.employeeSession as EmployeeSessionPrincipal;
   },
 );

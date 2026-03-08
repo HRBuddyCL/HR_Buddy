@@ -79,7 +79,7 @@ npm.cmd run lint
 
 ## Release Gate
 
-- `npm.cmd run release:gate` runs build + unit tests + e2e tests in sequence.
+- `npm.cmd run release:gate` runs build + lint + unit tests + e2e tests in sequence.
 - GitHub Actions workflow `Backend Release Gate` also runs the same `release:gate` command on backend PR/push.
 - CI release gate starts an ephemeral PostgreSQL service and injects `DATABASE_URL` for test runtime parity.
 - GitHub Actions workflow `Backend Preprod Smoke` can be triggered manually to run smoke checks against a preprod URL.
@@ -188,4 +188,3 @@ npx ts-node scripts/seed-dev.ts
 - Geo lookups are indexed in-memory at startup for faster read responses.
 - Province/District/Subdistrict queries are whitespace-tolerant and case-insensitive in lookup logic.
 - Dataset path can be overridden with `GEO_DATASET_PATH` for production deployments (for example when running from `dist`).
-

@@ -67,10 +67,9 @@ describe('OtpWebhookDeliveryProvider', () => {
     await provider.sendOtp(payload);
 
     const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
-    const body = JSON.parse(String(requestInit.body)) as Record<
-      string,
-      unknown
-    >;
+    const rawBody =
+      typeof requestInit.body === 'string' ? requestInit.body : '{}';
+    const body = JSON.parse(rawBody) as Record<string, unknown>;
 
     expect(body.channel).toBe('email');
     expect(body.email).toBe(payload.email);
@@ -93,10 +92,9 @@ describe('OtpWebhookDeliveryProvider', () => {
     await provider.sendOtp(payload);
 
     const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
-    const body = JSON.parse(String(requestInit.body)) as Record<
-      string,
-      unknown
-    >;
+    const rawBody =
+      typeof requestInit.body === 'string' ? requestInit.body : '{}';
+    const body = JSON.parse(rawBody) as Record<string, unknown>;
 
     expect(body.phone).toBe(payload.phone);
   });

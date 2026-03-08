@@ -61,9 +61,9 @@ Use this checklist to operate HR-Buddy backend in day-to-day production support.
 ## 8) Change Management Checklist
 
 Before shipping backend changes:
-- Release gate passes: `npm.cmd run release:gate`
+
+- Release gate passes: `npm.cmd run release:gate` (build + lint + tests + e2e)
 - Optional preprod smoke in gate: set `RELEASE_GATE_INCLUDE_SMOKE=true` then rerun `npm.cmd run release:gate`
 - Migration impact reviewed
 - New env keys documented in `.env.example`
 - Runbook updated when operational behavior changes
-

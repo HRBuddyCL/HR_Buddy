@@ -5,13 +5,22 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { AdminAuthService } from './admin-auth.service';
+import type { AdminSessionPrincipal } from './admin-session.types';
+
+type AdminRequestContext = {
+  headers?: {
+    authorization?: string;
+    'x-admin-session-token'?: string | string[];
+  };
+  adminSession?: AdminSessionPrincipal;
+};
 
 @Injectable()
 export class AdminSessionGuard implements CanActivate {
   constructor(private readonly adminAuthService: AdminAuthService) {}
 
   canActivate(context: ExecutionContext): boolean {
-    const request = context.switchToHttp().getRequest();
+    const request = context.switchToHttp().getRequest<AdminRequestContext>();
 
     const token = this.extractToken(
       request.headers?.authorization,

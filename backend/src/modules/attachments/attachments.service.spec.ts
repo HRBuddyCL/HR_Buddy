@@ -1,8 +1,4 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  NotFoundException,
-} from '@nestjs/common';
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { UploadedByRole } from '@prisma/client';
 import { AttachmentsService } from './attachments.service';
 import {

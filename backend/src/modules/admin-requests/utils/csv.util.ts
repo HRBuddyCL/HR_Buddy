@@ -15,7 +15,19 @@ export function toCsvCell(value: unknown): string {
     return value.toISOString();
   }
 
-  return String(value);
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  if (
+    typeof value === 'number' ||
+    typeof value === 'bigint' ||
+    typeof value === 'boolean'
+  ) {
+    return String(value);
+  }
+
+  return JSON.stringify(value);
 }
 
 export function buildCsv(headers: string[], rows: unknown[][]): string {

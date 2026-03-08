@@ -34,6 +34,11 @@ function buildSteps(includeSmoke: boolean): GateStep[] {
       args: ['run', 'build'],
     },
     {
+      label: 'Lint',
+      command: npmCommand,
+      args: ['run', 'lint:check'],
+    },
+    {
       label: 'Unit tests',
       command: npmCommand,
       args: ['run', 'test', '--', '--runInBand'],

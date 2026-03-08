@@ -24,4 +24,8 @@ async function bootstrap() {
 
   await app.listen(config.get<number>('port') ?? 3001);
 }
-bootstrap();
+
+bootstrap().catch((error: unknown) => {
+  console.error(error);
+  process.exit(1);
+});
