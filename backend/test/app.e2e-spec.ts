@@ -140,7 +140,6 @@ describe('HR Buddy API (e2e)', () => {
     updateStatus: jest.fn(async (id: string) => ({ id, status: 'DONE' })),
   };
 
-  
   const adminAuditServiceMock = {
     list: jest.fn(async () => ({
       items: [
@@ -167,7 +166,8 @@ describe('HR Buddy API (e2e)', () => {
     exportCsv: jest.fn(async () => ({
       fileName: 'audit-activity-export.csv',
       rowCount: 1,
-      csvContent: 'createdAt,requestNo,action\n2030-01-01T00:00:00.000Z,HRB-20260308-REQ1,CREATE',
+      csvContent:
+        'createdAt,requestNo,action\n2030-01-01T00:00:00.000Z,HRB-20260308-REQ1,CREATE',
     })),
   };
   const adminSettingsServiceMock = {
@@ -242,6 +242,12 @@ describe('HR Buddy API (e2e)', () => {
         addressCount: 1,
         employeeNotificationCount: 2,
       },
+    })),
+    anonymizeSubjectData: jest.fn(async () => ({
+      subject: { phone: '+66811111111', email: 'employee@cl.local' },
+      requests: { count: 1, requestNos: ['HRB-20260308-REQ1'] },
+      masked: { requestIdentityCount: 1, addressCount: 1 },
+      deleted: { employeeSessions: 1, otpSessions: 1 },
     })),
   };
 
@@ -428,7 +434,6 @@ describe('HR Buddy API (e2e)', () => {
         expect(res.body.name).toBe('HR');
       });
 
-
     await request(app.getHttpServer())
       .get('/admin/requests/export/csv')
       .set('Authorization', `Bearer ${adminToken}`)
@@ -471,12 +476,19 @@ describe('HR Buddy API (e2e)', () => {
       .expect((res) => {
         expect(res.body.masked.requestIdentity).toBe(true);
       });
+
+    await request(app.getHttpServer())
+      .post('/admin/maintenance/pdpa/subjects/anonymize')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        operatorId: 'op-1',
+        phone: '+66811111111',
+        email: 'employee@cl.local',
+        reason: 'Employee PDPA request',
+      })
+      .expect(201)
+      .expect((res) => {
+        expect(res.body.requests.count).toBe(1);
+      });
   });
 });
-
-
-
-
-
-
-

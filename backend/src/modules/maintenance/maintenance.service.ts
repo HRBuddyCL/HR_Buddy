@@ -9,11 +9,14 @@ import {
 import {
   ActivityAction,
   ActorRole,
+  Prisma,
   RecipientRole,
+  RequestStatus,
 } from '@prisma/client';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AnonymizeRequestDto } from './dto/anonymize-request.dto';
+import { AnonymizeSubjectDto } from './dto/anonymize-subject.dto';
 import {
   assertAnonymizeEligibility,
   normalizeAnonymizeReason,
@@ -21,6 +24,25 @@ import {
 import { cutoffFromDays } from './utils/retention.util';
 
 type RetentionMode = 'manual' | 'auto';
+
+type AnonymizeRequestProjection = {
+  id: string;
+  requestNo: string;
+  status: RequestStatus;
+  closedAt: Date | null;
+  messengerBookingDetail: {
+    senderAddressId: string;
+    receiverAddressId: string;
+  } | null;
+  documentRequestDetail: {
+    deliveryAddressId: string | null;
+  } | null;
+};
+
+type RequestMaskResult = {
+  addressCount: number;
+  employeeNotificationCount: number;
+};
 
 export type RetentionRunResult = {
   mode: RetentionMode;
@@ -110,7 +132,10 @@ export class MaintenanceService implements OnModuleInit, OnModuleDestroy {
         await this.prisma.$transaction([
           this.prisma.otpSession.deleteMany({
             where: {
-              OR: [{ expiresAt: { lt: now } }, { createdAt: { lt: otpCutoff } }],
+              OR: [
+                { expiresAt: { lt: now } },
+                { createdAt: { lt: otpCutoff } },
+              ],
             },
           }),
           this.prisma.employeeAccessSession.deleteMany({
@@ -156,8 +181,60 @@ export class MaintenanceService implements OnModuleInit, OnModuleDestroy {
 
   async anonymizeRequestData(id: string, dto: AnonymizeRequestDto) {
     return this.prisma.$transaction(async (tx) => {
-      const request = await tx.request.findUnique({
-        where: { id },
+      const request = await this.getRequestProjection(tx, id);
+
+      if (!request) {
+        throw new NotFoundException({
+          code: 'NOT_FOUND',
+          message: 'Request not found',
+        });
+      }
+
+      await this.assertOperatorActive(tx, dto.operatorId);
+
+      assertAnonymizeEligibility({
+        status: request.status,
+        closedAt: request.closedAt,
+        minClosedDays: this.pdpaAnonymizeMinClosedDays(),
+      });
+
+      const now = new Date();
+      const normalizedReason = normalizeAnonymizeReason(dto.reason);
+
+      const masked = await this.maskRequestIdentity(tx, request, now);
+      await this.writePdpaAuditLog(
+        tx,
+        request.id,
+        request.status,
+        dto.operatorId,
+        normalizedReason,
+      );
+
+      return {
+        id: request.id,
+        requestNo: request.requestNo,
+        status: request.status,
+        anonymizedAt: now,
+        masked: {
+          requestIdentity: true,
+          addressCount: masked.addressCount,
+          employeeNotificationCount: masked.employeeNotificationCount,
+        },
+      };
+    });
+  }
+
+  async anonymizeSubjectData(dto: AnonymizeSubjectDto) {
+    return this.prisma.$transaction(async (tx) => {
+      await this.assertOperatorActive(tx, dto.operatorId);
+
+      const phone = dto.phone.trim();
+      const email = dto.email.trim().toLowerCase();
+      const now = new Date();
+      const normalizedReason = normalizeAnonymizeReason(dto.reason);
+
+      const requests = await tx.request.findMany({
+        where: { phone },
         select: {
           id: true,
           requestNo: true,
@@ -175,113 +252,247 @@ export class MaintenanceService implements OnModuleInit, OnModuleDestroy {
             },
           },
         },
+        orderBy: { createdAt: 'asc' },
       });
 
-      if (!request) {
+      if (requests.length === 0) {
         throw new NotFoundException({
-          code: 'NOT_FOUND',
-          message: 'Request not found',
+          code: 'PDPA_SUBJECT_NOT_FOUND',
+          message: 'No requests found for this subject phone',
         });
       }
 
-      const operator = await tx.operator.findUnique({
-        where: { id: dto.operatorId },
-        select: {
-          id: true,
-          isActive: true,
-        },
-      });
+      const ineligibleRequestNos: string[] = [];
 
-      if (!operator) {
+      for (const request of requests) {
+        try {
+          assertAnonymizeEligibility({
+            status: request.status,
+            closedAt: request.closedAt,
+            minClosedDays: this.pdpaAnonymizeMinClosedDays(),
+            now,
+          });
+        } catch {
+          ineligibleRequestNos.push(request.requestNo);
+        }
+      }
+
+      if (ineligibleRequestNos.length > 0) {
         throw new BadRequestException({
-          code: 'INVALID_OPERATOR_ID',
-          message: 'Invalid operatorId',
+          code: 'PDPA_SUBJECT_CONTAINS_INELIGIBLE_REQUESTS',
+          message: 'Some requests are not eligible for anonymization yet',
+          requestNos: ineligibleRequestNos,
         });
       }
 
-      if (!operator.isActive) {
-        throw new BadRequestException({
-          code: 'OPERATOR_INACTIVE',
-          message: 'operatorId is inactive',
-        });
+      let maskedAddressCount = 0;
+      let maskedRequestNotificationCount = 0;
+
+      for (const request of requests) {
+        const masked = await this.maskRequestIdentity(tx, request, now);
+        maskedAddressCount += masked.addressCount;
+        maskedRequestNotificationCount += masked.employeeNotificationCount;
+        await this.writePdpaAuditLog(
+          tx,
+          request.id,
+          request.status,
+          dto.operatorId,
+          `SUBJECT:${normalizedReason}`,
+        );
       }
 
-      assertAnonymizeEligibility({
-        status: request.status,
-        closedAt: request.closedAt,
-        minClosedDays: this.pdpaAnonymizeMinClosedDays(),
-      });
-
-      const now = new Date();
-      const normalizedReason = normalizeAnonymizeReason(dto.reason);
-
-      const addressIds = [
-        request.messengerBookingDetail?.senderAddressId,
-        request.messengerBookingDetail?.receiverAddressId,
-        request.documentRequestDetail?.deliveryAddressId,
-      ].filter((value, index, self): value is string => {
-        return Boolean(value) && self.indexOf(value) === index;
-      });
-
-      await tx.request.update({
-        where: { id },
-        data: {
-          employeeName: 'REDACTED',
-          phone: 'REDACTED',
-          cancelReason: null,
-          hrCloseNote: null,
-          latestActivityAt: now,
-        },
-      });
-
-      const maskedAddressResult =
-        addressIds.length > 0
-          ? await tx.address.updateMany({
-              where: { id: { in: addressIds } },
-              data: {
-                name: 'REDACTED',
-                phone: 'REDACTED',
-                houseNo: 'REDACTED',
-                soi: null,
-                road: null,
-                extra: null,
-              },
-            })
-          : { count: 0 };
-
-      const maskedNotificationResult = await tx.notification.updateMany({
-        where: {
-          requestId: id,
-          recipientRole: RecipientRole.EMPLOYEE,
-        },
-        data: {
-          recipientPhone: null,
-        },
-      });
-
-      await tx.requestActivityLog.create({
-        data: {
-          requestId: id,
-          action: ActivityAction.STATUS_CHANGE,
-          fromStatus: request.status,
-          toStatus: request.status,
-          actorRole: ActorRole.ADMIN,
-          operatorId: dto.operatorId,
-          note: `PDPA_ANONYMIZED: ${normalizedReason}`,
-        },
-      });
+      const [
+        employeeNotifications,
+        employeeSessions,
+        otpSessions,
+        activityLogs,
+      ] = await Promise.all([
+        tx.notification.updateMany({
+          where: {
+            recipientRole: RecipientRole.EMPLOYEE,
+            recipientPhone: phone,
+          },
+          data: {
+            recipientPhone: null,
+          },
+        }),
+        tx.employeeAccessSession.deleteMany({
+          where: {
+            phone,
+            email,
+          },
+        }),
+        tx.otpSession.deleteMany({
+          where: {
+            phone,
+            email,
+          },
+        }),
+        tx.requestActivityLog.updateMany({
+          where: {
+            requestId: { in: requests.map((request) => request.id) },
+            actorRole: ActorRole.EMPLOYEE,
+          },
+          data: {
+            actorDisplayName: 'REDACTED',
+          },
+        }),
+      ]);
 
       return {
-        id: request.id,
-        requestNo: request.requestNo,
-        status: request.status,
+        subject: {
+          phone,
+          email,
+        },
         anonymizedAt: now,
+        requests: {
+          count: requests.length,
+          requestNos: requests.map((request) => request.requestNo),
+        },
         masked: {
-          requestIdentity: true,
-          addressCount: maskedAddressResult.count,
-          employeeNotificationCount: maskedNotificationResult.count,
+          requestIdentityCount: requests.length,
+          addressCount: maskedAddressCount,
+          requestNotificationCount: maskedRequestNotificationCount,
+          employeeNotificationCount: employeeNotifications.count,
+          employeeActivityLogCount: activityLogs.count,
+        },
+        deleted: {
+          employeeSessions: employeeSessions.count,
+          otpSessions: otpSessions.count,
         },
       };
+    });
+  }
+
+  private async getRequestProjection(
+    tx: Prisma.TransactionClient,
+    id: string,
+  ): Promise<AnonymizeRequestProjection | null> {
+    return tx.request.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        requestNo: true,
+        status: true,
+        closedAt: true,
+        messengerBookingDetail: {
+          select: {
+            senderAddressId: true,
+            receiverAddressId: true,
+          },
+        },
+        documentRequestDetail: {
+          select: {
+            deliveryAddressId: true,
+          },
+        },
+      },
+    });
+  }
+
+  private async assertOperatorActive(
+    tx: Prisma.TransactionClient,
+    operatorId: string,
+  ) {
+    const operator = await tx.operator.findUnique({
+      where: { id: operatorId },
+      select: {
+        id: true,
+        isActive: true,
+      },
+    });
+
+    if (!operator) {
+      throw new BadRequestException({
+        code: 'INVALID_OPERATOR_ID',
+        message: 'Invalid operatorId',
+      });
+    }
+
+    if (!operator.isActive) {
+      throw new BadRequestException({
+        code: 'OPERATOR_INACTIVE',
+        message: 'operatorId is inactive',
+      });
+    }
+  }
+
+  private collectAddressIds(request: AnonymizeRequestProjection) {
+    return [
+      request.messengerBookingDetail?.senderAddressId,
+      request.messengerBookingDetail?.receiverAddressId,
+      request.documentRequestDetail?.deliveryAddressId,
+    ].filter((value, index, self): value is string => {
+      return Boolean(value) && self.indexOf(value) === index;
+    });
+  }
+
+  private async maskRequestIdentity(
+    tx: Prisma.TransactionClient,
+    request: AnonymizeRequestProjection,
+    now: Date,
+  ): Promise<RequestMaskResult> {
+    const addressIds = this.collectAddressIds(request);
+
+    await tx.request.update({
+      where: { id: request.id },
+      data: {
+        employeeName: 'REDACTED',
+        phone: 'REDACTED',
+        cancelReason: null,
+        hrCloseNote: null,
+        latestActivityAt: now,
+      },
+    });
+
+    const maskedAddressResult =
+      addressIds.length > 0
+        ? await tx.address.updateMany({
+            where: { id: { in: addressIds } },
+            data: {
+              name: 'REDACTED',
+              phone: 'REDACTED',
+              houseNo: 'REDACTED',
+              soi: null,
+              road: null,
+              extra: null,
+            },
+          })
+        : { count: 0 };
+
+    const maskedNotificationResult = await tx.notification.updateMany({
+      where: {
+        requestId: request.id,
+        recipientRole: RecipientRole.EMPLOYEE,
+      },
+      data: {
+        recipientPhone: null,
+      },
+    });
+
+    return {
+      addressCount: maskedAddressResult.count,
+      employeeNotificationCount: maskedNotificationResult.count,
+    };
+  }
+
+  private async writePdpaAuditLog(
+    tx: Prisma.TransactionClient,
+    requestId: string,
+    status: RequestStatus,
+    operatorId: string,
+    reason: string,
+  ) {
+    await tx.requestActivityLog.create({
+      data: {
+        requestId,
+        action: ActivityAction.STATUS_CHANGE,
+        fromStatus: status,
+        toStatus: status,
+        actorRole: ActorRole.ADMIN,
+        operatorId,
+        note: `PDPA_ANONYMIZED: ${reason}`,
+      },
     });
   }
 
@@ -317,4 +528,3 @@ export class MaintenanceService implements OnModuleInit, OnModuleDestroy {
     return this.config.get<number>('pdpa.anonymizeMinClosedDays') ?? 30;
   }
 }
-

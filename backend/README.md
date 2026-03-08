@@ -120,3 +120,8 @@ npx ts-node scripts/seed-dev.ts
 - `ABUSE_PROTECTION_POSTGRES_RETRY_AFTER_SECONDS`
 - `ABUSE_PROTECTION_POSTGRES_CLEANUP_INTERVAL_SECONDS`
 - `ABUSE_PROTECTION_POSTGRES_RETENTION_HOURS`
+
+## PDPA Maintenance APIs
+
+- `POST /admin/maintenance/pdpa/requests/:id/anonymize` (request-level anonymization)
+- `POST /admin/maintenance/pdpa/subjects/anonymize` (subject-level anonymization by `phone+email`)
