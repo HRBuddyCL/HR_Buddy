@@ -141,6 +141,7 @@ GET /admin/requests/export/csv
 Expected: 200 with `text/csv`
 
 Optional one-command smoke check:
+- GitHub Actions: run workflow `Backend Preprod Smoke` with input `base_url` and secret `SMOKE_ADMIN_PASSWORD`.
 
 ```powershell
 $env:SMOKE_BASE_URL="http://localhost:3001"
