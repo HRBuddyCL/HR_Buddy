@@ -167,3 +167,8 @@ npx ts-node scripts/seed-dev.ts
 - Request creation can use PostgreSQL advisory transaction lock per `type+phone`.
 - This reduces duplicate race windows when multiple app instances process concurrent submits.
 - Configure with `REQUEST_CREATE_USE_DB_LOCK` (default `true`).
+
+## Geo API Notes
+
+- Geo lookups are indexed in-memory at startup for faster read responses.
+- Province/District/Subdistrict queries are whitespace-tolerant and case-insensitive in lookup logic.

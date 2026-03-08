@@ -12,8 +12,8 @@ export class GeoController {
 
   @Get('districts')
   districts(@Query('province') province: string) {
-    if (!province) throw new BadRequestException('province is required');
-    return this.geo.getDistricts(province);
+    const provinceName = this.requiredQuery(province, 'province');
+    return this.geo.getDistricts(provinceName);
   }
 
   @Get('subdistricts')
@@ -21,9 +21,10 @@ export class GeoController {
     @Query('province') province: string,
     @Query('district') district: string,
   ) {
-    if (!province) throw new BadRequestException('province is required');
-    if (!district) throw new BadRequestException('district is required');
-    return this.geo.getSubdistricts(province, district);
+    const provinceName = this.requiredQuery(province, 'province');
+    const districtName = this.requiredQuery(district, 'district');
+
+    return this.geo.getSubdistricts(provinceName, districtName);
   }
 
   @Get('postal-code')
@@ -32,12 +33,26 @@ export class GeoController {
     @Query('district') district: string,
     @Query('subdistrict') subdistrict: string,
   ) {
-    if (!province) throw new BadRequestException('province is required');
-    if (!district) throw new BadRequestException('district is required');
-    if (!subdistrict) throw new BadRequestException('subdistrict is required');
+    const provinceName = this.requiredQuery(province, 'province');
+    const districtName = this.requiredQuery(district, 'district');
+    const subdistrictName = this.requiredQuery(subdistrict, 'subdistrict');
 
     return {
-      postalCode: this.geo.getPostalCode(province, district, subdistrict),
+      postalCode: this.geo.getPostalCode(
+        provinceName,
+        districtName,
+        subdistrictName,
+      ),
     };
+  }
+
+  private requiredQuery(value: string | undefined, key: string) {
+    const normalized = value?.trim();
+
+    if (!normalized) {
+      throw new BadRequestException(`${key} is required`);
+    }
+
+    return normalized;
   }
 }

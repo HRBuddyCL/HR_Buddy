@@ -1,11 +1,18 @@
 import { Injectable } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
+import {
+  buildGeoIndex,
+  geoAddressKey,
+  normalizeGeoName,
+  type GeoIndex,
+} from './geo.indexer';
 import { GeoCompiled } from './geo.types';
 
 @Injectable()
 export class GeoService {
   private readonly data: GeoCompiled;
+  private readonly index: GeoIndex;
 
   constructor() {
     const filePath = path.join(
@@ -25,24 +32,27 @@ export class GeoService {
 
     const raw = fs.readFileSync(filePath, 'utf-8');
     this.data = JSON.parse(raw) as GeoCompiled;
+    this.index = buildGeoIndex(this.data);
   }
 
   getProvinces() {
-    // ส่งชื่อจังหวัด + code (มีประโยชน์เวลา cache ฝั่ง FE)
-    return this.data.provinces.map((p) => ({ name: p.name, code: p.code }));
+    return [...this.index.provinces];
   }
 
   getDistricts(provinceName: string) {
-    const p = this.data.provinces.find((x) => x.name === provinceName);
-    if (!p) return [];
-    return p.districts.map((d) => ({ name: d.name, code: d.code }));
+    const provinceKey = normalizeGeoName(provinceName);
+    return [...(this.index.districtsByProvince.get(provinceKey) ?? [])];
   }
 
   getSubdistricts(provinceName: string, districtName: string) {
-    const p = this.data.provinces.find((x) => x.name === provinceName);
-    const d = p?.districts.find((x) => x.name === districtName);
-    if (!d) return [];
-    return d.subdistricts.map((s) => ({ name: s.name, code: s.code }));
+    const provinceKey = normalizeGeoName(provinceName);
+    const districtKey = normalizeGeoName(districtName);
+
+    return [
+      ...(this.index.subdistrictsByProvinceDistrict.get(
+        geoAddressKey(provinceKey, districtKey),
+      ) ?? []),
+    ];
   }
 
   getPostalCode(
@@ -50,9 +60,14 @@ export class GeoService {
     districtName: string,
     subdistrictName: string,
   ) {
-    const p = this.data.provinces.find((x) => x.name === provinceName);
-    const d = p?.districts.find((x) => x.name === districtName);
-    const s = d?.subdistricts.find((x) => x.name === subdistrictName);
-    return s?.postalCode ?? null;
+    const provinceKey = normalizeGeoName(provinceName);
+    const districtKey = normalizeGeoName(districtName);
+    const subdistrictKey = normalizeGeoName(subdistrictName);
+
+    return (
+      this.index.postalCodeByAddress.get(
+        geoAddressKey(provinceKey, districtKey, subdistrictKey),
+      ) ?? null
+    );
   }
 }
