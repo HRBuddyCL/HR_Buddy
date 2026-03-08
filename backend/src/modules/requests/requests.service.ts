@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import {
   ActivityAction,
   ActorRole,
@@ -32,6 +33,14 @@ import {
   assertEmployeeCancelableStatus,
   normalizeCancelReason,
 } from './rules/cancel-request.rules';
+import {
+  isDuplicateBuildingRequest,
+  isDuplicateDocumentRequest,
+  isDuplicateMessengerRequest,
+  isDuplicateVehicleRequest,
+  normalizeSiteName,
+  type RequestDedupeCandidate,
+} from './rules/request-dedupe.rules';
 import { MessengerService } from '../messenger/messenger.service';
 import { NotificationsService } from '../notifications/notifications.service';
 
@@ -54,12 +63,11 @@ function generateRequestNo(now = new Date()) {
   return `HRB-${y}${m}${d}-${hh}${mm}${ss}-${rand}`;
 }
 
-function normalizeSiteName(raw: string) {
-  return raw.trim().replace(/\s+/g, ' ').toLowerCase();
-}
-
 type Tx = Prisma.TransactionClient;
 type DetailCreator = (tx: Tx, requestId: string) => Promise<void>;
+type DedupeMatcher = (
+  recentRequests: RequestDedupeCandidate[],
+) => boolean;
 
 @Injectable()
 export class RequestsService {
@@ -67,6 +75,7 @@ export class RequestsService {
     private readonly prisma: PrismaService,
     private readonly messengerService: MessengerService,
     private readonly notificationsService: NotificationsService,
+    private readonly config: ConfigService,
   ) {}
 
   /**
@@ -85,9 +94,17 @@ export class RequestsService {
     departmentId: string;
     phone: string;
     detailCreator: DetailCreator;
+    dedupeMatcher: DedupeMatcher;
   }) {
-    const { type, urgency, employeeName, departmentId, phone, detailCreator } =
-      params;
+    const {
+      type,
+      urgency,
+      employeeName,
+      departmentId,
+      phone,
+      detailCreator,
+      dedupeMatcher,
+    } = params;
 
     return this.prisma.$transaction(async (tx) => {
       // common FK validate: department
@@ -101,6 +118,54 @@ export class RequestsService {
           code: 'INVALID_DEPARTMENT_ID',
           message: 'Invalid departmentId',
         });
+      }
+
+      const dedupeWindowSeconds = this.requestDedupeWindowSeconds();
+
+      if (dedupeWindowSeconds > 0) {
+        const createdAfter = new Date(Date.now() - dedupeWindowSeconds * 1000);
+
+        const recentRequests = await tx.request.findMany({
+          where: {
+            type,
+            phone,
+            createdAt: { gte: createdAfter },
+            status: {
+              in: [
+                RequestStatus.NEW,
+                RequestStatus.APPROVED,
+                RequestStatus.IN_PROGRESS,
+                RequestStatus.IN_TRANSIT,
+                RequestStatus.DONE,
+              ],
+            },
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 10,
+          include: {
+            buildingRepairDetail: true,
+            vehicleRepairDetail: true,
+            messengerBookingDetail: {
+              include: {
+                senderAddress: true,
+                receiverAddress: true,
+              },
+            },
+            documentRequestDetail: {
+              include: {
+                deliveryAddress: true,
+              },
+            },
+          },
+        });
+
+        if (dedupeMatcher(recentRequests)) {
+          throw new BadRequestException({
+            code: 'DUPLICATE_REQUEST',
+            message:
+              'Duplicate request detected. Please wait a moment before submitting again.',
+          });
+        }
       }
 
       // 1) create Request
@@ -138,6 +203,7 @@ export class RequestsService {
           tx,
         );
       }
+
       // 4) latestActivityAt (common)
       await tx.request.update({
         where: { id: request.id },
@@ -166,6 +232,8 @@ export class RequestsService {
       employeeName: dto.employeeName,
       departmentId: dto.departmentId,
       phone: dto.phone,
+      dedupeMatcher: (recentRequests) =>
+        isDuplicateBuildingRequest(dto, recentRequests),
       detailCreator: async (tx, requestId) => {
         // feature FK validate: problemCategory
         await assertBuildingRefsExist(tx, dto);
@@ -200,6 +268,8 @@ export class RequestsService {
       employeeName: dto.employeeName,
       departmentId: dto.departmentId,
       phone: dto.phone,
+      dedupeMatcher: (recentRequests) =>
+        isDuplicateVehicleRequest(dto, recentRequests),
       detailCreator: async (tx, requestId) => {
         await assertVehicleRefsExist(tx, dto);
 
@@ -229,6 +299,8 @@ export class RequestsService {
       employeeName: dto.employeeName,
       departmentId: dto.departmentId,
       phone: dto.phone,
+      dedupeMatcher: (recentRequests) =>
+        isDuplicateMessengerRequest(dto, recentRequests),
 
       detailCreator: async (tx, requestId) => {
         const sender = await tx.address.create({
@@ -274,6 +346,8 @@ export class RequestsService {
       employeeName: dto.employeeName,
       departmentId: dto.departmentId,
       phone: dto.phone,
+      dedupeMatcher: (recentRequests) =>
+        isDuplicateDocumentRequest(dto, recentRequests),
       detailCreator: async (tx, requestId) => {
         // POSTAL: create immutable address snapshot and bind deliveryAddressId
         let deliveryAddressId: string | null = null;
@@ -316,6 +390,10 @@ export class RequestsService {
         });
       },
     });
+  }
+
+  private requestDedupeWindowSeconds() {
+    return this.config.get<number>('requestDedupeWindowSeconds') ?? 30;
   }
 
   async cancelRequest(id: string, phone: string, reason: string) {
@@ -492,5 +570,3 @@ export class RequestsService {
     return req;
   }
 }
-
-

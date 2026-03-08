@@ -24,6 +24,11 @@ export class AuthOtpService {
 
   async sendOtp(dto: SendOtpDto) {
     const normalizedEmail = this.normalizeEmail(dto.email);
+    const now = new Date();
+
+    await this.assertSendCooldown(dto.phone, normalizedEmail, now);
+    await this.assertSendRateLimit(dto.phone, normalizedEmail, now);
+
     const otpCode = generateOtpCode(6);
     const otpCodeHash = this.hash(otpCode);
     const expiresAt = this.minutesFromNow(this.otpTtlMinutes());
@@ -142,6 +147,68 @@ export class AuthOtpService {
     });
   }
 
+  private async assertSendCooldown(phone: string, email: string, now: Date) {
+    const cooldownSeconds = this.otpSendCooldownSeconds();
+
+    if (cooldownSeconds <= 0) {
+      return;
+    }
+
+    const latestSession = await this.prisma.otpSession.findFirst({
+      where: {
+        phone,
+        email,
+        createdAt: {
+          gte: new Date(now.getTime() - cooldownSeconds * 1000),
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        createdAt: true,
+      },
+    });
+
+    if (!latestSession) {
+      return;
+    }
+
+    const retryAfterSeconds = Math.max(
+      1,
+      Math.ceil(
+        (latestSession.createdAt.getTime() + cooldownSeconds * 1000 -
+          now.getTime()) /
+          1000,
+      ),
+    );
+
+    throw new BadRequestException({
+      code: 'OTP_COOLDOWN_ACTIVE',
+      message: 'OTP was recently sent. Please wait before requesting again.',
+      retryAfterSeconds,
+    });
+  }
+
+  private async assertSendRateLimit(phone: string, email: string, now: Date) {
+    const limitPerHour = this.otpMaxSendPerHour();
+
+    const lastHourCount = await this.prisma.otpSession.count({
+      where: {
+        phone,
+        email,
+        createdAt: {
+          gte: new Date(now.getTime() - 60 * 60 * 1000),
+        },
+      },
+    });
+
+    if (lastHourCount >= limitPerHour) {
+      throw new BadRequestException({
+        code: 'OTP_RATE_LIMITED',
+        message: 'Too many OTP requests. Please try again later.',
+      });
+    }
+  }
+
   private hash(raw: string) {
     const secret = this.config.get<string>('otpHashSecret') ?? 'dev-otp-secret';
     return hashWithSecret(raw, secret);
@@ -165,6 +232,14 @@ export class AuthOtpService {
 
   private maxAttempts() {
     return this.config.get<number>('otp.maxAttempts') ?? 5;
+  }
+
+  private otpSendCooldownSeconds() {
+    return this.config.get<number>('otp.sendCooldownSeconds') ?? 60;
+  }
+
+  private otpMaxSendPerHour() {
+    return this.config.get<number>('otp.maxSendPerHour') ?? 6;
   }
 
   private shouldExposeDevOtp() {

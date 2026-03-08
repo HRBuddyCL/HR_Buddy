@@ -10,11 +10,20 @@ export default () => ({
     codeTtlMinutes: parseInt(process.env.OTP_CODE_TTL_MINUTES ?? '5', 10),
     sessionTtlMinutes: parseInt(process.env.OTP_SESSION_TTL_MINUTES ?? '30', 10),
     maxAttempts: parseInt(process.env.OTP_MAX_ATTEMPTS ?? '5', 10),
+    sendCooldownSeconds: parseInt(
+      process.env.OTP_SEND_COOLDOWN_SECONDS ?? '60',
+      10,
+    ),
+    maxSendPerHour: parseInt(process.env.OTP_MAX_SEND_PER_HOUR ?? '6', 10),
     deliveryProvider: process.env.OTP_DELIVERY_PROVIDER ?? 'console',
     webhookUrl: process.env.OTP_WEBHOOK_URL ?? null,
     webhookApiKey: process.env.OTP_WEBHOOK_API_KEY ?? null,
     webhookTimeoutMs: parseInt(process.env.OTP_WEBHOOK_TIMEOUT_MS ?? '5000', 10),
   },
+  requestDedupeWindowSeconds: parseInt(
+    process.env.REQUEST_DEDUPE_WINDOW_SECONDS ?? '30',
+    10,
+  ),
   attachments: {
     uploadTicketSecret:
       process.env.ATTACHMENT_UPLOAD_TICKET_SECRET ??

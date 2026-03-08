@@ -10,6 +10,8 @@ export const envValidationSchema = Joi.object({
   OTP_CODE_TTL_MINUTES: Joi.number().integer().min(1).default(5),
   OTP_SESSION_TTL_MINUTES: Joi.number().integer().min(1).default(30),
   OTP_MAX_ATTEMPTS: Joi.number().integer().min(1).max(20).default(5),
+  OTP_SEND_COOLDOWN_SECONDS: Joi.number().integer().min(0).default(60),
+  OTP_MAX_SEND_PER_HOUR: Joi.number().integer().min(1).max(60).default(6),
   OTP_DELIVERY_PROVIDER: Joi.string().valid('console', 'webhook').default('console'),
   OTP_WEBHOOK_URL: Joi.when('OTP_DELIVERY_PROVIDER', {
     is: 'webhook',
@@ -18,6 +20,8 @@ export const envValidationSchema = Joi.object({
   }),
   OTP_WEBHOOK_API_KEY: Joi.string().allow('').optional(),
   OTP_WEBHOOK_TIMEOUT_MS: Joi.number().integer().min(500).default(5000),
+
+  REQUEST_DEDUPE_WINDOW_SECONDS: Joi.number().integer().min(0).default(30),
 
   ATTACHMENT_UPLOAD_TICKET_SECRET: Joi.string()
     .min(16)
