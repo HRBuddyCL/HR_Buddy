@@ -28,6 +28,22 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    env:
+      DATABASE_URL: postgresql://hrbuddy:hrbuddy_pass@localhost:5432/hr_buddy?schema=public
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: hrbuddy
+          POSTGRES_PASSWORD: hrbuddy_pass
+          POSTGRES_DB: hr_buddy
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U hrbuddy -d hr_buddy"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - name: Checkout
         uses: actions/checkout@v4

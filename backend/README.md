@@ -81,6 +81,7 @@ npm.cmd run lint
 
 - `npm.cmd run release:gate` runs build + unit tests + e2e tests in sequence.
 - GitHub Actions workflow `Backend Release Gate` also runs the same `release:gate` command on backend PR/push.
+- CI release gate starts an ephemeral PostgreSQL service and injects `DATABASE_URL` for test runtime parity.
 - GitHub Actions workflow `Backend Preprod Smoke` can be triggered manually to run smoke checks against a preprod URL.
 - To include smoke checks in the same gate, set `RELEASE_GATE_INCLUDE_SMOKE=true` and required smoke envs (at minimum `SMOKE_ADMIN_PASSWORD`).
 
