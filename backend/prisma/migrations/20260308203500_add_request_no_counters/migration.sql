@@ -1,0 +1,5 @@
+CREATE TABLE IF NOT EXISTS request_no_counters (
+  counter_date VARCHAR(8) PRIMARY KEY,
+  seq INTEGER NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

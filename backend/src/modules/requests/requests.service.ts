@@ -43,31 +43,11 @@ import {
 } from './rules/request-dedupe.rules';
 import { MessengerService } from '../messenger/messenger.service';
 import { NotificationsService } from '../notifications/notifications.service';
-
-function pad2(n: number) {
-  return n.toString().padStart(2, '0');
-}
-
-/**
- * Generates a user-facing request number for dev/staging usage.
- * If your company needs a strict sequence format, replace this generator later.
- */
-function generateRequestNo(now = new Date()) {
-  const y = now.getFullYear();
-  const m = pad2(now.getMonth() + 1);
-  const d = pad2(now.getDate());
-  const hh = pad2(now.getHours());
-  const mm = pad2(now.getMinutes());
-  const ss = pad2(now.getSeconds());
-  const rand = Math.random().toString(36).slice(2, 6).toUpperCase();
-  return `HRB-${y}${m}${d}-${hh}${mm}${ss}-${rand}`;
-}
+import { RequestNoService } from './request-no.service';
 
 type Tx = Prisma.TransactionClient;
 type DetailCreator = (tx: Tx, requestId: string) => Promise<void>;
-type DedupeMatcher = (
-  recentRequests: RequestDedupeCandidate[],
-) => boolean;
+type DedupeMatcher = (recentRequests: RequestDedupeCandidate[]) => boolean;
 
 @Injectable()
 export class RequestsService {
@@ -75,6 +55,7 @@ export class RequestsService {
     private readonly prisma: PrismaService,
     private readonly messengerService: MessengerService,
     private readonly notificationsService: NotificationsService,
+    private readonly requestNoService: RequestNoService,
     private readonly config: ConfigService,
   ) {}
 
@@ -171,7 +152,7 @@ export class RequestsService {
       // 1) create Request
       const request = await tx.request.create({
         data: {
-          requestNo: generateRequestNo(),
+          requestNo: await this.requestNoService.next(tx),
           type,
           status: RequestStatus.NEW,
           urgency,

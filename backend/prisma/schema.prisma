@@ -457,3 +457,11 @@ model AbuseRateLimitCounter {
   @@index([scope, updatedAt])
   @@map("abuse_rate_limit_counters")
 }
+
+model RequestNoCounter {
+  counterDate String   @id @map("counter_date")
+  seq         Int
+  updatedAt   DateTime @default(now()) @map("updated_at")
+
+  @@map("request_no_counters")
+}

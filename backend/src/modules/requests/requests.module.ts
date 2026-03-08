@@ -4,6 +4,7 @@ import { AuthOtpModule } from '../auth-otp/auth-otp.module';
 import { MessengerModule } from '../messenger/messenger.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { RequestsController } from './requests.controller';
+import { RequestNoService } from './request-no.service';
 import { RequestsService } from './requests.service';
 
 @Module({
@@ -14,6 +15,6 @@ import { RequestsService } from './requests.service';
     AttachmentsModule,
   ],
   controllers: [RequestsController],
-  providers: [RequestsService],
+  providers: [RequestsService, RequestNoService],
 })
 export class RequestsModule {}

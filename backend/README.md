@@ -142,3 +142,8 @@ npx ts-node scripts/seed-dev.ts
 - Configure with:
 - `RETENTION_USE_DB_LOCK`
 - `RETENTION_DB_LOCK_KEY`
+
+## Request Numbering
+
+- Request numbers use a PostgreSQL-backed daily sequence (`HRB-YYYYMMDD-####`).
+- This avoids collisions across concurrent requests and multiple backend instances.
