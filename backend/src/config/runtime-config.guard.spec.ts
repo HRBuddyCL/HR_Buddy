@@ -73,6 +73,9 @@ describe('runtime-config guard', () => {
     expect(result.errors).toContain(
       'READINESS_STRICT_PROVIDERS=true requires ATTACHMENT_STORAGE_PROVIDER to be b2 or webhook',
     );
+    expect(result.errors).toContain(
+      'ATTACHMENT_STORAGE_PROVIDER cannot be local in production',
+    );
   });
 
   it('returns validation error when smtp provider is missing credentials', () => {
@@ -118,6 +121,18 @@ describe('runtime-config guard', () => {
     );
     expect(result.errors).toContain(
       'ATTACHMENT_B2_SECRET_ACCESS_KEY is required when ATTACHMENT_STORAGE_PROVIDER=b2',
+    );
+  });
+
+  it('returns validation error when attachment provider is local in production mode', () => {
+    const result = validateProductionConfig(
+      makeConfig({
+        'attachments.storage.provider': 'local',
+      }),
+    );
+
+    expect(result.errors).toContain(
+      'ATTACHMENT_STORAGE_PROVIDER cannot be local in production',
     );
   });
 

@@ -8,6 +8,7 @@ import { ConfigService } from '@nestjs/config';
 import {
   ActivityAction,
   ActorRole,
+  FileKind,
   Prisma,
   UploadedByRole,
 } from '@prisma/client';
@@ -340,53 +341,64 @@ export class AttachmentsService {
       fileSize: dto.fileSize,
     });
 
+    await this.acquireAttachmentCreateLock(tx, requestId, dto.storageKey);
+
     const currentCount = await tx.requestAttachment.count({
       where: { requestId },
     });
 
     assertAttachmentCountLimit(currentCount);
 
-    const duplicatedStorage = await tx.requestAttachment.findFirst({
-      where: {
-        requestId,
-        storageKey: dto.storageKey,
-      },
-      select: { id: true },
-    });
-
-    if (duplicatedStorage) {
-      throw new BadRequestException({
-        code: 'DUPLICATE_ATTACHMENT_STORAGE_KEY',
-        message: 'storageKey already exists for this request',
-      });
-    }
-
     const now = new Date();
 
-    const attachment = await tx.requestAttachment.create({
-      data: {
-        requestId,
-        fileKind: dto.fileKind,
-        fileName: dto.fileName,
-        mimeType: dto.mimeType,
-        fileSize: dto.fileSize,
-        storageKey: dto.storageKey,
-        publicUrl: dto.publicUrl ?? null,
-        uploadedByRole,
-      },
-      select: {
-        id: true,
-        requestId: true,
-        fileKind: true,
-        fileName: true,
-        mimeType: true,
-        fileSize: true,
-        storageKey: true,
-        publicUrl: true,
-        uploadedByRole: true,
-        createdAt: true,
-      },
-    });
+    let attachment: {
+      id: string;
+      requestId: string;
+      fileKind: FileKind;
+      fileName: string;
+      mimeType: string;
+      fileSize: number;
+      storageKey: string;
+      publicUrl: string | null;
+      uploadedByRole: UploadedByRole;
+      createdAt: Date;
+    };
+
+    try {
+      attachment = await tx.requestAttachment.create({
+        data: {
+          requestId,
+          fileKind: dto.fileKind,
+          fileName: dto.fileName,
+          mimeType: dto.mimeType,
+          fileSize: dto.fileSize,
+          storageKey: dto.storageKey,
+          publicUrl: dto.publicUrl ?? null,
+          uploadedByRole,
+        },
+        select: {
+          id: true,
+          requestId: true,
+          fileKind: true,
+          fileName: true,
+          mimeType: true,
+          fileSize: true,
+          storageKey: true,
+          publicUrl: true,
+          uploadedByRole: true,
+          createdAt: true,
+        },
+      });
+    } catch (error) {
+      if (this.isDuplicateAttachmentStorageKeyError(error)) {
+        throw new BadRequestException({
+          code: 'DUPLICATE_ATTACHMENT_STORAGE_KEY',
+          message: 'storageKey already exists for this request',
+        });
+      }
+
+      throw error;
+    }
 
     await tx.requestActivityLog.create({
       data: {
@@ -490,6 +502,30 @@ export class AttachmentsService {
       : normalized;
   }
 
+  private async acquireAttachmentCreateLock(
+    tx: Prisma.TransactionClient,
+    requestId: string,
+    storageKey: string,
+  ) {
+    const lockKey = this.attachmentCreateLockKey(requestId, storageKey);
+
+    await tx.$queryRaw`
+      SELECT pg_advisory_xact_lock(hashtext(${lockKey}))
+    `;
+  }
+
+  private attachmentCreateLockKey(requestId: string, storageKey: string) {
+    return `attachment_create:${requestId}:${storageKey.trim()}`;
+  }
+
+  private isDuplicateAttachmentStorageKeyError(error: unknown) {
+    if (!error || typeof error !== 'object') {
+      return false;
+    }
+
+    const code = (error as { code?: unknown }).code;
+    return code === 'P2002';
+  }
   private uploadTicketSecret() {
     return (
       this.config.get<string>('attachments.uploadTicketSecret') ??

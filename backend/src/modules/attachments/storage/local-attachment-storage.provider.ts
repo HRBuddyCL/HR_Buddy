@@ -7,6 +7,7 @@ import {
   AttachmentUploadPresign,
 } from './attachment-storage.interface';
 import { LocalMockAttachmentStorageService } from './local-mock-attachment-storage.service';
+import { createLocalMockPresignSignature } from './local-mock-presign-signature.util';
 
 @Injectable()
 export class LocalAttachmentStorageProvider implements AttachmentStorageProvider {
@@ -22,9 +23,16 @@ export class LocalAttachmentStorageProvider implements AttachmentStorageProvider
     expiresAt: Date;
   }): Promise<AttachmentUploadPresign> {
     const base = this.baseUrl();
+    const expiresAtIso = params.expiresAt.toISOString();
+    const signature = createLocalMockPresignSignature({
+      action: 'upload',
+      storageKey: params.storageKey,
+      expiresAtIso,
+      secret: this.presignSecret(),
+    });
 
     return {
-      url: `${base}/upload/${encodeURIComponent(params.storageKey)}?expiresAt=${encodeURIComponent(params.expiresAt.toISOString())}`,
+      url: `${base}/upload/${encodeURIComponent(params.storageKey)}?expiresAt=${encodeURIComponent(expiresAtIso)}&signature=${encodeURIComponent(signature)}`,
       method: 'PUT',
       headers: {
         'content-type': params.mimeType,
@@ -40,9 +48,16 @@ export class LocalAttachmentStorageProvider implements AttachmentStorageProvider
     expiresAt: Date;
   }): Promise<AttachmentDownloadPresign> {
     const base = this.baseUrl();
+    const expiresAtIso = params.expiresAt.toISOString();
+    const signature = createLocalMockPresignSignature({
+      action: 'download',
+      storageKey: params.storageKey,
+      expiresAtIso,
+      secret: this.presignSecret(),
+    });
 
     return {
-      url: `${base}/download/${encodeURIComponent(params.storageKey)}?fileName=${encodeURIComponent(params.fileName)}&expiresAt=${encodeURIComponent(params.expiresAt.toISOString())}`,
+      url: `${base}/download/${encodeURIComponent(params.storageKey)}?fileName=${encodeURIComponent(params.fileName)}&expiresAt=${encodeURIComponent(expiresAtIso)}&signature=${encodeURIComponent(signature)}`,
       expiresAt: params.expiresAt,
     };
   }
@@ -61,5 +76,12 @@ export class LocalAttachmentStorageProvider implements AttachmentStorageProvider
       'http://localhost:3001/storage/mock';
 
     return raw.replace(/\/$/, '');
+  }
+
+  private presignSecret() {
+    return (
+      this.config.get<string>('attachments.uploadTicketSecret') ??
+      'dev-only-change-this-attachment-upload-ticket-secret'
+    );
   }
 }

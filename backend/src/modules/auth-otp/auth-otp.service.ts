@@ -67,78 +67,95 @@ export class AuthOtpService {
 
   async verifyOtp(dto: VerifyOtpDto) {
     const normalizedEmail = this.normalizeEmail(dto.email);
-
-    const otpSession = await this.prisma.otpSession.findFirst({
-      where: {
-        phone: dto.phone,
-        email: normalizedEmail,
-        verifiedAt: null,
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    if (!otpSession) {
-      throw new NotFoundException({
-        code: 'OTP_SESSION_NOT_FOUND',
-        message: 'OTP session not found',
-      });
-    }
-
-    const now = new Date();
-
-    if (otpSession.expiresAt <= now) {
-      throw new BadRequestException({
-        code: 'OTP_EXPIRED',
-        message: 'OTP is expired',
-      });
-    }
-
-    if (otpSession.attemptCount >= this.maxAttempts()) {
-      throw new BadRequestException({
-        code: 'OTP_ATTEMPTS_EXCEEDED',
-        message: 'Too many OTP attempts',
-      });
-    }
-
     const inputHash = this.hash(dto.otpCode);
 
-    if (inputHash !== otpSession.otpCodeHash) {
-      await this.prisma.otpSession.update({
-        where: { id: otpSession.id },
-        data: { attemptCount: { increment: 1 } },
+    return this.prisma.$transaction(async (tx) => {
+      const otpSession = await tx.otpSession.findFirst({
+        where: {
+          phone: dto.phone,
+          email: normalizedEmail,
+          verifiedAt: null,
+        },
+        orderBy: { createdAt: 'desc' },
       });
 
-      throw new BadRequestException({
-        code: 'INVALID_OTP_CODE',
-        message: 'Invalid OTP code',
+      if (!otpSession) {
+        throw new NotFoundException({
+          code: 'OTP_SESSION_NOT_FOUND',
+          message: 'OTP session not found',
+        });
+      }
+
+      const now = new Date();
+
+      if (otpSession.expiresAt <= now) {
+        throw new BadRequestException({
+          code: 'OTP_EXPIRED',
+          message: 'OTP is expired',
+        });
+      }
+
+      if (otpSession.attemptCount >= this.maxAttempts()) {
+        throw new BadRequestException({
+          code: 'OTP_ATTEMPTS_EXCEEDED',
+          message: 'Too many OTP attempts',
+        });
+      }
+
+      if (inputHash !== otpSession.otpCodeHash) {
+        await tx.otpSession.updateMany({
+          where: {
+            id: otpSession.id,
+            verifiedAt: null,
+          },
+          data: { attemptCount: { increment: 1 } },
+        });
+
+        throw new BadRequestException({
+          code: 'INVALID_OTP_CODE',
+          message: 'Invalid OTP code',
+        });
+      }
+
+      const verifyResult = await tx.otpSession.updateMany({
+        where: {
+          id: otpSession.id,
+          verifiedAt: null,
+          expiresAt: { gt: now },
+          attemptCount: { lt: this.maxAttempts() },
+          otpCodeHash: inputHash,
+        },
+        data: {
+          verifiedAt: now,
+          attemptCount: { increment: 1 },
+        },
       });
-    }
 
-    await this.prisma.otpSession.update({
-      where: { id: otpSession.id },
-      data: {
-        verifiedAt: now,
-        attemptCount: { increment: 1 },
-      },
-    });
+      if (verifyResult.count !== 1) {
+        throw new BadRequestException({
+          code: 'OTP_ALREADY_USED',
+          message: 'OTP session has already been verified',
+        });
+      }
 
-    const sessionToken = generateSessionToken();
-    const sessionTokenHash = this.hash(sessionToken);
-    const expiresAt = this.minutesFromNow(this.sessionTtlMinutes());
+      const sessionToken = generateSessionToken();
+      const sessionTokenHash = this.hash(sessionToken);
+      const expiresAt = this.minutesFromNow(this.sessionTtlMinutes());
 
-    await this.prisma.employeeAccessSession.create({
-      data: {
-        phone: dto.phone,
-        email: normalizedEmail,
-        sessionTokenHash,
+      await tx.employeeAccessSession.create({
+        data: {
+          phone: dto.phone,
+          email: normalizedEmail,
+          sessionTokenHash,
+          expiresAt,
+        },
+      });
+
+      return {
+        sessionToken,
         expiresAt,
-      },
+      };
     });
-
-    return {
-      sessionToken,
-      expiresAt,
-    };
   }
 
   async validateSessionToken(token: string) {

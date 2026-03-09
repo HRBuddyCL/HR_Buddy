@@ -1,21 +1,31 @@
 import { BadRequestException } from '@nestjs/common';
 import { AuthOtpService } from './auth-otp.service';
+import { hashWithSecret } from './utils/crypto.util';
 
-describe('AuthOtpService.sendOtp hardening', () => {
+describe('AuthOtpService hardening', () => {
   const now = new Date('2026-03-08T10:00:00.000Z');
 
-  const prisma = {
+  const tx = {
     otpSession: {
       findFirst: jest.fn(),
       count: jest.fn(),
       create: jest.fn(),
       delete: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn(),
     },
     employeeAccessSession: {
       create: jest.fn(),
       findFirst: jest.fn(),
     },
+  };
+
+  const prisma = {
+    otpSession: tx.otpSession,
+    employeeAccessSession: tx.employeeAccessSession,
+    $transaction: jest.fn(async (fn: (txArg: typeof tx) => Promise<unknown>) =>
+      fn(tx),
+    ),
   };
 
   const configValues: Record<string, unknown> = {
@@ -40,14 +50,31 @@ describe('AuthOtpService.sendOtp hardening', () => {
 
   let service: AuthOtpService;
 
+  const expectErrorCode = async (task: Promise<unknown>, code: string) => {
+    try {
+      await task;
+      fail(`expected error code ${code}`);
+    } catch (error) {
+      expect(error).toBeInstanceOf(Error);
+      expect(
+        (error as Error & { getResponse?: () => unknown }).getResponse?.(),
+      ).toMatchObject({
+        code,
+      });
+    }
+  };
+
   beforeEach(() => {
     jest.useFakeTimers().setSystemTime(now);
     jest.clearAllMocks();
 
-    prisma.otpSession.findFirst.mockResolvedValue(null);
-    prisma.otpSession.count.mockResolvedValue(0);
-    prisma.otpSession.create.mockResolvedValue({ id: 'otp-1' });
-    prisma.otpSession.delete.mockResolvedValue({ id: 'otp-1' });
+    tx.otpSession.findFirst.mockResolvedValue(null);
+    tx.otpSession.count.mockResolvedValue(0);
+    tx.otpSession.create.mockResolvedValue({ id: 'otp-1' });
+    tx.otpSession.delete.mockResolvedValue({ id: 'otp-1' });
+    tx.otpSession.update.mockResolvedValue({ id: 'otp-1' });
+    tx.otpSession.updateMany.mockResolvedValue({ count: 1 });
+    tx.employeeAccessSession.create.mockResolvedValue({ id: 'emp-sess-1' });
     sendOtpMock.mockResolvedValue(undefined);
 
     service = new AuthOtpService(
@@ -62,7 +89,7 @@ describe('AuthOtpService.sendOtp hardening', () => {
   });
 
   it('rejects sendOtp while cooldown is active', async () => {
-    prisma.otpSession.findFirst.mockResolvedValue({
+    tx.otpSession.findFirst.mockResolvedValue({
       createdAt: new Date('2026-03-08T09:59:45.000Z'),
     });
 
@@ -70,18 +97,18 @@ describe('AuthOtpService.sendOtp hardening', () => {
       service.sendOtp({ phone: '+66811111111', email: 'employee@cl.local' }),
     ).rejects.toBeInstanceOf(BadRequestException);
 
-    expect(prisma.otpSession.create).not.toHaveBeenCalled();
+    expect(tx.otpSession.create).not.toHaveBeenCalled();
     expect(sendOtpMock).not.toHaveBeenCalled();
   });
 
   it('rejects sendOtp when hourly limit is reached', async () => {
-    prisma.otpSession.count.mockResolvedValue(6);
+    tx.otpSession.count.mockResolvedValue(6);
 
     await expect(
       service.sendOtp({ phone: '+66811111111', email: 'employee@cl.local' }),
     ).rejects.toBeInstanceOf(BadRequestException);
 
-    expect(prisma.otpSession.create).not.toHaveBeenCalled();
+    expect(tx.otpSession.create).not.toHaveBeenCalled();
     expect(sendOtpMock).not.toHaveBeenCalled();
   });
 
@@ -92,20 +119,102 @@ describe('AuthOtpService.sendOtp hardening', () => {
       service.sendOtp({ phone: '+66811111111', email: 'employee@cl.local' }),
     ).rejects.toThrow('delivery failed');
 
-    expect(prisma.otpSession.create).toHaveBeenCalledTimes(1);
-    expect(prisma.otpSession.delete).toHaveBeenCalledWith({
+    expect(tx.otpSession.create).toHaveBeenCalledTimes(1);
+    expect(tx.otpSession.delete).toHaveBeenCalledWith({
       where: { id: 'otp-1' },
     });
   });
+
   it('creates OTP session and sends OTP when limits are not exceeded', async () => {
     const result = await service.sendOtp({
       phone: '+66811111111',
       email: 'employee@cl.local',
     });
 
-    expect(prisma.otpSession.create).toHaveBeenCalledTimes(1);
+    expect(tx.otpSession.create).toHaveBeenCalledTimes(1);
     expect(sendOtpMock).toHaveBeenCalledTimes(1);
     expect(result).toHaveProperty('expiresAt');
     expect(result).toHaveProperty('devOtp');
+  });
+
+  it('verifies OTP atomically and creates employee session', async () => {
+    tx.otpSession.findFirst.mockResolvedValue({
+      id: 'otp-verify-1',
+      phone: '+66811111111',
+      email: 'employee@cl.local',
+      otpCodeHash: hashWithSecret('123456', 'very-strong-dev-secret'),
+      expiresAt: new Date('2026-03-08T10:05:00.000Z'),
+      verifiedAt: null,
+      attemptCount: 0,
+      createdAt: new Date('2026-03-08T10:00:00.000Z'),
+    });
+
+    const result = await service.verifyOtp({
+      phone: '+66811111111',
+      email: 'employee@cl.local',
+      otpCode: '123456',
+    });
+
+    expect(result).toHaveProperty('sessionToken');
+    expect(result).toHaveProperty('expiresAt');
+    expect(tx.otpSession.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: 'otp-verify-1',
+          verifiedAt: null,
+          otpCodeHash: hashWithSecret('123456', 'very-strong-dev-secret'),
+        }),
+      }),
+    );
+    expect(tx.employeeAccessSession.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects OTP verify when code is invalid', async () => {
+    tx.otpSession.findFirst.mockResolvedValue({
+      id: 'otp-verify-1',
+      phone: '+66811111111',
+      email: 'employee@cl.local',
+      otpCodeHash: hashWithSecret('123456', 'very-strong-dev-secret'),
+      expiresAt: new Date('2026-03-08T10:05:00.000Z'),
+      verifiedAt: null,
+      attemptCount: 0,
+      createdAt: new Date('2026-03-08T10:00:00.000Z'),
+    });
+
+    await expectErrorCode(
+      service.verifyOtp({
+        phone: '+66811111111',
+        email: 'employee@cl.local',
+        otpCode: '000000',
+      }),
+      'INVALID_OTP_CODE',
+    );
+
+    expect(tx.employeeAccessSession.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects OTP verify when session was consumed concurrently', async () => {
+    tx.otpSession.findFirst.mockResolvedValue({
+      id: 'otp-verify-1',
+      phone: '+66811111111',
+      email: 'employee@cl.local',
+      otpCodeHash: hashWithSecret('123456', 'very-strong-dev-secret'),
+      expiresAt: new Date('2026-03-08T10:05:00.000Z'),
+      verifiedAt: null,
+      attemptCount: 0,
+      createdAt: new Date('2026-03-08T10:00:00.000Z'),
+    });
+    tx.otpSession.updateMany.mockResolvedValue({ count: 0 });
+
+    await expectErrorCode(
+      service.verifyOtp({
+        phone: '+66811111111',
+        email: 'employee@cl.local',
+        otpCode: '123456',
+      }),
+      'OTP_ALREADY_USED',
+    );
+
+    expect(tx.employeeAccessSession.create).not.toHaveBeenCalled();
   });
 });

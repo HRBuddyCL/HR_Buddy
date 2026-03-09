@@ -31,4 +31,29 @@ describe('LocalMockAttachmentStorageService', () => {
       }),
     ).toBeNull();
   });
+
+  it('evicts oldest object when object capacity is exceeded', () => {
+    for (let i = 0; i < 301; i += 1) {
+      service.putObject({
+        storageKey: `requests/req-1/file-${i}.pdf`,
+        content: Buffer.from('x'),
+        contentType: 'application/pdf',
+      });
+    }
+
+    expect(
+      service.getObjectMetadata({
+        storageKey: 'requests/req-1/file-0.pdf',
+      }),
+    ).toBeNull();
+
+    expect(
+      service.getObjectMetadata({
+        storageKey: 'requests/req-1/file-300.pdf',
+      }),
+    ).toEqual({
+      contentType: 'application/pdf',
+      contentLength: 1,
+    });
+  });
 });

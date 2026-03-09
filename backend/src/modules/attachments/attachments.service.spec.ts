@@ -10,6 +10,7 @@ describe('AttachmentsService', () => {
   const uploadSecret = 'test-upload-ticket-secret-1234';
 
   const tx = {
+    $queryRaw: jest.fn(),
     request: {
       findUnique: jest.fn(),
       update: jest.fn(),
@@ -80,6 +81,8 @@ describe('AttachmentsService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+
+    tx.$queryRaw.mockResolvedValue([{ pg_advisory_xact_lock: null }]);
 
     tx.request.findUnique.mockResolvedValue({
       id: 'req-1',
@@ -331,6 +334,8 @@ describe('AttachmentsService', () => {
   });
 
   it('rejects employee download when request is owned by another phone', async () => {
+    tx.$queryRaw.mockResolvedValue([{ pg_advisory_xact_lock: null }]);
+
     tx.request.findUnique.mockResolvedValue({
       id: 'req-1',
       phone: '+66819999999',
@@ -397,7 +402,7 @@ describe('AttachmentsService', () => {
       uploadSecret,
     );
 
-    tx.requestAttachment.findFirst.mockResolvedValue({ id: 'att-existing' });
+    tx.requestAttachment.create.mockRejectedValue({ code: 'P2002' });
 
     await expectErrorCode(
       service.completeAdminUpload('req-1', { uploadToken }),

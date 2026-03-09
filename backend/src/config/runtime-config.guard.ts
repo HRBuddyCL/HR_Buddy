@@ -121,6 +121,10 @@ export function validateProductionConfig(
   const attachmentProvider =
     config.get<string>('attachments.storage.provider') ?? 'local';
 
+  if (attachmentProvider === 'local') {
+    errors.push('ATTACHMENT_STORAGE_PROVIDER cannot be local in production');
+  }
+
   if (attachmentProvider === 'webhook') {
     const webhookUrl =
       config.get<string>('attachments.storage.webhookUrl')?.trim() ?? '';
