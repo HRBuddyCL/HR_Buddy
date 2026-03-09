@@ -13,9 +13,21 @@ describe('redactUrlForLogs', () => {
     );
   });
 
-  it('preserves query string while redacting token', () => {
+  it('preserves non-sensitive query string while redacting path token', () => {
     expect(redactUrlForLogs('/messenger/link/abc123?foo=bar')).toBe(
       '/messenger/link/[redacted]?foo=bar',
+    );
+  });
+
+  it('redacts sensitive query parameters', () => {
+    expect(redactUrlForLogs('/auth?token=abc&signature=123&foo=bar')).toBe(
+      '/auth?token=[redacted]&signature=[redacted]&foo=bar',
+    );
+  });
+
+  it('redacts sensitive query parameters case-insensitively and preserves fragments', () => {
+    expect(redactUrlForLogs('/auth?Api_Key=abc&otpCode=123#section-1')).toBe(
+      '/auth?Api_Key=[redacted]&otpCode=[redacted]#section-1',
     );
   });
 

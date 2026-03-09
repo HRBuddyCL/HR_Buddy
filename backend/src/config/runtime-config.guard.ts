@@ -273,7 +273,9 @@ function shouldValidateRuntimeConfig(config: ConfigService) {
     return true;
   }
 
-  const nodeEnv = (process.env.NODE_ENV ?? '').trim().toLowerCase();
+  const nodeEnv = (config.get<string>('nodeEnv') ?? process.env.NODE_ENV ?? '')
+    .trim()
+    .toLowerCase();
 
   if (!nodeEnv) {
     // Fail closed when NODE_ENV is missing to avoid skipping safety checks by mistake.

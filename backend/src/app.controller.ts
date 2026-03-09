@@ -46,7 +46,7 @@ export class AppController {
   }
 
   private formatReadinessResponse(report: ReadinessReport) {
-    if (process.env.NODE_ENV !== 'production') {
+    if (!this.isProduction()) {
       return report;
     }
 
@@ -62,7 +62,7 @@ export class AppController {
   }
 
   private assertHealthAccess(healthTokenHeader?: string) {
-    if (process.env.NODE_ENV !== 'production') {
+    if (!this.isProduction()) {
       return;
     }
 
@@ -85,5 +85,11 @@ export class AppController {
         message: 'Invalid health endpoint token',
       });
     }
+  }
+
+  private isProduction() {
+    return (
+      (this.config.get<string>('nodeEnv') ?? '').toLowerCase() === 'production'
+    );
   }
 }

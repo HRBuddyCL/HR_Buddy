@@ -1,3 +1,4 @@
+import { ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { MemoryRateLimitStore } from './memory-rate-limit.store';
 import { PostgresRateLimitStore } from './postgres-rate-limit.store';
@@ -17,6 +18,10 @@ describe('AbuseProtectionService', () => {
 
       if (key === 'abuseProtection.postgres.retryAfterSeconds') {
         return 30;
+      }
+
+      if (key === 'nodeEnv') {
+        return 'development';
       }
 
       return undefined;
@@ -70,6 +75,10 @@ describe('AbuseProtectionService', () => {
         return 30;
       }
 
+      if (key === 'nodeEnv') {
+        return 'development';
+      }
+
       return undefined;
     });
 
@@ -85,7 +94,7 @@ describe('AbuseProtectionService', () => {
     expect(result.remaining).toBe(2);
   });
 
-  it('falls back to memory when postgres store fails', async () => {
+  it('falls back to memory when postgres store fails outside production', async () => {
     configGetMock.mockImplementation((key: string) => {
       if (key === 'abuseProtection.store') {
         return 'postgres';
@@ -93,6 +102,10 @@ describe('AbuseProtectionService', () => {
 
       if (key === 'abuseProtection.postgres.retryAfterSeconds') {
         return 30;
+      }
+
+      if (key === 'nodeEnv') {
+        return 'development';
       }
 
       return undefined;
@@ -118,5 +131,36 @@ describe('AbuseProtectionService', () => {
     expect(memoryStore.consume).toHaveBeenCalledTimes(2);
     expect(first.allowed).toBe(true);
     expect(second.allowed).toBe(true);
+  });
+
+  it('fails closed when postgres store fails in production', async () => {
+    configGetMock.mockImplementation((key: string) => {
+      if (key === 'abuseProtection.store') {
+        return 'postgres';
+      }
+
+      if (key === 'abuseProtection.postgres.retryAfterSeconds') {
+        return 30;
+      }
+
+      if (key === 'nodeEnv') {
+        return 'production';
+      }
+
+      return undefined;
+    });
+
+    postgresStore.consume.mockRejectedValueOnce(new Error('db unavailable'));
+
+    await expect(
+      service.consume({
+        scope: 'otpVerify',
+        key: 'ip=1.1.1.1',
+        policy: { windowSeconds: 60, maxRequests: 10, blockSeconds: 300 },
+        nowMs: 1_000,
+      }),
+    ).rejects.toBeInstanceOf(ServiceUnavailableException);
+
+    expect(memoryStore.consume).not.toHaveBeenCalled();
   });
 });

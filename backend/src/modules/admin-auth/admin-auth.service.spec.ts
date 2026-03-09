@@ -14,6 +14,7 @@ describe('AdminAuthService', () => {
   };
 
   const tx = {
+    $queryRaw: jest.fn(),
     adminSession: {
       create: jest.fn(),
       updateMany: jest.fn(),
@@ -35,6 +36,7 @@ describe('AdminAuthService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
 
+    tx.$queryRaw.mockResolvedValue([{ pg_advisory_xact_lock: null }]);
     tx.adminSession.create.mockResolvedValue({ id: 'admin-session-1' });
     tx.adminSession.updateMany.mockResolvedValue({ count: 1 });
     prisma.adminSession.findFirst.mockResolvedValue({
@@ -51,6 +53,8 @@ describe('AdminAuthService', () => {
 
     expect(result).toHaveProperty('sessionToken');
     expect(result).toHaveProperty('expiresAt');
+
+    expect(tx.$queryRaw).toHaveBeenCalledTimes(1);
 
     expect(tx.adminSession.updateMany).toHaveBeenCalledWith({
       where: {

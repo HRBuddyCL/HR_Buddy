@@ -325,7 +325,9 @@ export class LocalMockAttachmentStorageController {
     const provider =
       this.config.get<string>('attachments.storage.provider') ?? 'local';
 
-    if (provider !== 'local' || process.env.NODE_ENV === 'production') {
+    const nodeEnv = (this.config.get<string>('nodeEnv') ?? '').toLowerCase();
+
+    if (provider !== 'local' || nodeEnv === 'production') {
       throw new NotFoundException({
         code: 'MOCK_ATTACHMENT_ENDPOINT_DISABLED',
         message: 'Local mock attachment storage endpoint is disabled',

@@ -53,6 +53,7 @@ export type RetentionRunResult = {
     employeeSessions: number;
     notifications: number;
     activityLogs: number;
+    adminSessions: number;
   };
 };
 
@@ -105,6 +106,7 @@ export class MaintenanceService implements OnModuleInit, OnModuleDestroy {
           employeeSessions: 0,
           notifications: 0,
           activityLogs: 0,
+          adminSessions: 0,
         },
       };
     }
@@ -125,6 +127,7 @@ export class MaintenanceService implements OnModuleInit, OnModuleDestroy {
             employeeSessions: 0,
             notifications: 0,
             activityLogs: 0,
+            adminSessions: 0,
           },
         };
       }
@@ -149,44 +152,46 @@ export class MaintenanceService implements OnModuleInit, OnModuleDestroy {
         now,
       );
 
-      const [otpSessions, employeeSessions, notifications, activityLogs] =
-        await this.prisma.$transaction([
-          this.prisma.otpSession.deleteMany({
-            where: {
-              OR: [
-                { expiresAt: { lt: now } },
-                { createdAt: { lt: otpCutoff } },
-              ],
-            },
-          }),
-          this.prisma.employeeAccessSession.deleteMany({
-            where: {
-              OR: [
-                { expiresAt: { lt: now } },
-                { createdAt: { lt: employeeSessionCutoff } },
-              ],
-            },
-          }),
-          this.prisma.notification.deleteMany({
-            where: { createdAt: { lt: notificationsCutoff } },
-          }),
-          this.prisma.requestActivityLog.deleteMany({
-            where: { createdAt: { lt: activityLogsCutoff } },
-          }),
-          this.prisma.adminSession.deleteMany({
-            where: {
-              OR: [
-                { expiresAt: { lt: now } },
-                {
-                  revokedAt: {
-                    not: null,
-                    lt: adminSessionsCutoff,
-                  },
+      const [
+        otpSessions,
+        employeeSessions,
+        notifications,
+        activityLogs,
+        adminSessions,
+      ] = await this.prisma.$transaction([
+        this.prisma.otpSession.deleteMany({
+          where: {
+            OR: [{ expiresAt: { lt: now } }, { createdAt: { lt: otpCutoff } }],
+          },
+        }),
+        this.prisma.employeeAccessSession.deleteMany({
+          where: {
+            OR: [
+              { expiresAt: { lt: now } },
+              { createdAt: { lt: employeeSessionCutoff } },
+            ],
+          },
+        }),
+        this.prisma.notification.deleteMany({
+          where: { createdAt: { lt: notificationsCutoff } },
+        }),
+        this.prisma.requestActivityLog.deleteMany({
+          where: { createdAt: { lt: activityLogsCutoff } },
+        }),
+        this.prisma.adminSession.deleteMany({
+          where: {
+            OR: [
+              { expiresAt: { lt: now } },
+              {
+                revokedAt: {
+                  not: null,
+                  lt: adminSessionsCutoff,
                 },
-              ],
-            },
-          }),
-        ]);
+              },
+            ],
+          },
+        }),
+      ]);
 
       const result: RetentionRunResult = {
         mode,
@@ -197,11 +202,12 @@ export class MaintenanceService implements OnModuleInit, OnModuleDestroy {
           employeeSessions: employeeSessions.count,
           notifications: notifications.count,
           activityLogs: activityLogs.count,
+          adminSessions: adminSessions.count,
         },
       };
 
       this.logger.log(
-        `Retention run (${mode}) deleted otp=${result.deleted.otpSessions}, sessions=${result.deleted.employeeSessions}, notifications=${result.deleted.notifications}, logs=${result.deleted.activityLogs}`,
+        `Retention run (${mode}) deleted otp=${result.deleted.otpSessions}, sessions=${result.deleted.employeeSessions}, notifications=${result.deleted.notifications}, logs=${result.deleted.activityLogs}, adminSessions=${result.deleted.adminSessions}`,
       );
 
       return result;

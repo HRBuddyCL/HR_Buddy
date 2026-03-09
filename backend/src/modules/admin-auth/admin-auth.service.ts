@@ -1,12 +1,14 @@
-import { UnauthorizedException } from '@nestjs/common';
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Prisma } from '@prisma/client';
 import { createHash, timingSafeEqual } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   issueAdminSessionToken,
   verifyAdminSessionToken,
 } from './utils/admin-session-token.util';
+
+type Tx = Prisma.TransactionClient;
 
 @Injectable()
 export class AdminAuthService {
@@ -38,6 +40,8 @@ export class AdminAuthService {
     const now = new Date();
 
     await this.prisma.$transaction(async (tx) => {
+      await this.acquireAdminLoginLock(tx, adminUsername);
+
       await tx.adminSession.updateMany({
         where: {
           username: adminUsername,
@@ -121,6 +125,14 @@ export class AdminAuthService {
     });
 
     return { ok: true };
+  }
+
+  private async acquireAdminLoginLock(tx: Tx, username: string) {
+    const lockKey = `admin_login:${username.trim().toLowerCase()}`;
+
+    await tx.$queryRaw`
+      SELECT pg_advisory_xact_lock(hashtext(${lockKey}))
+    `;
   }
 
   private hashSessionToken(token: string) {

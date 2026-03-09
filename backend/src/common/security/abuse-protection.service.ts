@@ -1,4 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { MemoryRateLimitStore } from './memory-rate-limit.store';
 import { PostgresRateLimitStore } from './postgres-rate-limit.store';
@@ -32,6 +36,17 @@ export class AbuseProtectionService {
       try {
         return await this.postgresStore.consume(input);
       } catch (error) {
+        if (this.isProduction()) {
+          this.logger.error(
+            `Postgres abuse store failed in production; rejecting requests: ${(error as Error).message}`,
+          );
+
+          throw new ServiceUnavailableException({
+            code: 'ABUSE_PROTECTION_UNAVAILABLE',
+            message: 'Rate-limit store is temporarily unavailable',
+          });
+        }
+
         const retryAfterSeconds = this.postgresRetryAfterSeconds();
         this.postgresDisabledUntilMs = nowMs + retryAfterSeconds * 1000;
 
@@ -60,6 +75,12 @@ export class AbuseProtectionService {
     return (
       this.config.get<number>('abuseProtection.postgres.retryAfterSeconds') ??
       30
+    );
+  }
+
+  private isProduction() {
+    return (
+      (this.config.get<string>('nodeEnv') ?? '').toLowerCase() === 'production'
     );
   }
 }

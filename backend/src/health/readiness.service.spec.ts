@@ -9,7 +9,13 @@ describe('ReadinessService', () => {
 
   const makeConfig = (values: Record<string, unknown>) =>
     ({
-      get: jest.fn((key: string) => values[key]),
+      get: jest.fn((key: string) => {
+        if (key === 'nodeEnv') {
+          return values[key] ?? process.env.NODE_ENV ?? 'development';
+        }
+
+        return values[key];
+      }),
     }) as unknown as ConfigService;
 
   const originalNodeEnv = process.env.NODE_ENV;

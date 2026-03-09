@@ -275,7 +275,7 @@ export class ReadinessService {
   }
 
   private checkProductionRuntimeConfig(): ReadinessCheck {
-    if (process.env.NODE_ENV !== 'production') {
+    if (!this.isProduction()) {
       return {
         name: 'production-runtime-config',
         ok: true,
@@ -303,5 +303,11 @@ export class ReadinessService {
 
   private strictProvidersEnabled() {
     return this.config.get<boolean>('readiness.strictProviders') ?? false;
+  }
+
+  private isProduction() {
+    return (
+      (this.config.get<string>('nodeEnv') ?? '').toLowerCase() === 'production'
+    );
   }
 }

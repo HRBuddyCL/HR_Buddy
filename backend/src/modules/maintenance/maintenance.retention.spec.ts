@@ -69,6 +69,7 @@ describe('MaintenanceService retention db lock', () => {
       employeeSessions: 0,
       notifications: 0,
       activityLogs: 0,
+      adminSessions: 0,
     });
 
     expect(prisma.otpSession.deleteMany).not.toHaveBeenCalled();
@@ -88,6 +89,7 @@ describe('MaintenanceService retention db lock', () => {
       employeeSessions: 2,
       notifications: 3,
       activityLogs: 4,
+      adminSessions: 1,
     });
 
     expect(prisma.otpSession.deleteMany).toHaveBeenCalledTimes(1);
@@ -106,6 +108,7 @@ describe('MaintenanceService retention db lock', () => {
     const result = await service.runRetentionJob('manual');
 
     expect(result.skipped).toBe(false);
+    expect(result.deleted.adminSessions).toBe(1);
     expect(prisma.$queryRaw).not.toHaveBeenCalled();
     expect(prisma.otpSession.deleteMany).toHaveBeenCalledTimes(1);
   });

@@ -1,4 +1,5 @@
 export default () => ({
+  nodeEnv: (process.env.NODE_ENV ?? '').trim().toLowerCase(),
   port: parseInt(process.env.PORT ?? '3001', 10),
   corsOrigins: (process.env.CORS_ORIGINS ?? 'http://localhost:3000')
     .split(',')
