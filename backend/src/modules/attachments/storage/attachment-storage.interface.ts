@@ -22,4 +22,6 @@ export interface AttachmentStorageProvider {
     fileName: string;
     expiresAt: Date;
   }): Promise<AttachmentDownloadPresign>;
+
+  objectExists?(params: { storageKey: string }): Promise<boolean>;
 }

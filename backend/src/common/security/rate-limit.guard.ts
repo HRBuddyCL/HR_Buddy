@@ -131,10 +131,8 @@ export class RateLimitGuard implements CanActivate {
   }
 
   private clientIp(req: Request) {
-    const xff = req.headers['x-forwarded-for'];
-
-    if (typeof xff === 'string' && xff.trim()) {
-      return xff.split(',')[0].trim();
+    if (Array.isArray(req.ips) && req.ips.length > 0) {
+      return req.ips[0];
     }
 
     return req.ip || req.socket.remoteAddress || 'unknown';

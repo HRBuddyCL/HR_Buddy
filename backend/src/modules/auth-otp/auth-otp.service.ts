@@ -33,21 +33,31 @@ export class AuthOtpService {
     const otpCodeHash = this.hash(otpCode);
     const expiresAt = this.minutesFromNow(this.otpTtlMinutes());
 
-    await this.prisma.otpSession.create({
+    const otpSession = await this.prisma.otpSession.create({
       data: {
         phone: dto.phone,
         email: normalizedEmail,
         otpCodeHash,
         expiresAt,
       },
+      select: {
+        id: true,
+      },
     });
 
-    await this.otpDeliveryService.getProvider().sendOtp({
-      phone: dto.phone,
-      email: normalizedEmail,
-      otpCode,
-      expiresAt,
-    });
+    try {
+      await this.otpDeliveryService.getProvider().sendOtp({
+        phone: dto.phone,
+        email: normalizedEmail,
+        otpCode,
+        expiresAt,
+      });
+    } catch (error) {
+      await this.prisma.otpSession
+        .delete({ where: { id: otpSession.id } })
+        .catch(() => undefined);
+      throw error;
+    }
 
     return {
       expiresAt,

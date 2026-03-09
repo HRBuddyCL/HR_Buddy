@@ -2,6 +2,7 @@ import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   GetObjectCommand,
+  HeadObjectCommand,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
@@ -70,6 +71,30 @@ export class B2AttachmentStorageProvider implements AttachmentStorageProvider {
     };
   }
 
+  async objectExists(params: { storageKey: string }): Promise<boolean> {
+    const { bucketName } = this.readRequiredConfig();
+
+    try {
+      await this.createClient().send(
+        new HeadObjectCommand({
+          Bucket: bucketName,
+          Key: params.storageKey,
+        }),
+      );
+
+      return true;
+    } catch (error) {
+      if (this.isNotFoundError(error)) {
+        return false;
+      }
+
+      throw new ServiceUnavailableException({
+        code: 'ATTACHMENT_B2_OBJECT_CHECK_FAILED',
+        message: 'Failed to verify attachment object in B2 storage',
+      });
+    }
+  }
+
   private createClient() {
     const { endpoint, region, accessKeyId, secretAccessKey } =
       this.readRequiredConfig();
@@ -134,5 +159,40 @@ export class B2AttachmentStorageProvider implements AttachmentStorageProvider {
   private sanitizeFileName(fileName: string) {
     const sanitized = fileName.replace(/[\r\n"]/g, '').trim();
     return sanitized || 'file';
+  }
+
+  private isNotFoundError(error: unknown) {
+    if (!error || typeof error !== 'object') {
+      return false;
+    }
+
+    const withName = error as {
+      name?: unknown;
+      code?: unknown;
+      Code?: unknown;
+    };
+    const name = typeof withName.name === 'string' ? withName.name : '';
+    const code =
+      typeof withName.code === 'string'
+        ? withName.code
+        : typeof withName.Code === 'string'
+          ? withName.Code
+          : '';
+
+    const withMeta = error as {
+      $metadata?: {
+        httpStatusCode?: unknown;
+      };
+    };
+
+    const status = withMeta.$metadata?.httpStatusCode;
+
+    return (
+      status === 404 ||
+      name === 'NotFound' ||
+      name === 'NoSuchKey' ||
+      code === 'NotFound' ||
+      code === 'NoSuchKey'
+    );
   }
 }

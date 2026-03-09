@@ -244,6 +244,21 @@ export class AttachmentsService {
       });
     }
 
+    const storageProvider = this.storageService.getProvider();
+
+    if (storageProvider.objectExists) {
+      const exists = await storageProvider.objectExists({
+        storageKey: ticket.storageKey,
+      });
+
+      if (!exists) {
+        throw new BadRequestException({
+          code: 'ATTACHMENT_OBJECT_NOT_FOUND',
+          message: 'Uploaded file was not found in storage',
+        });
+      }
+    }
+
     return this.createAttachment(
       tx,
       requestId,

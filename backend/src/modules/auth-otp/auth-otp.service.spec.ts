@@ -9,6 +9,7 @@ describe('AuthOtpService.sendOtp hardening', () => {
       findFirst: jest.fn(),
       count: jest.fn(),
       create: jest.fn(),
+      delete: jest.fn(),
       update: jest.fn(),
     },
     employeeAccessSession: {
@@ -46,6 +47,7 @@ describe('AuthOtpService.sendOtp hardening', () => {
     prisma.otpSession.findFirst.mockResolvedValue(null);
     prisma.otpSession.count.mockResolvedValue(0);
     prisma.otpSession.create.mockResolvedValue({ id: 'otp-1' });
+    prisma.otpSession.delete.mockResolvedValue({ id: 'otp-1' });
     sendOtpMock.mockResolvedValue(undefined);
 
     service = new AuthOtpService(
@@ -83,6 +85,18 @@ describe('AuthOtpService.sendOtp hardening', () => {
     expect(sendOtpMock).not.toHaveBeenCalled();
   });
 
+  it('deletes OTP session when delivery fails', async () => {
+    sendOtpMock.mockRejectedValueOnce(new Error('delivery failed'));
+
+    await expect(
+      service.sendOtp({ phone: '+66811111111', email: 'employee@cl.local' }),
+    ).rejects.toThrow('delivery failed');
+
+    expect(prisma.otpSession.create).toHaveBeenCalledTimes(1);
+    expect(prisma.otpSession.delete).toHaveBeenCalledWith({
+      where: { id: 'otp-1' },
+    });
+  });
   it('creates OTP session and sends OTP when limits are not exceeded', async () => {
     const result = await service.sendOtp({
       phone: '+66811111111',
