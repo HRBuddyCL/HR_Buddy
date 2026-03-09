@@ -341,6 +341,7 @@ export class AttachmentsService {
       fileSize: dto.fileSize,
     });
 
+    await this.acquireAttachmentRequestLock(tx, requestId);
     await this.acquireAttachmentCreateLock(tx, requestId, dto.storageKey);
 
     const currentCount = await tx.requestAttachment.count({
@@ -500,6 +501,21 @@ export class AttachmentsService {
     return separatorIndex >= 0
       ? normalized.slice(0, separatorIndex).trim()
       : normalized;
+  }
+
+  private async acquireAttachmentRequestLock(
+    tx: Prisma.TransactionClient,
+    requestId: string,
+  ) {
+    const lockKey = this.attachmentRequestLockKey(requestId);
+
+    await tx.$queryRaw`
+      SELECT pg_advisory_xact_lock(hashtext(${lockKey}))
+    `;
+  }
+
+  private attachmentRequestLockKey(requestId: string) {
+    return `attachment_request:${requestId}`;
   }
 
   private async acquireAttachmentCreateLock(

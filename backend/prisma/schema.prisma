@@ -374,6 +374,20 @@ model EmployeeAccessSession {
   @@map("employee_access_sessions")
 }
 
+model AdminSession {
+  id               String    @id @default(cuid())
+  username         String
+  sessionTokenHash String    @unique @map("session_token_hash")
+  expiresAt        DateTime  @map("expires_at")
+  revokedAt        DateTime? @map("revoked_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  @@index([username, expiresAt])
+  @@index([expiresAt])
+  @@index([revokedAt])
+  @@map("admin_sessions")
+}
+
 model MagicLink {
   id String @id @default(cuid())
 
@@ -467,4 +481,5 @@ model RequestNoCounter {
 
   @@map("request_no_counters")
 }
+
 

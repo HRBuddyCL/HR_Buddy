@@ -4,6 +4,7 @@ import { MessengerService } from './messenger.service';
 
 describe('MessengerService replay guard', () => {
   const tx = {
+    $queryRaw: jest.fn(),
     magicLink: {
       findUnique: jest.fn(),
       update: jest.fn(),
@@ -69,6 +70,7 @@ describe('MessengerService replay guard', () => {
   beforeEach(() => {
     jest.clearAllMocks();
 
+    tx.$queryRaw.mockResolvedValue([{ pg_advisory_xact_lock: null }]);
     tx.magicLink.findUnique.mockResolvedValue(baseLink);
     tx.magicLink.update.mockResolvedValue({ id: 'link-1' });
     tx.requestActivityLog.findFirst.mockResolvedValue(null);
@@ -117,6 +119,16 @@ describe('MessengerService replay guard', () => {
     });
   });
 
+  it('acquires mutation lock before messenger mutations', async () => {
+    await service.reportProblem('token-abc', {
+      note: 'Cannot contact receiver',
+    });
+
+    expect(tx.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(String((tx.$queryRaw as jest.Mock).mock.calls[0][0][0])).toContain(
+      'pg_advisory_xact_lock',
+    );
+  });
   it('blocks reportProblem when recent same action already exists', async () => {
     tx.requestActivityLog.findFirst.mockResolvedValue({
       id: 'log-1',

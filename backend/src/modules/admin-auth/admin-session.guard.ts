@@ -19,7 +19,7 @@ type AdminRequestContext = {
 export class AdminSessionGuard implements CanActivate {
   constructor(private readonly adminAuthService: AdminAuthService) {}
 
-  canActivate(context: ExecutionContext): boolean {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<AdminRequestContext>();
 
     const token = this.extractToken(
@@ -34,7 +34,7 @@ export class AdminSessionGuard implements CanActivate {
       });
     }
 
-    const session = this.adminAuthService.verifySessionToken(token);
+    const session = await this.adminAuthService.verifySessionToken(token);
 
     if (!session) {
       throw new UnauthorizedException({

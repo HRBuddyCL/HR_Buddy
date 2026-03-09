@@ -99,6 +99,7 @@ export class MessengerService {
 
     return this.prisma.$transaction(async (tx) => {
       const link = await this.getActiveLinkWithRequestOrThrow(tx, tokenHash);
+      await this.acquireMessengerMutationLock(tx, link.requestId);
 
       assertMessengerTargetStatus(dto.status);
       assertMessengerTransition(link.request.status, dto.status);
@@ -158,6 +159,7 @@ export class MessengerService {
 
     return this.prisma.$transaction(async (tx) => {
       const link = await this.getActiveLinkWithRequestOrThrow(tx, tokenHash);
+      await this.acquireMessengerMutationLock(tx, link.requestId);
       await this.assertNoMutationReplay(
         tx,
         link.requestId,
@@ -204,6 +206,7 @@ export class MessengerService {
 
     return this.prisma.$transaction(async (tx) => {
       const link = await this.getActiveLinkWithRequestOrThrow(tx, tokenHash);
+      await this.acquireMessengerMutationLock(tx, link.requestId);
       await this.assertNoMutationReplay(
         tx,
         link.requestId,
@@ -335,6 +338,18 @@ export class MessengerService {
         message: 'Magic link is expired',
       });
     }
+  }
+
+  private async acquireMessengerMutationLock(tx: Tx, requestId: string) {
+    const lockKey = this.messengerMutationLockKey(requestId);
+
+    await tx.$queryRaw`
+      SELECT pg_advisory_xact_lock(hashtext(${lockKey}))
+    `;
+  }
+
+  private messengerMutationLockKey(requestId: string) {
+    return `messenger_mutation:${requestId}`;
   }
 
   private async assertNoMutationReplay(

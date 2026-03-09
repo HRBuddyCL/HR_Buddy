@@ -1,5 +1,5 @@
 import { Controller, Get, ServiceUnavailableException } from '@nestjs/common';
-import { ReadinessService } from './health/readiness.service';
+import { ReadinessReport, ReadinessService } from './health/readiness.service';
 import { PrismaService } from './prisma/prisma.service';
 
 @Controller()
@@ -24,11 +24,28 @@ export class AppController {
   @Get('health/ready')
   async healthReady() {
     const report = await this.readinessService.getReport();
+    const response = this.formatReadinessResponse(report);
 
     if (!report.ok) {
-      throw new ServiceUnavailableException(report);
+      throw new ServiceUnavailableException(response);
     }
 
-    return report;
+    return response;
+  }
+
+  private formatReadinessResponse(report: ReadinessReport) {
+    if (process.env.NODE_ENV !== 'production') {
+      return report;
+    }
+
+    return {
+      ok: report.ok,
+      checkedAt: report.checkedAt,
+      checks: report.checks.map((check) => ({
+        name: check.name,
+        ok: check.ok,
+        skipped: check.skipped,
+      })),
+    };
   }
 }

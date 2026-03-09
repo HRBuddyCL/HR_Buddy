@@ -387,6 +387,28 @@ describe('AttachmentsService', () => {
     }
   });
 
+  it('acquires request-level lock before creating attachment', async () => {
+    const uploadToken = signAttachmentUploadTicket(
+      {
+        requestId: 'req-1',
+        storageKey: 'requests/req-1/doc.pdf',
+        fileKind: 'DOCUMENT',
+        fileName: 'doc.pdf',
+        mimeType: 'application/pdf',
+        fileSize: 1024,
+        uploadedByRole: UploadedByRole.ADMIN,
+        exp: Math.floor(Date.now() / 1000) + 60,
+      },
+      uploadSecret,
+    );
+
+    await service.completeAdminUpload('req-1', { uploadToken });
+
+    expect(tx.$queryRaw).toHaveBeenCalledTimes(2);
+    expect((tx.$queryRaw as jest.Mock).mock.calls[0][1]).toContain(
+      'attachment_request:req-1',
+    );
+  });
   it('rejects duplicate storage key during complete upload', async () => {
     const uploadToken = signAttachmentUploadTicket(
       {

@@ -1,7 +1,8 @@
 import { UnauthorizedException } from '@nestjs/common';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { timingSafeEqual } from 'crypto';
+import { createHash, timingSafeEqual } from 'crypto';
+import { PrismaService } from '../../prisma/prisma.service';
 import {
   issueAdminSessionToken,
   verifyAdminSessionToken,
@@ -9,9 +10,12 @@ import {
 
 @Injectable()
 export class AdminAuthService {
-  constructor(private readonly config: ConfigService) {}
+  constructor(
+    private readonly config: ConfigService,
+    private readonly prisma: PrismaService,
+  ) {}
 
-  login(usernameInput: string, passwordInput: string) {
+  async login(usernameInput: string, passwordInput: string) {
     const adminUsername =
       this.config.get<string>('adminAuth.username') ?? 'admin';
     const adminPassword =
@@ -25,18 +29,104 @@ export class AdminAuthService {
       throw this.invalidCredentialError();
     }
 
-    return issueAdminSessionToken({
+    const issued = issueAdminSessionToken({
       username: adminUsername,
       secret: this.sessionSecret(),
       ttlMinutes: this.sessionTtlMinutes(),
     });
+
+    const now = new Date();
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.adminSession.updateMany({
+        where: {
+          username: adminUsername,
+          revokedAt: null,
+        },
+        data: {
+          revokedAt: now,
+        },
+      });
+
+      await tx.adminSession.create({
+        data: {
+          username: adminUsername,
+          sessionTokenHash: this.hashSessionToken(issued.sessionToken),
+          expiresAt: issued.expiresAt,
+        },
+        select: {
+          id: true,
+        },
+      });
+    });
+
+    return issued;
   }
 
-  verifySessionToken(token: string) {
-    return verifyAdminSessionToken({
+  async verifySessionToken(token: string) {
+    const parsed = verifyAdminSessionToken({
       token,
       secret: this.sessionSecret(),
     });
+
+    if (!parsed) {
+      return null;
+    }
+
+    const now = new Date();
+    const session = await this.prisma.adminSession.findFirst({
+      where: {
+        username: parsed.username,
+        sessionTokenHash: this.hashSessionToken(token),
+        revokedAt: null,
+        expiresAt: {
+          gt: now,
+        },
+      },
+      select: {
+        username: true,
+        expiresAt: true,
+      },
+    });
+
+    if (!session) {
+      return null;
+    }
+
+    return {
+      username: session.username,
+      expiresAt: session.expiresAt,
+    };
+  }
+
+  async logout(token: string) {
+    const parsed = verifyAdminSessionToken({
+      token,
+      secret: this.sessionSecret(),
+    });
+
+    if (!parsed) {
+      return { ok: true };
+    }
+
+    await this.prisma.adminSession.updateMany({
+      where: {
+        username: parsed.username,
+        sessionTokenHash: this.hashSessionToken(token),
+        revokedAt: null,
+      },
+      data: {
+        revokedAt: new Date(),
+      },
+    });
+
+    return { ok: true };
+  }
+
+  private hashSessionToken(token: string) {
+    return createHash('sha256')
+      .update(`${this.sessionSecret()}:${token}`)
+      .digest('hex');
   }
 
   private matchCredential(input: string, expected: string) {
