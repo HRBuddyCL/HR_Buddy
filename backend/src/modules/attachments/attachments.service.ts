@@ -176,6 +176,7 @@ export class AttachmentsService {
       .createUploadPresign({
         storageKey,
         mimeType: dto.mimeType,
+        fileSize: dto.fileSize,
         expiresAt,
       });
 
@@ -246,36 +247,22 @@ export class AttachmentsService {
     }
 
     const storageProvider = this.storageService.getProvider();
+    const metadata = await storageProvider.getObjectMetadata({
+      storageKey: ticket.storageKey,
+    });
 
-    if (storageProvider.getObjectMetadata) {
-      const metadata = await storageProvider.getObjectMetadata({
-        storageKey: ticket.storageKey,
+    if (!metadata) {
+      throw new BadRequestException({
+        code: 'ATTACHMENT_OBJECT_NOT_FOUND',
+        message: 'Uploaded file was not found in storage',
       });
-
-      if (!metadata) {
-        throw new BadRequestException({
-          code: 'ATTACHMENT_OBJECT_NOT_FOUND',
-          message: 'Uploaded file was not found in storage',
-        });
-      }
-
-      this.assertUploadedObjectMetadata({
-        expectedMimeType: ticket.mimeType,
-        expectedFileSize: ticket.fileSize,
-        metadata,
-      });
-    } else if (storageProvider.objectExists) {
-      const exists = await storageProvider.objectExists({
-        storageKey: ticket.storageKey,
-      });
-
-      if (!exists) {
-        throw new BadRequestException({
-          code: 'ATTACHMENT_OBJECT_NOT_FOUND',
-          message: 'Uploaded file was not found in storage',
-        });
-      }
     }
+
+    this.assertUploadedObjectMetadata({
+      expectedMimeType: ticket.mimeType,
+      expectedFileSize: ticket.fileSize,
+      metadata,
+    });
 
     return this.createAttachment(
       tx,

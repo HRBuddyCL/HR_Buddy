@@ -7,6 +7,9 @@ const SECURITY_HEADERS: Record<string, string> = {
   'referrer-policy': 'no-referrer',
   'x-permitted-cross-domain-policies': 'none',
   'permissions-policy': 'geolocation=(), microphone=(), camera=()',
+  'content-security-policy':
+    "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; form-action 'self'",
+  'strict-transport-security': 'max-age=31536000; includeSubDomains; preload',
 };
 
 @Injectable()

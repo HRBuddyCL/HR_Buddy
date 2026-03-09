@@ -7,6 +7,7 @@ import { ConfigService } from '@nestjs/config';
 import { createWebhookHeaders } from '../../../common/security/webhook-signature.util';
 import {
   AttachmentDownloadPresign,
+  AttachmentObjectMetadata,
   AttachmentStorageProvider,
   AttachmentUploadPresign,
 } from './attachment-storage.interface';
@@ -16,6 +17,9 @@ type WebhookResponse = {
   method?: 'PUT' | 'POST';
   headers?: Record<string, string>;
   expiresAt?: string;
+  exists?: boolean;
+  contentType?: string | null;
+  contentLength?: number | null;
 };
 
 @Injectable()
@@ -27,17 +31,21 @@ export class WebhookAttachmentStorageProvider implements AttachmentStorageProvid
   async createUploadPresign(params: {
     storageKey: string;
     mimeType: string;
+    fileSize: number;
     expiresAt: Date;
   }): Promise<AttachmentUploadPresign> {
     const response = await this.callWebhook({
       action: 'presign_upload',
       storageKey: params.storageKey,
       mimeType: params.mimeType,
+      fileSize: params.fileSize,
       expiresAt: params.expiresAt.toISOString(),
     });
 
+    const url = this.readUrlFromWebhook(response);
+
     return {
-      url: response.url,
+      url,
       method: response.method ?? 'PUT',
       headers: response.headers,
       expiresAt: response.expiresAt
@@ -58,17 +66,57 @@ export class WebhookAttachmentStorageProvider implements AttachmentStorageProvid
       expiresAt: params.expiresAt.toISOString(),
     });
 
+    const url = this.readUrlFromWebhook(response);
+
     return {
-      url: response.url,
+      url,
       expiresAt: response.expiresAt
         ? new Date(response.expiresAt)
         : params.expiresAt,
     };
   }
 
-  private async callWebhook(
-    payload: Record<string, unknown>,
-  ): Promise<Required<Pick<WebhookResponse, 'url'>> & WebhookResponse> {
+  async getObjectMetadata(params: {
+    storageKey: string;
+  }): Promise<AttachmentObjectMetadata | null> {
+    const response = await this.callWebhook({
+      action: 'head_object',
+      storageKey: params.storageKey,
+    });
+
+    if (response.exists === false) {
+      return null;
+    }
+
+    if (response.exists !== true) {
+      throw new ServiceUnavailableException({
+        code: 'ATTACHMENT_STORAGE_WEBHOOK_INVALID_RESPONSE',
+        message: 'Attachment storage webhook response is invalid',
+      });
+    }
+
+    return {
+      contentType:
+        typeof response.contentType === 'string' ? response.contentType : null,
+      contentLength:
+        typeof response.contentLength === 'number'
+          ? response.contentLength
+          : null,
+    };
+  }
+
+  private readUrlFromWebhook(response: WebhookResponse): string {
+    if (!response?.url || typeof response.url !== 'string') {
+      throw new ServiceUnavailableException({
+        code: 'ATTACHMENT_STORAGE_WEBHOOK_INVALID_RESPONSE',
+        message: 'Attachment storage webhook response is invalid',
+      });
+    }
+
+    return response.url;
+  }
+
+  private async callWebhook(payload: Record<string, unknown>) {
     const url = this.config.get<string>('attachments.storage.webhookUrl');
 
     if (!url) {
@@ -132,14 +180,14 @@ export class WebhookAttachmentStorageProvider implements AttachmentStorageProvid
 
         const data = (await response.json()) as WebhookResponse;
 
-        if (!data?.url || typeof data.url !== 'string') {
+        if (!data || typeof data !== 'object') {
           throw new ServiceUnavailableException({
             code: 'ATTACHMENT_STORAGE_WEBHOOK_INVALID_RESPONSE',
             message: 'Attachment storage webhook response is invalid',
           });
         }
 
-        return data as Required<Pick<WebhookResponse, 'url'>> & WebhookResponse;
+        return data;
       } catch (error) {
         if (error instanceof ServiceUnavailableException) {
           throw error;

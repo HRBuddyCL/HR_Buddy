@@ -40,6 +40,7 @@ describe('WebhookAttachmentStorageProvider', () => {
     const result = await provider.createUploadPresign({
       storageKey: 'requests/req-1/file.pdf',
       mimeType: 'application/pdf',
+      fileSize: 1024,
       expiresAt: new Date('2030-01-01T00:10:00.000Z'),
     });
 
@@ -96,6 +97,55 @@ describe('WebhookAttachmentStorageProvider', () => {
     expect(headers['x-hrbuddy-webhook-signature']).toBeUndefined();
   });
 
+  it('returns metadata when object exists', async () => {
+    jest.spyOn(global, 'fetch').mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        exists: true,
+        contentType: 'application/pdf',
+        contentLength: 1024,
+      }),
+    } as Response);
+
+    await expect(
+      provider.getObjectMetadata({
+        storageKey: 'requests/req-1/file.pdf',
+      }),
+    ).resolves.toEqual({
+      contentType: 'application/pdf',
+      contentLength: 1024,
+    });
+  });
+
+  it('returns null metadata when object does not exist', async () => {
+    jest.spyOn(global, 'fetch').mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ exists: false }),
+    } as Response);
+
+    await expect(
+      provider.getObjectMetadata({
+        storageKey: 'requests/req-1/missing.pdf',
+      }),
+    ).resolves.toBeNull();
+  });
+
+  it('throws when metadata webhook response shape is invalid', async () => {
+    jest.spyOn(global, 'fetch').mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true }),
+    } as Response);
+
+    await expect(
+      provider.getObjectMetadata({
+        storageKey: 'requests/req-1/file.pdf',
+      }),
+    ).rejects.toBeInstanceOf(ServiceUnavailableException);
+  });
+
   it('does not retry on non-retryable status', async () => {
     const fetchMock = jest
       .spyOn(global, 'fetch')
@@ -140,6 +190,7 @@ describe('WebhookAttachmentStorageProvider', () => {
       provider.createUploadPresign({
         storageKey: 'requests/req-1/file.pdf',
         mimeType: 'application/pdf',
+        fileSize: 1024,
         expiresAt: new Date('2030-01-01T00:10:00.000Z'),
       }),
     ).rejects.toBeInstanceOf(ServiceUnavailableException);

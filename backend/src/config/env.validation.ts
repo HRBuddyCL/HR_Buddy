@@ -217,6 +217,10 @@ export const envValidationSchema = Joi.object({
     .min(16)
     .default('dev-only-change-this-messenger-magic-link-secret'),
   MESSENGER_MAGIC_LINK_TTL_HOURS: Joi.number().integer().min(1).default(72),
+  MESSENGER_MUTATION_REPLAY_WINDOW_SECONDS: Joi.number()
+    .integer()
+    .min(0)
+    .default(5),
   MESSENGER_MAGIC_LINK_BASE_URL: Joi.string()
     .uri({ scheme: ['http', 'https'] })
     .default('http://localhost:3000/messenger'),

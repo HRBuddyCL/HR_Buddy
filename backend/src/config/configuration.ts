@@ -239,6 +239,10 @@ export default () => ({
   messengerMagicLinkBaseUrl:
     process.env.MESSENGER_MAGIC_LINK_BASE_URL ??
     'http://localhost:3000/messenger',
+  messengerMutationReplayWindowSeconds: parseInt(
+    process.env.MESSENGER_MUTATION_REPLAY_WINDOW_SECONDS ?? '5',
+    10,
+  ),
   adminAuth: {
     username: process.env.ADMIN_USERNAME ?? 'admin',
     password: process.env.ADMIN_PASSWORD ?? 'admin12345',

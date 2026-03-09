@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  Headers,
+  Patch,
+  Post,
+} from '@nestjs/common';
 import { RateLimitPolicy } from '../../common/security/rate-limit.decorator';
 import { MessengerService } from './messenger.service';
 import { MessengerStatusUpdateDto } from './dto/messenger-status-update.dto';
@@ -10,32 +18,82 @@ import { MessengerPickupEventDto } from './dto/messenger-pickup-event.dto';
 export class MessengerController {
   constructor(private readonly messengerService: MessengerService) {}
 
-  @Get('link/:token')
-  getByToken(@Param('token') token: string) {
-    return this.messengerService.getByToken(token);
+  @Get('link')
+  getByToken(
+    @Headers('authorization') authorization?: string,
+    @Headers('x-messenger-token') headerToken?: string,
+  ) {
+    return this.messengerService.getByToken(
+      this.extractToken(authorization, headerToken),
+    );
   }
 
-  @Patch('link/:token/status')
+  @Patch('link/status')
   updateStatus(
-    @Param('token') token: string,
+    @Headers('authorization') authorization: string | undefined,
+    @Headers('x-messenger-token') headerToken: string | undefined,
     @Body() dto: MessengerStatusUpdateDto,
   ) {
-    return this.messengerService.updateStatus(token, dto);
+    return this.messengerService.updateStatus(
+      this.extractToken(authorization, headerToken),
+      dto,
+    );
   }
 
-  @Post('link/:token/report-problem')
+  @Post('link/report-problem')
   reportProblem(
-    @Param('token') token: string,
+    @Headers('authorization') authorization: string | undefined,
+    @Headers('x-messenger-token') headerToken: string | undefined,
     @Body() dto: MessengerProblemReportDto,
   ) {
-    return this.messengerService.reportProblem(token, dto);
+    return this.messengerService.reportProblem(
+      this.extractToken(authorization, headerToken),
+      dto,
+    );
   }
 
-  @Post('link/:token/pickup-event')
+  @Post('link/pickup-event')
   pickupEvent(
-    @Param('token') token: string,
+    @Headers('authorization') authorization: string | undefined,
+    @Headers('x-messenger-token') headerToken: string | undefined,
     @Body() dto: MessengerPickupEventDto,
   ) {
-    return this.messengerService.pickupEvent(token, dto);
+    return this.messengerService.pickupEvent(
+      this.extractToken(authorization, headerToken),
+      dto,
+    );
+  }
+
+  private extractToken(authorization?: string, headerToken?: string) {
+    const fromAuthorization = this.extractBearerToken(authorization);
+
+    if (fromAuthorization) {
+      return fromAuthorization;
+    }
+
+    const fromHeader = headerToken?.trim();
+
+    if (fromHeader) {
+      return fromHeader;
+    }
+
+    throw new BadRequestException({
+      code: 'MESSENGER_TOKEN_REQUIRED',
+      message:
+        'Messenger token is required via Authorization Bearer token or x-messenger-token header',
+    });
+  }
+
+  private extractBearerToken(authorization?: string) {
+    if (!authorization) {
+      return null;
+    }
+
+    if (!authorization.startsWith('Bearer ')) {
+      return null;
+    }
+
+    const token = authorization.slice('Bearer '.length).trim();
+    return token || null;
   }
 }

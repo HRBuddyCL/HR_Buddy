@@ -51,7 +51,6 @@ describe('AttachmentsService', () => {
   const storageProvider = {
     createUploadPresign: jest.fn(),
     createDownloadPresign: jest.fn(),
-    objectExists: jest.fn(),
     getObjectMetadata: jest.fn(),
   };
 
@@ -118,7 +117,6 @@ describe('AttachmentsService', () => {
       expiresAt: new Date('2030-01-01T00:10:00.000Z'),
     });
 
-    storageProvider.objectExists.mockResolvedValue(true);
     storageProvider.getObjectMetadata.mockResolvedValue({
       contentType: 'application/pdf',
       contentLength: 1024,
@@ -154,6 +152,12 @@ describe('AttachmentsService', () => {
     });
 
     expect(storageProvider.createUploadPresign).toHaveBeenCalledTimes(1);
+    expect(storageProvider.createUploadPresign).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mimeType: 'application/pdf',
+        fileSize: 2048,
+      }),
+    );
   });
 
   it('rejects issue upload ticket when mime type is invalid for file kind', async () => {

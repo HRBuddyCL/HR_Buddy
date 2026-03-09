@@ -340,7 +340,10 @@ describe('HR Buddy API (e2e)', () => {
 
     const response = await request(app.getHttpServer())
       .post('/admin/auth/login')
-      .send({ username: 'admin', password: 'admin12345' })
+      .send({
+        username: process.env.ADMIN_USERNAME ?? 'admin',
+        password: process.env.ADMIN_PASSWORD ?? 'admin12345',
+      })
       .expect(201);
 
     cachedAdminToken = response.body.sessionToken as string;
@@ -499,9 +502,10 @@ describe('HR Buddy API (e2e)', () => {
       .send({})
       .expect(400);
   });
-  it('GET /messenger/link/:token returns magic link payload', async () => {
+  it('GET /messenger/link returns magic link payload', async () => {
     await request(app.getHttpServer())
-      .get('/messenger/link/token-abc')
+      .get('/messenger/link')
+      .set('x-messenger-token', 'token-abc')
       .expect(200)
       .expect((res) => {
         expect(res.body.requestNo).toBe('HRB-20260308-REQ1');
@@ -510,16 +514,18 @@ describe('HR Buddy API (e2e)', () => {
     expect(messengerServiceMock.getByToken).toHaveBeenCalledWith('token-abc');
   });
 
-  it('PATCH /messenger/link/:token/status validates status enum', async () => {
+  it('PATCH /messenger/link/status validates status enum', async () => {
     await request(app.getHttpServer())
-      .patch('/messenger/link/token-abc/status')
+      .patch('/messenger/link/status')
+      .set('x-messenger-token', 'token-abc')
       .send({ status: 'INVALID_STATUS' })
       .expect(400);
   });
 
-  it('PATCH /messenger/link/:token/status updates status', async () => {
+  it('PATCH /messenger/link/status updates status', async () => {
     await request(app.getHttpServer())
-      .patch('/messenger/link/token-abc/status')
+      .patch('/messenger/link/status')
+      .set('x-messenger-token', 'token-abc')
       .send({ status: 'IN_TRANSIT', note: 'Picked up package' })
       .expect(200)
       .expect((res) => {
@@ -527,16 +533,18 @@ describe('HR Buddy API (e2e)', () => {
       });
   });
 
-  it('POST /messenger/link/:token/report-problem validates body', async () => {
+  it('POST /messenger/link/report-problem validates body', async () => {
     await request(app.getHttpServer())
-      .post('/messenger/link/token-abc/report-problem')
+      .post('/messenger/link/report-problem')
+      .set('x-messenger-token', 'token-abc')
       .send({})
       .expect(400);
   });
 
-  it('POST /messenger/link/:token/pickup-event accepts optional note', async () => {
+  it('POST /messenger/link/pickup-event accepts optional note', async () => {
     await request(app.getHttpServer())
-      .post('/messenger/link/token-abc/pickup-event')
+      .post('/messenger/link/pickup-event')
+      .set('x-messenger-token', 'token-abc')
       .send({ note: 'Package received at front desk' })
       .expect(201)
       .expect((res) => {
@@ -716,7 +724,7 @@ describe('HR Buddy API (e2e)', () => {
       .set('Authorization', `Bearer ${adminToken}`)
       .expect(200)
       .expect((res) => {
-        expect(res.body.username).toBe('admin');
+        expect(res.body.username).toBe(process.env.ADMIN_USERNAME ?? 'admin');
       });
 
     await request(app.getHttpServer())

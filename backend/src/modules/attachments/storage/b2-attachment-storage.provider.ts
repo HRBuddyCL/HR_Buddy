@@ -22,6 +22,7 @@ export class B2AttachmentStorageProvider implements AttachmentStorageProvider {
   async createUploadPresign(params: {
     storageKey: string;
     mimeType: string;
+    fileSize: number;
     expiresAt: Date;
   }): Promise<AttachmentUploadPresign> {
     const { bucketName } = this.readRequiredConfig();
@@ -31,6 +32,7 @@ export class B2AttachmentStorageProvider implements AttachmentStorageProvider {
       Bucket: bucketName,
       Key: params.storageKey,
       ContentType: params.mimeType,
+      ContentLength: params.fileSize,
     });
 
     const url = await getSignedUrl(this.createClient(), command, {
@@ -42,6 +44,7 @@ export class B2AttachmentStorageProvider implements AttachmentStorageProvider {
       method: 'PUT',
       headers: {
         'content-type': params.mimeType,
+        'content-length': String(params.fileSize),
       },
       expiresAt: new Date(Date.now() + expiresIn * 1000),
     };
@@ -71,11 +74,6 @@ export class B2AttachmentStorageProvider implements AttachmentStorageProvider {
       url,
       expiresAt: new Date(Date.now() + expiresIn * 1000),
     };
-  }
-
-  async objectExists(params: { storageKey: string }): Promise<boolean> {
-    const metadata = await this.getObjectMetadata(params);
-    return metadata !== null;
   }
 
   async getObjectMetadata(params: {

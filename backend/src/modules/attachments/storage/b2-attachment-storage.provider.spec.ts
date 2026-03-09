@@ -50,6 +50,7 @@ describe('B2AttachmentStorageProvider', () => {
       provider.createUploadPresign({
         storageKey: 'requests/req-1/test.pdf',
         mimeType: 'application/pdf',
+        fileSize: 1024,
         expiresAt: new Date('2030-01-01T00:10:00.000Z'),
       }),
     ).rejects.toBeInstanceOf(ServiceUnavailableException);
@@ -61,6 +62,7 @@ describe('B2AttachmentStorageProvider', () => {
     const result = await provider.createUploadPresign({
       storageKey: 'requests/req-1/test.pdf',
       mimeType: 'application/pdf',
+      fileSize: 1024,
       expiresAt: new Date(Date.now() + 10 * 60 * 1000),
     });
 
@@ -68,6 +70,7 @@ describe('B2AttachmentStorageProvider', () => {
     expect(result.method).toBe('PUT');
     expect(result.headers).toEqual({
       'content-type': 'application/pdf',
+      'content-length': '1024',
     });
     expect(getSignedUrlMock).toHaveBeenCalledTimes(1);
   });
@@ -124,12 +127,6 @@ describe('B2AttachmentStorageProvider', () => {
         storageKey: 'requests/req-1/missing.pdf',
       }),
     ).resolves.toBeNull();
-
-    await expect(
-      provider.objectExists({
-        storageKey: 'requests/req-1/missing.pdf',
-      }),
-    ).resolves.toBe(false);
   });
 
   it('throws when head object check fails with unknown error', async () => {

@@ -158,6 +158,11 @@ export class MessengerService {
 
     return this.prisma.$transaction(async (tx) => {
       const link = await this.getActiveLinkWithRequestOrThrow(tx, tokenHash);
+      this.assertNoMutationReplay(
+        link.lastUsedAt,
+        ActivityAction.REPORT_PROBLEM,
+      );
+
       const now = new Date();
       const normalizedNote = this.normalizeRequiredText(dto.note, 'note');
 
@@ -198,6 +203,10 @@ export class MessengerService {
 
     return this.prisma.$transaction(async (tx) => {
       const link = await this.getActiveLinkWithRequestOrThrow(tx, tokenHash);
+      this.assertNoMutationReplay(
+        link.lastUsedAt,
+        ActivityAction.MESSENGER_PICKUP_EVENT,
+      );
 
       if (
         link.request.status !== RequestStatus.APPROVED &&
@@ -326,6 +335,26 @@ export class MessengerService {
     }
   }
 
+  private assertNoMutationReplay(lastUsedAt: Date | null, action: string) {
+    const replayWindowSeconds = this.mutationReplayWindowSeconds();
+
+    if (replayWindowSeconds <= 0 || !lastUsedAt) {
+      return;
+    }
+
+    const elapsedMs = Date.now() - lastUsedAt.getTime();
+
+    if (elapsedMs >= replayWindowSeconds * 1000) {
+      return;
+    }
+
+    throw new BadRequestException({
+      code: 'MAGIC_LINK_REPLAY_BLOCKED',
+      message: `Repeated ${action} request is blocked. Please wait before retrying`,
+      retryAfterSeconds: replayWindowSeconds,
+    });
+  }
+
   private hashToken(token: string) {
     return hashMagicLinkToken(token, this.magicLinkSecret());
   }
@@ -346,6 +375,10 @@ export class MessengerService {
       this.config.get<string>('messengerMagicLinkBaseUrl') ??
       'http://localhost:3000/messenger'
     );
+  }
+
+  private mutationReplayWindowSeconds() {
+    return this.config.get<number>('messengerMutationReplayWindowSeconds') ?? 5;
   }
 
   private buildMagicLinkUrl(token: string) {

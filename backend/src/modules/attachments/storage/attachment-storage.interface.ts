@@ -19,6 +19,7 @@ export interface AttachmentStorageProvider {
   createUploadPresign(params: {
     storageKey: string;
     mimeType: string;
+    fileSize: number;
     expiresAt: Date;
   }): Promise<AttachmentUploadPresign>;
 
@@ -28,9 +29,7 @@ export interface AttachmentStorageProvider {
     expiresAt: Date;
   }): Promise<AttachmentDownloadPresign>;
 
-  objectExists?(params: { storageKey: string }): Promise<boolean>;
-
-  getObjectMetadata?(params: {
+  getObjectMetadata(params: {
     storageKey: string;
   }): Promise<AttachmentObjectMetadata | null>;
 }
