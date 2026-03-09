@@ -1,6 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import {
+  GetObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import {
   AttachmentDownloadPresign,
@@ -53,7 +57,7 @@ export class B2AttachmentStorageProvider implements AttachmentStorageProvider {
     const command = new GetObjectCommand({
       Bucket: bucketName,
       Key: params.storageKey,
-      ResponseContentDisposition: `attachment; filename=\"${fileName}\"`,
+      ResponseContentDisposition: `attachment; filename="${fileName}"`,
     });
 
     const url = await getSignedUrl(this.createClient(), command, {
@@ -83,25 +87,28 @@ export class B2AttachmentStorageProvider implements AttachmentStorageProvider {
 
   private readRequiredConfig() {
     const bucketName =
-      this.config.get<string>('attachments.storage.b2.bucketName')?.trim() ?? '';
+      this.config.get<string>('attachments.storage.b2.bucketName')?.trim() ??
+      '';
     const endpoint =
-      this.config.get<string>('attachments.storage.b2.s3Endpoint')?.trim() ?? '';
+      this.config.get<string>('attachments.storage.b2.s3Endpoint')?.trim() ??
+      '';
     const region =
       this.config.get<string>('attachments.storage.b2.region')?.trim() ||
       'us-west-004';
     const accessKeyId =
-      this.config
-        .get<string>('attachments.storage.b2.accessKeyId')
-        ?.trim() ?? '';
+      this.config.get<string>('attachments.storage.b2.accessKeyId')?.trim() ??
+      '';
     const secretAccessKey =
       this.config
         .get<string>('attachments.storage.b2.secretAccessKey')
         ?.trim() ?? '';
 
     if (!bucketName || !endpoint || !accessKeyId || !secretAccessKey) {
-      throw new Error(
-        'B2 storage provider is not fully configured (bucket/endpoint/access key/secret key)',
-      );
+      throw new ServiceUnavailableException({
+        code: 'ATTACHMENT_B2_NOT_CONFIGURED',
+        message:
+          'B2 storage provider is not fully configured (bucket/endpoint/access key/secret key)',
+      });
     }
 
     return {
@@ -125,7 +132,7 @@ export class B2AttachmentStorageProvider implements AttachmentStorageProvider {
   }
 
   private sanitizeFileName(fileName: string) {
-    const sanitized = fileName.replace(/[\r\n\"]/g, '').trim();
+    const sanitized = fileName.replace(/[\r\n"]/g, '').trim();
     return sanitized || 'file';
   }
 }

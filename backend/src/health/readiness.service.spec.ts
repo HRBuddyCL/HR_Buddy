@@ -110,6 +110,67 @@ describe('ReadinessService', () => {
     );
   });
 
+  it('returns not ready when otp webhook provider is missing signing secret', async () => {
+    process.env.NODE_ENV = 'development';
+    (prisma.$queryRaw as jest.Mock).mockResolvedValue([{ '?column?': 1 }]);
+
+    const config = makeConfig({
+      'otp.deliveryProvider': 'webhook',
+      'otp.webhookUrl': 'https://otp.example/webhook',
+      'otp.webhookSigningSecret': '',
+      'attachments.storage.provider': 'local',
+      'readiness.strictProviders': false,
+      'abuseProtection.enabled': true,
+      'abuseProtection.store': 'memory',
+    });
+
+    const svc = new ReadinessService(prisma, config);
+
+    const report = await svc.getReport();
+
+    expect(report.ok).toBe(false);
+    expect(report.checks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'otp-provider',
+          ok: false,
+          message:
+            'otp webhook provider is enabled but OTP_WEBHOOK_SIGNING_SECRET is missing',
+        }),
+      ]),
+    );
+  });
+
+  it('returns not ready when attachment webhook provider is missing signing secret', async () => {
+    process.env.NODE_ENV = 'development';
+    (prisma.$queryRaw as jest.Mock).mockResolvedValue([{ '?column?': 1 }]);
+
+    const config = makeConfig({
+      'otp.deliveryProvider': 'console',
+      'attachments.storage.provider': 'webhook',
+      'attachments.storage.webhookUrl': 'https://storage.example/webhook',
+      'attachments.storage.webhookSigningSecret': '',
+      'readiness.strictProviders': false,
+      'abuseProtection.enabled': true,
+      'abuseProtection.store': 'memory',
+    });
+
+    const svc = new ReadinessService(prisma, config);
+
+    const report = await svc.getReport();
+
+    expect(report.ok).toBe(false);
+    expect(report.checks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'attachment-storage-provider',
+          ok: false,
+          message:
+            'attachment webhook provider is enabled but ATTACHMENT_STORAGE_WEBHOOK_SIGNING_SECRET is missing',
+        }),
+      ]),
+    );
+  });
   it('returns not ready when smtp provider credentials are missing', async () => {
     process.env.NODE_ENV = 'development';
     (prisma.$queryRaw as jest.Mock).mockResolvedValue([{ '?column?': 1 }]);
@@ -150,6 +211,8 @@ describe('ReadinessService', () => {
       'otp.deliveryProvider': 'console',
       'attachments.storage.provider': 'webhook',
       'attachments.storage.webhookUrl': 'https://storage.example/webhook',
+      'attachments.storage.webhookSigningSecret':
+        'attachment-webhook-signing-secret-123456',
       'readiness.strictProviders': true,
       'abuseProtection.enabled': true,
       'abuseProtection.store': 'memory',
@@ -179,6 +242,7 @@ describe('ReadinessService', () => {
     const config = makeConfig({
       'otp.deliveryProvider': 'webhook',
       'otp.webhookUrl': 'https://otp.example/webhook',
+      'otp.webhookSigningSecret': 'otp-webhook-signing-secret-123456',
       'attachments.storage.provider': 'local',
       'readiness.strictProviders': true,
       'abuseProtection.enabled': true,

@@ -17,7 +17,8 @@ export class OtpSmtpDeliveryProvider implements OtpDeliveryProvider {
     const username = this.config.get<string>('otp.smtp.username')?.trim() ?? '';
     const appPassword =
       this.config.get<string>('otp.smtp.appPassword')?.trim() ?? '';
-    const fromEmail = this.config.get<string>('otp.smtp.fromEmail')?.trim() ?? '';
+    const fromEmail =
+      this.config.get<string>('otp.smtp.fromEmail')?.trim() ?? '';
     const timeoutMs = this.config.get<number>('otp.smtp.timeoutMs') ?? 8000;
 
     if (!username || !appPassword || !fromEmail) {

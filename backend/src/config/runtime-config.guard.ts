@@ -81,7 +81,9 @@ export function validateProductionConfig(
       config.get<string>('otp.webhookSigningSecret')?.trim() ?? '';
 
     if (!webhookUrl) {
-      errors.push('OTP_WEBHOOK_URL is required when OTP_DELIVERY_PROVIDER=webhook');
+      errors.push(
+        'OTP_WEBHOOK_URL is required when OTP_DELIVERY_PROVIDER=webhook',
+      );
     }
 
     if (!signingSecret) {
@@ -98,7 +100,9 @@ export function validateProductionConfig(
     const fromEmail = config.get<string>('otp.smtp.fromEmail')?.trim() ?? '';
 
     if (!username) {
-      errors.push('OTP_SMTP_USERNAME is required when OTP_DELIVERY_PROVIDER=smtp');
+      errors.push(
+        'OTP_SMTP_USERNAME is required when OTP_DELIVERY_PROVIDER=smtp',
+      );
     }
 
     if (!appPassword) {
@@ -108,7 +112,9 @@ export function validateProductionConfig(
     }
 
     if (!fromEmail) {
-      errors.push('OTP_SMTP_FROM_EMAIL is required when OTP_DELIVERY_PROVIDER=smtp');
+      errors.push(
+        'OTP_SMTP_FROM_EMAIL is required when OTP_DELIVERY_PROVIDER=smtp',
+      );
     }
   }
 
@@ -143,22 +149,31 @@ export function validateProductionConfig(
     const accessKeyId =
       config.get<string>('attachments.storage.b2.accessKeyId')?.trim() ?? '';
     const secretAccessKey =
-      config.get<string>('attachments.storage.b2.secretAccessKey')?.trim() ?? '';
+      config.get<string>('attachments.storage.b2.secretAccessKey')?.trim() ??
+      '';
 
     if (!bucketName) {
-      errors.push('ATTACHMENT_B2_BUCKET_NAME is required when ATTACHMENT_STORAGE_PROVIDER=b2');
+      errors.push(
+        'ATTACHMENT_B2_BUCKET_NAME is required when ATTACHMENT_STORAGE_PROVIDER=b2',
+      );
     }
 
     if (!endpoint) {
-      errors.push('ATTACHMENT_B2_S3_ENDPOINT is required when ATTACHMENT_STORAGE_PROVIDER=b2');
+      errors.push(
+        'ATTACHMENT_B2_S3_ENDPOINT is required when ATTACHMENT_STORAGE_PROVIDER=b2',
+      );
     }
 
     if (!accessKeyId) {
-      errors.push('ATTACHMENT_B2_ACCESS_KEY_ID is required when ATTACHMENT_STORAGE_PROVIDER=b2');
+      errors.push(
+        'ATTACHMENT_B2_ACCESS_KEY_ID is required when ATTACHMENT_STORAGE_PROVIDER=b2',
+      );
     }
 
     if (!secretAccessKey) {
-      errors.push('ATTACHMENT_B2_SECRET_ACCESS_KEY is required when ATTACHMENT_STORAGE_PROVIDER=b2');
+      errors.push(
+        'ATTACHMENT_B2_SECRET_ACCESS_KEY is required when ATTACHMENT_STORAGE_PROVIDER=b2',
+      );
     }
   }
 

@@ -69,7 +69,10 @@ export class ReadinessService {
     const strictProviders = this.strictProvidersEnabled();
 
     if (provider === 'webhook') {
-      const webhookUrl = this.config.get<string>('otp.webhookUrl')?.trim() ?? '';
+      const webhookUrl =
+        this.config.get<string>('otp.webhookUrl')?.trim() ?? '';
+      const signingSecret =
+        this.config.get<string>('otp.webhookSigningSecret')?.trim() ?? '';
 
       if (!webhookUrl) {
         return {
@@ -77,6 +80,15 @@ export class ReadinessService {
           ok: false,
           message:
             'otp webhook provider is enabled but OTP_WEBHOOK_URL is missing',
+        };
+      }
+
+      if (!signingSecret) {
+        return {
+          name: 'otp-provider',
+          ok: false,
+          message:
+            'otp webhook provider is enabled but OTP_WEBHOOK_SIGNING_SECRET is missing',
         };
       }
 
@@ -88,10 +100,12 @@ export class ReadinessService {
     }
 
     if (provider === 'smtp') {
-      const username = this.config.get<string>('otp.smtp.username')?.trim() ?? '';
+      const username =
+        this.config.get<string>('otp.smtp.username')?.trim() ?? '';
       const appPassword =
         this.config.get<string>('otp.smtp.appPassword')?.trim() ?? '';
-      const fromEmail = this.config.get<string>('otp.smtp.fromEmail')?.trim() ?? '';
+      const fromEmail =
+        this.config.get<string>('otp.smtp.fromEmail')?.trim() ?? '';
 
       if (!username || !appPassword || !fromEmail) {
         return {
@@ -133,6 +147,10 @@ export class ReadinessService {
     if (provider === 'webhook') {
       const webhookUrl =
         this.config.get<string>('attachments.storage.webhookUrl')?.trim() ?? '';
+      const signingSecret =
+        this.config
+          .get<string>('attachments.storage.webhookSigningSecret')
+          ?.trim() ?? '';
 
       if (!webhookUrl) {
         return {
@@ -140,6 +158,15 @@ export class ReadinessService {
           ok: false,
           message:
             'attachment webhook provider is enabled but ATTACHMENT_STORAGE_WEBHOOK_URL is missing',
+        };
+      }
+
+      if (!signingSecret) {
+        return {
+          name: 'attachment-storage-provider',
+          ok: false,
+          message:
+            'attachment webhook provider is enabled but ATTACHMENT_STORAGE_WEBHOOK_SIGNING_SECRET is missing',
         };
       }
 
