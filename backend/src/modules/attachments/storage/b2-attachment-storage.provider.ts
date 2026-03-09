@@ -3,12 +3,14 @@ import { ConfigService } from '@nestjs/config';
 import {
   GetObjectCommand,
   HeadObjectCommand,
+  HeadObjectCommandOutput,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import {
   AttachmentDownloadPresign,
+  AttachmentObjectMetadata,
   AttachmentStorageProvider,
   AttachmentUploadPresign,
 } from './attachment-storage.interface';
@@ -72,20 +74,43 @@ export class B2AttachmentStorageProvider implements AttachmentStorageProvider {
   }
 
   async objectExists(params: { storageKey: string }): Promise<boolean> {
+    const metadata = await this.getObjectMetadata(params);
+    return metadata !== null;
+  }
+
+  async getObjectMetadata(params: {
+    storageKey: string;
+  }): Promise<AttachmentObjectMetadata | null> {
     const { bucketName } = this.readRequiredConfig();
 
+    const head = await this.loadHeadObject(bucketName, params.storageKey);
+
+    if (!head) {
+      return null;
+    }
+
+    return {
+      contentType:
+        typeof head.ContentType === 'string' ? head.ContentType : null,
+      contentLength:
+        typeof head.ContentLength === 'number' ? head.ContentLength : null,
+    };
+  }
+
+  private async loadHeadObject(
+    bucketName: string,
+    storageKey: string,
+  ): Promise<HeadObjectCommandOutput | null> {
     try {
-      await this.createClient().send(
+      return await this.createClient().send(
         new HeadObjectCommand({
           Bucket: bucketName,
-          Key: params.storageKey,
+          Key: storageKey,
         }),
       );
-
-      return true;
     } catch (error) {
       if (this.isNotFoundError(error)) {
-        return false;
+        return null;
       }
 
       throw new ServiceUnavailableException({

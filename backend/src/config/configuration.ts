@@ -11,6 +11,12 @@ export default () => ({
   readiness: {
     strictProviders: process.env.READINESS_STRICT_PROVIDERS === 'true',
   },
+  runtimeConfig: {
+    strict: process.env.RUNTIME_CONFIG_STRICT === 'true',
+  },
+  server: {
+    trustProxy: parseTrustProxy(process.env.TRUST_PROXY),
+  },
   otpHashSecret:
     process.env.OTP_HASH_SECRET ?? 'dev-only-change-this-otp-hash-secret',
   otp: {
@@ -132,6 +138,20 @@ export default () => ({
           10,
         ),
       },
+      messengerLink: {
+        windowSeconds: parseInt(
+          process.env.RATE_LIMIT_MESSENGER_LINK_WINDOW_SECONDS ?? '60',
+          10,
+        ),
+        maxRequests: parseInt(
+          process.env.RATE_LIMIT_MESSENGER_LINK_MAX_REQUESTS ?? '30',
+          10,
+        ),
+        blockSeconds: parseInt(
+          process.env.RATE_LIMIT_MESSENGER_LINK_BLOCK_SECONDS ?? '120',
+          10,
+        ),
+      },
     },
   },
   attachments: {
@@ -231,3 +251,31 @@ export default () => ({
     ),
   },
 });
+
+function parseTrustProxy(raw: string | undefined) {
+  if (!raw) {
+    return false;
+  }
+
+  const trimmed = raw.trim();
+
+  if (!trimmed) {
+    return false;
+  }
+
+  const normalized = trimmed.toLowerCase();
+
+  if (normalized === 'true') {
+    return true;
+  }
+
+  if (normalized === 'false') {
+    return false;
+  }
+
+  if (/^\d+$/.test(trimmed)) {
+    return parseInt(trimmed, 10);
+  }
+
+  return trimmed;
+}

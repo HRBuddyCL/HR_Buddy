@@ -47,6 +47,7 @@ describe('RateLimitGuard', () => {
       ip: '10.1.1.10',
       ips: [],
       path: '/auth/otp/send',
+      method: 'POST',
       socket: { remoteAddress: '10.1.1.10' },
     } as never;
 
@@ -87,6 +88,7 @@ describe('RateLimitGuard', () => {
       ip: '10.1.1.10',
       ips: ['203.0.113.11', '10.1.1.10'],
       path: '/auth/otp/send',
+      method: 'POST',
       socket: { remoteAddress: '10.1.1.10' },
     } as never;
 
@@ -111,6 +113,44 @@ describe('RateLimitGuard', () => {
     expect(abuseProtectionService.consume).toHaveBeenCalledWith(
       expect.objectContaining({
         key: expect.stringContaining('203.0.113.11'),
+      }),
+    );
+  });
+
+  it('does not include messenger token in rate limit key', async () => {
+    reflector.getAllAndOverride = jest.fn().mockReturnValue('messengerLink');
+
+    const req = {
+      body: {},
+      headers: { 'x-forwarded-for': '198.51.100.25' },
+      method: 'PATCH',
+      ip: '10.1.1.10',
+      ips: ['203.0.113.11', '10.1.1.10'],
+      path: '/messenger/link/sensitive-token/status',
+      socket: { remoteAddress: '10.1.1.10' },
+    } as never;
+
+    const res = {
+      setHeader: jest.fn(),
+      statusCode: 200,
+    } as never;
+
+    const context = {
+      getType: () => 'http',
+      switchToHttp: () => ({
+        getRequest: () => req,
+        getResponse: () => res,
+      }),
+      getHandler: () => ({}),
+      getClass: () => ({}),
+    } as unknown as ExecutionContext;
+
+    const allowed = await guard.canActivate(context);
+
+    expect(allowed).toBe(true);
+    expect(abuseProtectionService.consume).toHaveBeenCalledWith(
+      expect.objectContaining({
+        key: '203.0.113.11:method=PATCH:messenger-link',
       }),
     );
   });

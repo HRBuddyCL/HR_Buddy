@@ -21,6 +21,7 @@ import {
   assertAttachmentPolicy,
 } from './rules/attachment-policy.rules';
 import { AttachmentStorageService } from './storage/attachment-storage.service';
+import { AttachmentObjectMetadata } from './storage/attachment-storage.interface';
 import {
   signAttachmentUploadTicket,
   verifyAttachmentUploadTicket,
@@ -246,7 +247,24 @@ export class AttachmentsService {
 
     const storageProvider = this.storageService.getProvider();
 
-    if (storageProvider.objectExists) {
+    if (storageProvider.getObjectMetadata) {
+      const metadata = await storageProvider.getObjectMetadata({
+        storageKey: ticket.storageKey,
+      });
+
+      if (!metadata) {
+        throw new BadRequestException({
+          code: 'ATTACHMENT_OBJECT_NOT_FOUND',
+          message: 'Uploaded file was not found in storage',
+        });
+      }
+
+      this.assertUploadedObjectMetadata({
+        expectedMimeType: ticket.mimeType,
+        expectedFileSize: ticket.fileSize,
+        metadata,
+      });
+    } else if (storageProvider.objectExists) {
       const exists = await storageProvider.objectExists({
         storageKey: ticket.storageKey,
       });
@@ -441,6 +459,48 @@ export class AttachmentsService {
         message: 'Not your request',
       });
     }
+  }
+
+  private assertUploadedObjectMetadata(params: {
+    expectedMimeType: string;
+    expectedFileSize: number;
+    metadata: AttachmentObjectMetadata;
+  }) {
+    const actualFileSize = params.metadata.contentLength;
+
+    if (actualFileSize === null || actualFileSize !== params.expectedFileSize) {
+      throw new BadRequestException({
+        code: 'ATTACHMENT_FILE_SIZE_MISMATCH',
+        message: 'Uploaded file size does not match upload ticket',
+      });
+    }
+
+    const expectedMimeType = this.normalizeMimeType(params.expectedMimeType);
+    const actualMimeType = this.normalizeMimeType(params.metadata.contentType);
+
+    if (!actualMimeType || actualMimeType !== expectedMimeType) {
+      throw new BadRequestException({
+        code: 'ATTACHMENT_MIME_TYPE_MISMATCH',
+        message: 'Uploaded file MIME type does not match upload ticket',
+      });
+    }
+  }
+
+  private normalizeMimeType(value: string | null) {
+    if (!value) {
+      return null;
+    }
+
+    const normalized = value.trim().toLowerCase();
+
+    if (!normalized) {
+      return null;
+    }
+
+    const separatorIndex = normalized.indexOf(';');
+    return separatorIndex >= 0
+      ? normalized.slice(0, separatorIndex).trim()
+      : normalized;
   }
 
   private uploadTicketSecret() {

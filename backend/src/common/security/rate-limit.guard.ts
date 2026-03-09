@@ -125,6 +125,8 @@ export class RateLimitGuard implements CanActivate {
         const phone = this.normalizeText(body.phone);
         return `${ip}:phone=${phone ?? '-'}:path=${req.path}`;
       }
+      case 'messengerLink':
+        return `${ip}:method=${req.method}:messenger-link`;
       default:
         return ip;
     }

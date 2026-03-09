@@ -7,6 +7,8 @@ export const envValidationSchema = Joi.object({
   CORS_ALLOW_CREDENTIALS: Joi.boolean().default(true),
   GEO_DATASET_PATH: Joi.string().allow('').optional(),
   READINESS_STRICT_PROVIDERS: Joi.boolean().default(false),
+  RUNTIME_CONFIG_STRICT: Joi.boolean().default(false),
+  TRUST_PROXY: Joi.string().allow('').default(''),
   OTP_HASH_SECRET: Joi.string()
     .min(16)
     .default('dev-only-change-this-otp-hash-secret'),
@@ -107,6 +109,18 @@ export const envValidationSchema = Joi.object({
     .min(1)
     .default(30),
   RATE_LIMIT_REQUEST_CREATE_BLOCK_SECONDS: Joi.number()
+    .integer()
+    .min(0)
+    .default(120),
+  RATE_LIMIT_MESSENGER_LINK_WINDOW_SECONDS: Joi.number()
+    .integer()
+    .min(1)
+    .default(60),
+  RATE_LIMIT_MESSENGER_LINK_MAX_REQUESTS: Joi.number()
+    .integer()
+    .min(1)
+    .default(30),
+  RATE_LIMIT_MESSENGER_LINK_BLOCK_SECONDS: Joi.number()
     .integer()
     .min(0)
     .default(120),

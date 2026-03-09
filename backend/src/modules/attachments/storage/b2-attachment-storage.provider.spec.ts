@@ -87,4 +87,62 @@ describe('B2AttachmentStorageProvider', () => {
       'attachment; filename="myfile.pdf"',
     );
   });
+
+  it('returns object metadata from head object', async () => {
+    const sendMock = jest.fn().mockResolvedValue({
+      ContentType: 'application/pdf',
+      ContentLength: 1024,
+    });
+
+    jest
+      .spyOn(provider as any, 'createClient')
+      .mockReturnValue({ send: sendMock } as any);
+
+    await expect(
+      provider.getObjectMetadata({
+        storageKey: 'requests/req-1/test.pdf',
+      }),
+    ).resolves.toEqual({
+      contentType: 'application/pdf',
+      contentLength: 1024,
+    });
+  });
+
+  it('returns null metadata when object does not exist', async () => {
+    const sendMock = jest.fn().mockRejectedValue({
+      $metadata: {
+        httpStatusCode: 404,
+      },
+    });
+
+    jest
+      .spyOn(provider as any, 'createClient')
+      .mockReturnValue({ send: sendMock } as any);
+
+    await expect(
+      provider.getObjectMetadata({
+        storageKey: 'requests/req-1/missing.pdf',
+      }),
+    ).resolves.toBeNull();
+
+    await expect(
+      provider.objectExists({
+        storageKey: 'requests/req-1/missing.pdf',
+      }),
+    ).resolves.toBe(false);
+  });
+
+  it('throws when head object check fails with unknown error', async () => {
+    const sendMock = jest.fn().mockRejectedValue(new Error('boom'));
+
+    jest
+      .spyOn(provider as any, 'createClient')
+      .mockReturnValue({ send: sendMock } as any);
+
+    await expect(
+      provider.getObjectMetadata({
+        storageKey: 'requests/req-1/test.pdf',
+      }),
+    ).rejects.toBeInstanceOf(ServiceUnavailableException);
+  });
 });

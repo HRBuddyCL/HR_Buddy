@@ -1,6 +1,7 @@
 import { ArgumentsHost, Catch, HttpException, Logger } from '@nestjs/common';
 import { BaseExceptionFilter, HttpAdapterHost } from '@nestjs/core';
 import { Request } from 'express';
+import { redactUrlForLogs } from './url-redaction.util';
 
 @Catch()
 export class ExceptionLoggingFilter extends BaseExceptionFilter {
@@ -30,7 +31,7 @@ export class ExceptionLoggingFilter extends BaseExceptionFilter {
             event: 'http_exception',
             requestId: req.requestId ?? null,
             method: req.method,
-            path: req.originalUrl ?? req.url,
+            path: redactUrlForLogs(req.originalUrl ?? req.url),
             statusCode,
             message:
               responsePayload ??

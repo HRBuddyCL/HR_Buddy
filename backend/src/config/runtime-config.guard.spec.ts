@@ -21,6 +21,7 @@ describe('runtime-config guard', () => {
     'readiness.strictProviders': false,
     corsOrigins: ['https://portal.construction-lines.local'],
     corsAllowCredentials: true,
+    'runtimeConfig.strict': false,
   };
 
   const makeConfig = (overrides?: Record<string, unknown>) => {
@@ -147,6 +148,19 @@ describe('runtime-config guard', () => {
     ).toThrow(
       'OTP_WEBHOOK_SIGNING_SECRET is required when OTP_DELIVERY_PROVIDER=webhook',
     );
+  });
+
+  it('throws in non-production when runtime strict is enabled', () => {
+    process.env.NODE_ENV = 'development';
+
+    expect(() =>
+      assertRuntimeConfig(
+        makeConfig({
+          'runtimeConfig.strict': true,
+          'otp.deliveryProvider': 'console',
+        }),
+      ),
+    ).toThrow('OTP_DELIVERY_PROVIDER cannot be console in production');
   });
 
   it('passes in production when config is secure', () => {

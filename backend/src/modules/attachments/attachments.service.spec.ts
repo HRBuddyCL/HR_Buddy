@@ -52,6 +52,7 @@ describe('AttachmentsService', () => {
     createUploadPresign: jest.fn(),
     createDownloadPresign: jest.fn(),
     objectExists: jest.fn(),
+    getObjectMetadata: jest.fn(),
   };
 
   const storageService = {
@@ -118,6 +119,10 @@ describe('AttachmentsService', () => {
     });
 
     storageProvider.objectExists.mockResolvedValue(true);
+    storageProvider.getObjectMetadata.mockResolvedValue({
+      contentType: 'application/pdf',
+      contentLength: 1024,
+    });
   });
 
   it('issues admin upload ticket with signed token and storage presign', async () => {
@@ -199,7 +204,7 @@ describe('AttachmentsService', () => {
       uploadSecret,
     );
 
-    storageProvider.objectExists.mockResolvedValue(false);
+    storageProvider.getObjectMetadata.mockResolvedValue(null);
 
     await expectErrorCode(
       service.completeAdminUpload('req-1', { uploadToken }),
@@ -208,6 +213,58 @@ describe('AttachmentsService', () => {
 
     expect(tx.requestAttachment.create).not.toHaveBeenCalled();
   });
+  it('rejects complete upload when uploaded file size does not match ticket', async () => {
+    const uploadToken = signAttachmentUploadTicket(
+      {
+        requestId: 'req-1',
+        storageKey: 'requests/req-1/doc.pdf',
+        fileKind: 'DOCUMENT',
+        fileName: 'doc.pdf',
+        mimeType: 'application/pdf',
+        fileSize: 1024,
+        uploadedByRole: UploadedByRole.ADMIN,
+        exp: Math.floor(Date.now() / 1000) + 60,
+      },
+      uploadSecret,
+    );
+
+    storageProvider.getObjectMetadata.mockResolvedValue({
+      contentType: 'application/pdf',
+      contentLength: 2048,
+    });
+
+    await expectErrorCode(
+      service.completeAdminUpload('req-1', { uploadToken }),
+      'ATTACHMENT_FILE_SIZE_MISMATCH',
+    );
+  });
+
+  it('rejects complete upload when uploaded mime type does not match ticket', async () => {
+    const uploadToken = signAttachmentUploadTicket(
+      {
+        requestId: 'req-1',
+        storageKey: 'requests/req-1/doc.pdf',
+        fileKind: 'DOCUMENT',
+        fileName: 'doc.pdf',
+        mimeType: 'application/pdf',
+        fileSize: 1024,
+        uploadedByRole: UploadedByRole.ADMIN,
+        exp: Math.floor(Date.now() / 1000) + 60,
+      },
+      uploadSecret,
+    );
+
+    storageProvider.getObjectMetadata.mockResolvedValue({
+      contentType: 'image/png',
+      contentLength: 1024,
+    });
+
+    await expectErrorCode(
+      service.completeAdminUpload('req-1', { uploadToken }),
+      'ATTACHMENT_MIME_TYPE_MISMATCH',
+    );
+  });
+
   it('rejects complete upload when token role mismatches actor role', async () => {
     const uploadToken = signAttachmentUploadTicket(
       {

@@ -4,7 +4,8 @@ export type RateLimitPolicyName =
   | 'otpSend'
   | 'otpVerify'
   | 'adminLogin'
-  | 'requestCreate';
+  | 'requestCreate'
+  | 'messengerLink';
 
 export type RateLimitPolicyConfig = {
   windowSeconds: number;

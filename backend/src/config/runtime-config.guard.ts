@@ -8,7 +8,7 @@ type ValidationResult = {
 };
 
 export function assertRuntimeConfig(config: ConfigService) {
-  if (!isProduction()) {
+  if (!shouldValidateRuntimeConfig(config)) {
     return;
   }
 
@@ -245,6 +245,11 @@ function isLocalhostOrigin(origin: string) {
     return false;
   }
 }
+function shouldValidateRuntimeConfig(config: ConfigService) {
+  const strict = config.get<boolean>('runtimeConfig.strict') ?? false;
+  return strict || isProduction();
+}
+
 function isProduction() {
   return process.env.NODE_ENV === 'production';
 }

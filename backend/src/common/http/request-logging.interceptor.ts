@@ -8,6 +8,7 @@ import {
 import { Observable } from 'rxjs';
 import { finalize } from 'rxjs/operators';
 import { Request, Response } from 'express';
+import { redactUrlForLogs } from './url-redaction.util';
 
 @Injectable()
 export class RequestLoggingInterceptor implements NestInterceptor {
@@ -34,7 +35,7 @@ export class RequestLoggingInterceptor implements NestInterceptor {
             event: 'http_request',
             requestId: req.requestId ?? null,
             method: req.method,
-            path: req.originalUrl ?? req.url,
+            path: redactUrlForLogs(req.originalUrl ?? req.url),
             statusCode: res.statusCode,
             durationMs: Number(durationMs.toFixed(2)),
             ip: req.ip,

@@ -17,6 +17,13 @@ async function bootstrap() {
 
   const config = app.get(ConfigService);
   assertRuntimeConfig(config);
+
+  const trustProxy = config.get<boolean | number | string>('server.trustProxy');
+  const expressApp = app.getHttpAdapter().getInstance() as {
+    set: (setting: string, value: boolean | number | string) => void;
+  };
+  expressApp.set('trust proxy', trustProxy ?? false);
+
   app.enableCors({
     origin: config.get<string[]>('corsOrigins'),
     credentials: config.get<boolean>('corsAllowCredentials') ?? true,

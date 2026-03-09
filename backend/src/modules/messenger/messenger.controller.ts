@@ -1,9 +1,11 @@
 import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
+import { RateLimitPolicy } from '../../common/security/rate-limit.decorator';
 import { MessengerService } from './messenger.service';
 import { MessengerStatusUpdateDto } from './dto/messenger-status-update.dto';
 import { MessengerProblemReportDto } from './dto/messenger-problem-report.dto';
 import { MessengerPickupEventDto } from './dto/messenger-pickup-event.dto';
 
+@RateLimitPolicy('messengerLink')
 @Controller('messenger')
 export class MessengerController {
   constructor(private readonly messengerService: MessengerService) {}
