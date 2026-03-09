@@ -12,8 +12,10 @@ describe('runtime-config guard', () => {
     'adminAuth.sessionSecret': 'admin-session-strong-secret-1234567890',
     'adminAuth.password': 'ultra-strong-admin-password',
     'otp.deliveryProvider': 'webhook',
+    'otp.webhookUrl': 'https://otp.example/webhook',
     'otp.webhookSigningSecret': 'otp-webhook-signing-secret-123456',
     'attachments.storage.provider': 'webhook',
+    'attachments.storage.webhookUrl': 'https://storage.example/webhook',
     'attachments.storage.webhookSigningSecret':
       'attachment-webhook-signing-secret-123456',
     'readiness.strictProviders': false,
@@ -55,7 +57,7 @@ describe('runtime-config guard', () => {
     );
   });
 
-  it('returns validation errors when strict providers mode is enabled but providers are not webhook', () => {
+  it('returns validation errors when strict providers mode is enabled but providers are not production-like', () => {
     const result = validateProductionConfig(
       makeConfig({
         'readiness.strictProviders': true,
@@ -65,10 +67,56 @@ describe('runtime-config guard', () => {
     );
 
     expect(result.errors).toContain(
-      'READINESS_STRICT_PROVIDERS=true requires OTP_DELIVERY_PROVIDER=webhook',
+      'READINESS_STRICT_PROVIDERS=true requires OTP_DELIVERY_PROVIDER to be smtp or webhook',
     );
     expect(result.errors).toContain(
-      'READINESS_STRICT_PROVIDERS=true requires ATTACHMENT_STORAGE_PROVIDER=webhook',
+      'READINESS_STRICT_PROVIDERS=true requires ATTACHMENT_STORAGE_PROVIDER to be b2 or webhook',
+    );
+  });
+
+  it('returns validation error when smtp provider is missing credentials', () => {
+    const result = validateProductionConfig(
+      makeConfig({
+        'otp.deliveryProvider': 'smtp',
+        'otp.smtp.username': '',
+        'otp.smtp.appPassword': '',
+        'otp.smtp.fromEmail': '',
+      }),
+    );
+
+    expect(result.errors).toContain(
+      'OTP_SMTP_USERNAME is required when OTP_DELIVERY_PROVIDER=smtp',
+    );
+    expect(result.errors).toContain(
+      'OTP_SMTP_APP_PASSWORD is required when OTP_DELIVERY_PROVIDER=smtp',
+    );
+    expect(result.errors).toContain(
+      'OTP_SMTP_FROM_EMAIL is required when OTP_DELIVERY_PROVIDER=smtp',
+    );
+  });
+
+  it('returns validation error when b2 provider is missing credentials', () => {
+    const result = validateProductionConfig(
+      makeConfig({
+        'attachments.storage.provider': 'b2',
+        'attachments.storage.b2.bucketName': '',
+        'attachments.storage.b2.s3Endpoint': '',
+        'attachments.storage.b2.accessKeyId': '',
+        'attachments.storage.b2.secretAccessKey': '',
+      }),
+    );
+
+    expect(result.errors).toContain(
+      'ATTACHMENT_B2_BUCKET_NAME is required when ATTACHMENT_STORAGE_PROVIDER=b2',
+    );
+    expect(result.errors).toContain(
+      'ATTACHMENT_B2_S3_ENDPOINT is required when ATTACHMENT_STORAGE_PROVIDER=b2',
+    );
+    expect(result.errors).toContain(
+      'ATTACHMENT_B2_ACCESS_KEY_ID is required when ATTACHMENT_STORAGE_PROVIDER=b2',
+    );
+    expect(result.errors).toContain(
+      'ATTACHMENT_B2_SECRET_ACCESS_KEY is required when ATTACHMENT_STORAGE_PROVIDER=b2',
     );
   });
 
@@ -107,19 +155,28 @@ describe('runtime-config guard', () => {
     expect(() => assertRuntimeConfig(makeConfig())).not.toThrow();
   });
 
-  it('passes in production strict mode when providers are webhook', () => {
+  it('passes in production strict mode when providers are smtp and b2', () => {
     process.env.NODE_ENV = 'production';
 
     expect(() =>
       assertRuntimeConfig(
         makeConfig({
           'readiness.strictProviders': true,
-          'otp.deliveryProvider': 'webhook',
-          'attachments.storage.provider': 'webhook',
+          'otp.deliveryProvider': 'smtp',
+          'otp.smtp.username': 'sender@gmail.com',
+          'otp.smtp.appPassword': 'app-password-123456',
+          'otp.smtp.fromEmail': 'sender@gmail.com',
+          'attachments.storage.provider': 'b2',
+          'attachments.storage.b2.bucketName': 'hrbuddy-attachments',
+          'attachments.storage.b2.s3Endpoint':
+            'https://s3.us-west-004.backblazeb2.com',
+          'attachments.storage.b2.accessKeyId': 'key-id',
+          'attachments.storage.b2.secretAccessKey': 'secret-key-123456',
         }),
       ),
     ).not.toThrow();
   });
+
   it('returns validation error when production cors origins include localhost', () => {
     const result = validateProductionConfig(
       makeConfig({
@@ -146,6 +203,7 @@ describe('runtime-config guard', () => {
       'CORS_ORIGINS must not include localhost origins in production: http://[::1]:3000',
     );
   });
+
   it('returns validation error when wildcard cors origin is used with credentials', () => {
     const result = validateProductionConfig(
       makeConfig({

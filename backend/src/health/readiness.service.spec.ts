@@ -110,7 +110,39 @@ describe('ReadinessService', () => {
     );
   });
 
-  it('returns not ready when strict providers mode requires otp webhook', async () => {
+  it('returns not ready when smtp provider credentials are missing', async () => {
+    process.env.NODE_ENV = 'development';
+    (prisma.$queryRaw as jest.Mock).mockResolvedValue([{ '?column?': 1 }]);
+
+    const config = makeConfig({
+      'otp.deliveryProvider': 'smtp',
+      'otp.smtp.username': '',
+      'otp.smtp.appPassword': '',
+      'otp.smtp.fromEmail': '',
+      'attachments.storage.provider': 'local',
+      'readiness.strictProviders': false,
+      'abuseProtection.enabled': true,
+      'abuseProtection.store': 'memory',
+    });
+
+    const svc = new ReadinessService(prisma, config);
+
+    const report = await svc.getReport();
+
+    expect(report.ok).toBe(false);
+    expect(report.checks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'otp-provider',
+          ok: false,
+          message:
+            'otp smtp provider is enabled but SMTP credentials are incomplete',
+        }),
+      ]),
+    );
+  });
+
+  it('returns not ready when strict providers mode requires production-like otp provider', async () => {
     process.env.NODE_ENV = 'development';
     (prisma.$queryRaw as jest.Mock).mockResolvedValue([{ '?column?': 1 }]);
 
@@ -134,13 +166,13 @@ describe('ReadinessService', () => {
           name: 'otp-provider',
           ok: false,
           message:
-            'READINESS_STRICT_PROVIDERS=true requires OTP_DELIVERY_PROVIDER=webhook',
+            'READINESS_STRICT_PROVIDERS=true requires OTP_DELIVERY_PROVIDER to be smtp or webhook',
         }),
       ]),
     );
   });
 
-  it('returns not ready when strict providers mode requires attachment webhook', async () => {
+  it('returns not ready when strict providers mode requires production-like attachment provider', async () => {
     process.env.NODE_ENV = 'development';
     (prisma.$queryRaw as jest.Mock).mockResolvedValue([{ '?column?': 1 }]);
 
@@ -164,21 +196,27 @@ describe('ReadinessService', () => {
           name: 'attachment-storage-provider',
           ok: false,
           message:
-            'READINESS_STRICT_PROVIDERS=true requires ATTACHMENT_STORAGE_PROVIDER=webhook',
+            'READINESS_STRICT_PROVIDERS=true requires ATTACHMENT_STORAGE_PROVIDER to be b2 or webhook',
         }),
       ]),
     );
   });
 
-  it('returns healthy report in strict providers mode when both providers are webhook', async () => {
+  it('returns healthy report in strict providers mode when otp is smtp and attachment is b2', async () => {
     process.env.NODE_ENV = 'development';
     (prisma.$queryRaw as jest.Mock).mockResolvedValue([{ '?column?': 1 }]);
 
     const config = makeConfig({
-      'otp.deliveryProvider': 'webhook',
-      'otp.webhookUrl': 'https://otp.example/webhook',
-      'attachments.storage.provider': 'webhook',
-      'attachments.storage.webhookUrl': 'https://storage.example/webhook',
+      'otp.deliveryProvider': 'smtp',
+      'otp.smtp.username': 'sender@gmail.com',
+      'otp.smtp.appPassword': 'app-password-123456',
+      'otp.smtp.fromEmail': 'sender@gmail.com',
+      'attachments.storage.provider': 'b2',
+      'attachments.storage.b2.bucketName': 'hrbuddy-attachments',
+      'attachments.storage.b2.s3Endpoint':
+        'https://s3.us-west-004.backblazeb2.com',
+      'attachments.storage.b2.accessKeyId': 'key-id',
+      'attachments.storage.b2.secretAccessKey': 'secret-key-123456',
       'readiness.strictProviders': true,
       'abuseProtection.enabled': true,
       'abuseProtection.store': 'memory',

@@ -16,7 +16,7 @@ export const envValidationSchema = Joi.object({
   OTP_SEND_COOLDOWN_SECONDS: Joi.number().integer().min(0).default(60),
   OTP_MAX_SEND_PER_HOUR: Joi.number().integer().min(1).max(60).default(6),
   OTP_DELIVERY_PROVIDER: Joi.string()
-    .valid('console', 'webhook')
+    .valid('console', 'webhook', 'smtp')
     .default('console'),
   OTP_WEBHOOK_URL: Joi.when('OTP_DELIVERY_PROVIDER', {
     is: 'webhook',
@@ -25,6 +25,7 @@ export const envValidationSchema = Joi.object({
       .required(),
     otherwise: Joi.string()
       .uri({ scheme: ['http', 'https'] })
+      .allow('')
       .optional(),
   }),
   OTP_WEBHOOK_API_KEY: Joi.string().allow('').optional(),
@@ -33,6 +34,25 @@ export const envValidationSchema = Joi.object({
   OTP_WEBHOOK_TIMEOUT_MS: Joi.number().integer().min(500).default(5000),
   OTP_WEBHOOK_MAX_RETRIES: Joi.number().integer().min(0).max(10).default(2),
   OTP_WEBHOOK_RETRY_DELAY_MS: Joi.number().integer().min(0).default(200),
+  OTP_SMTP_HOST: Joi.string().default('smtp.gmail.com'),
+  OTP_SMTP_PORT: Joi.number().integer().min(1).default(465),
+  OTP_SMTP_SECURE: Joi.boolean().default(true),
+  OTP_SMTP_USERNAME: Joi.when('OTP_DELIVERY_PROVIDER', {
+    is: 'smtp',
+    then: Joi.string().min(3).required(),
+    otherwise: Joi.string().allow('').optional(),
+  }),
+  OTP_SMTP_APP_PASSWORD: Joi.when('OTP_DELIVERY_PROVIDER', {
+    is: 'smtp',
+    then: Joi.string().min(8).required(),
+    otherwise: Joi.string().allow('').optional(),
+  }),
+  OTP_SMTP_FROM_EMAIL: Joi.when('OTP_DELIVERY_PROVIDER', {
+    is: 'smtp',
+    then: Joi.string().email().required(),
+    otherwise: Joi.string().email().allow('').optional(),
+  }),
+  OTP_SMTP_TIMEOUT_MS: Joi.number().integer().min(500).default(8000),
 
   REQUEST_DEDUPE_WINDOW_SECONDS: Joi.number().integer().min(0).default(30),
   REQUEST_CREATE_USE_DB_LOCK: Joi.boolean().default(true),
@@ -103,7 +123,7 @@ export const envValidationSchema = Joi.object({
     .min(60)
     .default(900),
   ATTACHMENT_STORAGE_PROVIDER: Joi.string()
-    .valid('local', 'webhook')
+    .valid('local', 'webhook', 'b2')
     .default('local'),
   ATTACHMENT_STORAGE_BASE_URL: Joi.string()
     .uri({ scheme: ['http', 'https'] })
@@ -115,6 +135,7 @@ export const envValidationSchema = Joi.object({
       .required(),
     otherwise: Joi.string()
       .uri({ scheme: ['http', 'https'] })
+      .allow('')
       .optional(),
   }),
   ATTACHMENT_STORAGE_WEBHOOK_API_KEY: Joi.string().allow('').optional(),
@@ -135,6 +156,37 @@ export const envValidationSchema = Joi.object({
     .integer()
     .min(0)
     .default(200),
+  ATTACHMENT_B2_BUCKET_NAME: Joi.when('ATTACHMENT_STORAGE_PROVIDER', {
+    is: 'b2',
+    then: Joi.string().min(6).required(),
+    otherwise: Joi.string().allow('').optional(),
+  }),
+  ATTACHMENT_B2_S3_ENDPOINT: Joi.when('ATTACHMENT_STORAGE_PROVIDER', {
+    is: 'b2',
+    then: Joi.string()
+      .uri({ scheme: ['http', 'https'] })
+      .required(),
+    otherwise: Joi.string()
+      .uri({ scheme: ['http', 'https'] })
+      .allow('')
+      .optional(),
+  }),
+  ATTACHMENT_B2_REGION: Joi.string().default('us-west-004'),
+  ATTACHMENT_B2_ACCESS_KEY_ID: Joi.when('ATTACHMENT_STORAGE_PROVIDER', {
+    is: 'b2',
+    then: Joi.string().min(3).required(),
+    otherwise: Joi.string().allow('').optional(),
+  }),
+  ATTACHMENT_B2_SECRET_ACCESS_KEY: Joi.when('ATTACHMENT_STORAGE_PROVIDER', {
+    is: 'b2',
+    then: Joi.string().min(8).required(),
+    otherwise: Joi.string().allow('').optional(),
+  }),
+  ATTACHMENT_B2_MAX_PRESIGN_TTL_SECONDS: Joi.number()
+    .integer()
+    .min(60)
+    .max(604800)
+    .default(3600),
 
   RETENTION_ENABLED: Joi.boolean().default(false),
   RETENTION_RUN_ON_STARTUP: Joi.boolean().default(false),

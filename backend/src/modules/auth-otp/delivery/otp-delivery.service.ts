@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { OtpConsoleDeliveryProvider } from './otp-console-delivery.provider';
 import { OtpDeliveryProvider } from './otp-delivery.interface';
+import { OtpSmtpDeliveryProvider } from './otp-smtp-delivery.provider';
 import { OtpWebhookDeliveryProvider } from './otp-webhook-delivery.provider';
 
 @Injectable()
@@ -10,6 +11,7 @@ export class OtpDeliveryService {
     private readonly config: ConfigService,
     private readonly consoleProvider: OtpConsoleDeliveryProvider,
     private readonly webhookProvider: OtpWebhookDeliveryProvider,
+    private readonly smtpProvider: OtpSmtpDeliveryProvider,
   ) {}
 
   getProvider(): OtpDeliveryProvider {
@@ -18,6 +20,10 @@ export class OtpDeliveryService {
 
     if (provider === 'webhook') {
       return this.webhookProvider;
+    }
+
+    if (provider === 'smtp') {
+      return this.smtpProvider;
     }
 
     return this.consoleProvider;

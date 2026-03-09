@@ -1,6 +1,7 @@
 import { ConfigService } from '@nestjs/config';
 import { OtpConsoleDeliveryProvider } from './otp-console-delivery.provider';
 import { OtpDeliveryService } from './otp-delivery.service';
+import { OtpSmtpDeliveryProvider } from './otp-smtp-delivery.provider';
 import { OtpWebhookDeliveryProvider } from './otp-webhook-delivery.provider';
 
 describe('OtpDeliveryService', () => {
@@ -13,14 +14,38 @@ describe('OtpDeliveryService', () => {
 
     const consoleProvider = {} as OtpConsoleDeliveryProvider;
     const webhookProvider = {} as OtpWebhookDeliveryProvider;
+    const smtpProvider = {} as OtpSmtpDeliveryProvider;
 
     const svc = new OtpDeliveryService(
       config,
       consoleProvider,
       webhookProvider,
+      smtpProvider,
     );
 
     expect(svc.getProvider()).toBe(webhookProvider);
+    expect(svc.isConsoleProvider()).toBe(false);
+  });
+
+  it('returns smtp provider when configured', () => {
+    const config = {
+      get: jest.fn((key: string) =>
+        key === 'otp.deliveryProvider' ? 'smtp' : undefined,
+      ),
+    } as unknown as ConfigService;
+
+    const consoleProvider = {} as OtpConsoleDeliveryProvider;
+    const webhookProvider = {} as OtpWebhookDeliveryProvider;
+    const smtpProvider = {} as OtpSmtpDeliveryProvider;
+
+    const svc = new OtpDeliveryService(
+      config,
+      consoleProvider,
+      webhookProvider,
+      smtpProvider,
+    );
+
+    expect(svc.getProvider()).toBe(smtpProvider);
     expect(svc.isConsoleProvider()).toBe(false);
   });
 
@@ -31,11 +56,13 @@ describe('OtpDeliveryService', () => {
 
     const consoleProvider = {} as OtpConsoleDeliveryProvider;
     const webhookProvider = {} as OtpWebhookDeliveryProvider;
+    const smtpProvider = {} as OtpSmtpDeliveryProvider;
 
     const svc = new OtpDeliveryService(
       config,
       consoleProvider,
       webhookProvider,
+      smtpProvider,
     );
 
     expect(svc.getProvider()).toBe(consoleProvider);

@@ -39,6 +39,15 @@ export default () => ({
       process.env.OTP_WEBHOOK_RETRY_DELAY_MS ?? '200',
       10,
     ),
+    smtp: {
+      host: process.env.OTP_SMTP_HOST ?? 'smtp.gmail.com',
+      port: parseInt(process.env.OTP_SMTP_PORT ?? '465', 10),
+      secure: process.env.OTP_SMTP_SECURE !== 'false',
+      username: process.env.OTP_SMTP_USERNAME ?? null,
+      appPassword: process.env.OTP_SMTP_APP_PASSWORD ?? null,
+      fromEmail: process.env.OTP_SMTP_FROM_EMAIL ?? null,
+      timeoutMs: parseInt(process.env.OTP_SMTP_TIMEOUT_MS ?? '8000', 10),
+    },
   },
   requestDedupeWindowSeconds: parseInt(
     process.env.REQUEST_DEDUPE_WINDOW_SECONDS ?? '30',
@@ -158,6 +167,17 @@ export default () => ({
         process.env.ATTACHMENT_STORAGE_WEBHOOK_RETRY_DELAY_MS ?? '200',
         10,
       ),
+      b2: {
+        bucketName: process.env.ATTACHMENT_B2_BUCKET_NAME ?? null,
+        s3Endpoint: process.env.ATTACHMENT_B2_S3_ENDPOINT ?? null,
+        region: process.env.ATTACHMENT_B2_REGION ?? 'us-west-004',
+        accessKeyId: process.env.ATTACHMENT_B2_ACCESS_KEY_ID ?? null,
+        secretAccessKey: process.env.ATTACHMENT_B2_SECRET_ACCESS_KEY ?? null,
+        maxPresignTtlSeconds: parseInt(
+          process.env.ATTACHMENT_B2_MAX_PRESIGN_TTL_SECONDS ?? '3600',
+          10,
+        ),
+      },
     },
   },
   retention: {

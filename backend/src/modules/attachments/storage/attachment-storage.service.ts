@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AttachmentStorageProvider } from './attachment-storage.interface';
+import { B2AttachmentStorageProvider } from './b2-attachment-storage.provider';
 import { LocalAttachmentStorageProvider } from './local-attachment-storage.provider';
 import { WebhookAttachmentStorageProvider } from './webhook-attachment-storage.provider';
 
@@ -10,6 +11,7 @@ export class AttachmentStorageService {
     private readonly config: ConfigService,
     private readonly localProvider: LocalAttachmentStorageProvider,
     private readonly webhookProvider: WebhookAttachmentStorageProvider,
+    private readonly b2Provider: B2AttachmentStorageProvider,
   ) {}
 
   getProvider(): AttachmentStorageProvider {
@@ -18,6 +20,10 @@ export class AttachmentStorageService {
 
     if (provider === 'webhook') {
       return this.webhookProvider;
+    }
+
+    if (provider === 'b2') {
+      return this.b2Provider;
     }
 
     return this.localProvider;

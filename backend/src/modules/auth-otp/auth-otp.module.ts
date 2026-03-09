@@ -3,6 +3,7 @@ import { AuthOtpController } from './auth-otp.controller';
 import { AuthOtpService } from './auth-otp.service';
 import { OtpConsoleDeliveryProvider } from './delivery/otp-console-delivery.provider';
 import { OtpDeliveryService } from './delivery/otp-delivery.service';
+import { OtpSmtpDeliveryProvider } from './delivery/otp-smtp-delivery.provider';
 import { OtpWebhookDeliveryProvider } from './delivery/otp-webhook-delivery.provider';
 import { EmployeeSessionGuard } from './employee-session.guard';
 
@@ -13,6 +14,7 @@ import { EmployeeSessionGuard } from './employee-session.guard';
     OtpDeliveryService,
     OtpConsoleDeliveryProvider,
     OtpWebhookDeliveryProvider,
+    OtpSmtpDeliveryProvider,
     EmployeeSessionGuard,
   ],
   exports: [AuthOtpService, EmployeeSessionGuard],

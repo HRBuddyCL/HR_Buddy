@@ -68,38 +68,60 @@ export class ReadinessService {
       this.config.get<string>('otp.deliveryProvider') ?? 'console';
     const strictProviders = this.strictProvidersEnabled();
 
-    if (provider !== 'webhook') {
-      if (strictProviders) {
+    if (provider === 'webhook') {
+      const webhookUrl = this.config.get<string>('otp.webhookUrl')?.trim() ?? '';
+
+      if (!webhookUrl) {
         return {
           name: 'otp-provider',
           ok: false,
           message:
-            'READINESS_STRICT_PROVIDERS=true requires OTP_DELIVERY_PROVIDER=webhook',
+            'otp webhook provider is enabled but OTP_WEBHOOK_URL is missing',
         };
       }
 
       return {
         name: 'otp-provider',
         ok: true,
-        message: `otp provider '${provider}' is configured`,
+        message: 'otp webhook provider is configured',
       };
     }
 
-    const webhookUrl = this.config.get<string>('otp.webhookUrl')?.trim() ?? '';
+    if (provider === 'smtp') {
+      const username = this.config.get<string>('otp.smtp.username')?.trim() ?? '';
+      const appPassword =
+        this.config.get<string>('otp.smtp.appPassword')?.trim() ?? '';
+      const fromEmail = this.config.get<string>('otp.smtp.fromEmail')?.trim() ?? '';
 
-    if (!webhookUrl) {
+      if (!username || !appPassword || !fromEmail) {
+        return {
+          name: 'otp-provider',
+          ok: false,
+          message:
+            'otp smtp provider is enabled but SMTP credentials are incomplete',
+        };
+      }
+
+      return {
+        name: 'otp-provider',
+        ok: true,
+        message: 'otp smtp provider is configured',
+      };
+    }
+
+    if (strictProviders) {
       return {
         name: 'otp-provider',
         ok: false,
         message:
-          'otp webhook provider is enabled but OTP_WEBHOOK_URL is missing',
+          'READINESS_STRICT_PROVIDERS=true requires OTP_DELIVERY_PROVIDER to be smtp or webhook',
       };
     }
 
     return {
       name: 'otp-provider',
       ok: true,
-      message: 'otp webhook provider is configured',
+      message: `otp provider '${provider}' is configured`,
     };
   }
 
@@ -108,39 +130,70 @@ export class ReadinessService {
       this.config.get<string>('attachments.storage.provider') ?? 'local';
     const strictProviders = this.strictProvidersEnabled();
 
-    if (provider !== 'webhook') {
-      if (strictProviders) {
+    if (provider === 'webhook') {
+      const webhookUrl =
+        this.config.get<string>('attachments.storage.webhookUrl')?.trim() ?? '';
+
+      if (!webhookUrl) {
         return {
           name: 'attachment-storage-provider',
           ok: false,
           message:
-            'READINESS_STRICT_PROVIDERS=true requires ATTACHMENT_STORAGE_PROVIDER=webhook',
+            'attachment webhook provider is enabled but ATTACHMENT_STORAGE_WEBHOOK_URL is missing',
         };
       }
 
       return {
         name: 'attachment-storage-provider',
         ok: true,
-        message: `attachment storage provider '${provider}' is configured`,
+        message: 'attachment storage webhook provider is configured',
       };
     }
 
-    const webhookUrl =
-      this.config.get<string>('attachments.storage.webhookUrl')?.trim() ?? '';
+    if (provider === 'b2') {
+      const bucketName =
+        this.config.get<string>('attachments.storage.b2.bucketName')?.trim() ??
+        '';
+      const endpoint =
+        this.config.get<string>('attachments.storage.b2.s3Endpoint')?.trim() ??
+        '';
+      const accessKeyId =
+        this.config.get<string>('attachments.storage.b2.accessKeyId')?.trim() ??
+        '';
+      const secretAccessKey =
+        this.config
+          .get<string>('attachments.storage.b2.secretAccessKey')
+          ?.trim() ?? '';
 
-    if (!webhookUrl) {
+      if (!bucketName || !endpoint || !accessKeyId || !secretAccessKey) {
+        return {
+          name: 'attachment-storage-provider',
+          ok: false,
+          message:
+            'attachment b2 provider is enabled but B2 credentials are incomplete',
+        };
+      }
+
+      return {
+        name: 'attachment-storage-provider',
+        ok: true,
+        message: 'attachment storage b2 provider is configured',
+      };
+    }
+
+    if (strictProviders) {
       return {
         name: 'attachment-storage-provider',
         ok: false,
         message:
-          'attachment webhook provider is enabled but ATTACHMENT_STORAGE_WEBHOOK_URL is missing',
+          'READINESS_STRICT_PROVIDERS=true requires ATTACHMENT_STORAGE_PROVIDER to be b2 or webhook',
       };
     }
 
     return {
       name: 'attachment-storage-provider',
       ok: true,
-      message: 'attachment storage webhook provider is configured',
+      message: `attachment storage provider '${provider}' is configured`,
     };
   }
 

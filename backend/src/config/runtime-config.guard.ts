@@ -76,8 +76,13 @@ export function validateProductionConfig(
   }
 
   if (otpProvider === 'webhook') {
+    const webhookUrl = config.get<string>('otp.webhookUrl')?.trim() ?? '';
     const signingSecret =
       config.get<string>('otp.webhookSigningSecret')?.trim() ?? '';
+
+    if (!webhookUrl) {
+      errors.push('OTP_WEBHOOK_URL is required when OTP_DELIVERY_PROVIDER=webhook');
+    }
 
     if (!signingSecret) {
       errors.push(
@@ -86,13 +91,42 @@ export function validateProductionConfig(
     }
   }
 
+  if (otpProvider === 'smtp') {
+    const username = config.get<string>('otp.smtp.username')?.trim() ?? '';
+    const appPassword =
+      config.get<string>('otp.smtp.appPassword')?.trim() ?? '';
+    const fromEmail = config.get<string>('otp.smtp.fromEmail')?.trim() ?? '';
+
+    if (!username) {
+      errors.push('OTP_SMTP_USERNAME is required when OTP_DELIVERY_PROVIDER=smtp');
+    }
+
+    if (!appPassword) {
+      errors.push(
+        'OTP_SMTP_APP_PASSWORD is required when OTP_DELIVERY_PROVIDER=smtp',
+      );
+    }
+
+    if (!fromEmail) {
+      errors.push('OTP_SMTP_FROM_EMAIL is required when OTP_DELIVERY_PROVIDER=smtp');
+    }
+  }
+
   const attachmentProvider =
     config.get<string>('attachments.storage.provider') ?? 'local';
 
   if (attachmentProvider === 'webhook') {
+    const webhookUrl =
+      config.get<string>('attachments.storage.webhookUrl')?.trim() ?? '';
     const signingSecret =
       config.get<string>('attachments.storage.webhookSigningSecret')?.trim() ??
       '';
+
+    if (!webhookUrl) {
+      errors.push(
+        'ATTACHMENT_STORAGE_WEBHOOK_URL is required when ATTACHMENT_STORAGE_PROVIDER=webhook',
+      );
+    }
 
     if (!signingSecret) {
       errors.push(
@@ -101,19 +135,46 @@ export function validateProductionConfig(
     }
   }
 
+  if (attachmentProvider === 'b2') {
+    const bucketName =
+      config.get<string>('attachments.storage.b2.bucketName')?.trim() ?? '';
+    const endpoint =
+      config.get<string>('attachments.storage.b2.s3Endpoint')?.trim() ?? '';
+    const accessKeyId =
+      config.get<string>('attachments.storage.b2.accessKeyId')?.trim() ?? '';
+    const secretAccessKey =
+      config.get<string>('attachments.storage.b2.secretAccessKey')?.trim() ?? '';
+
+    if (!bucketName) {
+      errors.push('ATTACHMENT_B2_BUCKET_NAME is required when ATTACHMENT_STORAGE_PROVIDER=b2');
+    }
+
+    if (!endpoint) {
+      errors.push('ATTACHMENT_B2_S3_ENDPOINT is required when ATTACHMENT_STORAGE_PROVIDER=b2');
+    }
+
+    if (!accessKeyId) {
+      errors.push('ATTACHMENT_B2_ACCESS_KEY_ID is required when ATTACHMENT_STORAGE_PROVIDER=b2');
+    }
+
+    if (!secretAccessKey) {
+      errors.push('ATTACHMENT_B2_SECRET_ACCESS_KEY is required when ATTACHMENT_STORAGE_PROVIDER=b2');
+    }
+  }
+
   const strictProviders =
     config.get<boolean>('readiness.strictProviders') ?? false;
 
   if (strictProviders) {
-    if (otpProvider !== 'webhook') {
+    if (otpProvider !== 'webhook' && otpProvider !== 'smtp') {
       errors.push(
-        'READINESS_STRICT_PROVIDERS=true requires OTP_DELIVERY_PROVIDER=webhook',
+        'READINESS_STRICT_PROVIDERS=true requires OTP_DELIVERY_PROVIDER to be smtp or webhook',
       );
     }
 
-    if (attachmentProvider !== 'webhook') {
+    if (attachmentProvider !== 'webhook' && attachmentProvider !== 'b2') {
       errors.push(
-        'READINESS_STRICT_PROVIDERS=true requires ATTACHMENT_STORAGE_PROVIDER=webhook',
+        'READINESS_STRICT_PROVIDERS=true requires ATTACHMENT_STORAGE_PROVIDER to be b2 or webhook',
       );
     }
   }
