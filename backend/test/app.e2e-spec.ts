@@ -9,6 +9,7 @@ import { AppModule } from './../src/app.module';
 import { ReadinessService } from '../src/health/readiness.service';
 import { AdminRequestsService } from '../src/modules/admin-requests/admin-requests.service';
 import { AdminAuditService } from '../src/modules/admin-audit/admin-audit.service';
+import { AdminAuthService } from '../src/modules/admin-auth/admin-auth.service';
 import { AdminSettingsService } from '../src/modules/admin-settings/admin-settings.service';
 import { AttachmentsService } from '../src/modules/attachments/attachments.service';
 import { AuthOtpService } from '../src/modules/auth-otp/auth-otp.service';
@@ -144,6 +145,22 @@ describe('HR Buddy API (e2e)', () => {
     })),
     detail: jest.fn(async (id: string) => ({ id, status: 'NEW' })),
     updateStatus: jest.fn(async (id: string) => ({ id, status: 'DONE' })),
+  };
+
+  const adminAuthServiceMock = {
+    login: jest.fn(async () => ({
+      sessionToken: 'admin-valid-token',
+      expiresAt: new Date('2030-01-01T08:00:00.000Z'),
+    })),
+    verifySessionToken: jest.fn(async (token: string) =>
+      token === 'admin-valid-token'
+        ? {
+            username: process.env.ADMIN_USERNAME ?? 'admin',
+            expiresAt: new Date('2030-01-01T08:00:00.000Z'),
+          }
+        : null,
+    ),
+    logout: jest.fn(async () => ({ ok: true })),
   };
 
   const adminAuditServiceMock = {
@@ -304,6 +321,8 @@ describe('HR Buddy API (e2e)', () => {
       .useValue(attachmentsServiceMock)
       .overrideProvider(AdminRequestsService)
       .useValue(adminRequestsServiceMock)
+      .overrideProvider(AdminAuthService)
+      .useValue(adminAuthServiceMock)
       .overrideProvider(AdminAuditService)
       .useValue(adminAuditServiceMock)
       .overrideProvider(AdminSettingsService)
