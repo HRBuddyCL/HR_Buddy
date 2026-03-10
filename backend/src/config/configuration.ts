@@ -258,7 +258,7 @@ export default () => ({
   ),
   messengerMagicLinkBaseUrl:
     process.env.MESSENGER_MAGIC_LINK_BASE_URL ??
-    'http://localhost:3000/messenger',
+    'http://localhost:3000/messenger/link',
   messengerMutationReplayWindowSeconds: parseInt(
     process.env.MESSENGER_MUTATION_REPLAY_WINDOW_SECONDS ?? '5',
     10,
@@ -303,3 +303,4 @@ function parseTrustProxy(raw: string | undefined) {
 
   return trimmed;
 }
+

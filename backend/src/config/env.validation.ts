@@ -235,7 +235,7 @@ export const envValidationSchema = Joi.object({
     .default(5),
   MESSENGER_MAGIC_LINK_BASE_URL: Joi.string()
     .uri({ scheme: ['http', 'https'] })
-    .default('http://localhost:3000/messenger'),
+    .default('http://localhost:3000/messenger/link'),
   ADMIN_USERNAME: Joi.string().min(3).default('admin'),
   ADMIN_PASSWORD: Joi.string().min(8).default('admin12345'),
   ADMIN_SESSION_SECRET: Joi.string()
@@ -243,3 +243,4 @@ export const envValidationSchema = Joi.object({
     .default('dev-only-change-this-admin-session-secret'),
   ADMIN_SESSION_TTL_MINUTES: Joi.number().integer().min(30).default(480),
 });
+
