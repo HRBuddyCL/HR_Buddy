@@ -303,4 +303,3 @@ function parseTrustProxy(raw: string | undefined) {
 
   return trimmed;
 }
-
