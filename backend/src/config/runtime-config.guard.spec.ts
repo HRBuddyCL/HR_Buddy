@@ -214,7 +214,7 @@ describe('runtime-config guard', () => {
     ).toThrow('OTP_DELIVERY_PROVIDER cannot be console in production');
   });
 
-  it('throws when production-like providers are configured with non-production env', () => {
+  it('does not throw when providers are production-like but runtime env is development', () => {
     process.env.NODE_ENV = 'development';
 
     expect(() =>
@@ -222,11 +222,24 @@ describe('runtime-config guard', () => {
         makeConfig({
           runtimeEnv: 'development',
           nodeEnv: 'development',
+          otpHashSecret: 'dev-only-change-this-otp-hash-secret',
+          'adminAuth.password': 'admin12345',
+          'otp.deliveryProvider': 'smtp',
+          'otp.smtp.username': 'sender@gmail.com',
+          'otp.smtp.appPassword': 'app-password-123456',
+          'otp.smtp.fromEmail': 'sender@gmail.com',
+          'attachments.storage.provider': 'b2',
+          'attachments.storage.b2.bucketName': 'hrbuddy-attachments',
+          'attachments.storage.b2.s3Endpoint':
+            'https://s3.us-west-004.backblazeb2.com',
+          'attachments.storage.b2.accessKeyId': 'key-id',
+          'attachments.storage.b2.secretAccessKey': 'secret-key-123456',
+          'abuseProtection.store': 'memory',
+          'health.checkToken': '',
+          corsOrigins: ['http://localhost:3000'],
         }),
       ),
-    ).toThrow(
-      'RUNTIME_ENV must be production for production-like configuration',
-    );
+    ).not.toThrow();
   });
 
   it('throws in production when config is insecure', () => {

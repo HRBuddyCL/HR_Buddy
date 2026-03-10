@@ -37,22 +37,6 @@ export function validateProductionConfig(
     errors.push('RUNTIME_ENV and NODE_ENV must match');
   }
 
-  const productionLikeConfig = isProductionLikeConfiguration(config);
-
-  if (productionLikeConfig) {
-    if (runtimeEnv !== 'production') {
-      errors.push(
-        'RUNTIME_ENV must be production for production-like configuration',
-      );
-    }
-
-    if (nodeEnv !== 'production') {
-      errors.push(
-        'NODE_ENV must be production for production-like configuration',
-      );
-    }
-  }
-
   const secrets: Array<{ key: string; value: string | null | undefined }> = [
     {
       key: 'OTP_HASH_SECRET',
@@ -300,44 +284,10 @@ function isLocalhostOrigin(origin: string) {
   }
 }
 
-function isProductionLikeConfiguration(config: ConfigService) {
-  const otpProvider = config.get<string>('otp.deliveryProvider') ?? 'console';
-  const attachmentProvider =
-    config.get<string>('attachments.storage.provider') ?? 'local';
-  const abuseProtectionStore =
-    config.get<string>('abuseProtection.store') ?? 'memory';
-  const healthCheckToken = (
-    config.get<string>('health.checkToken') ?? ''
-  ).trim();
-  const corsOrigins = config.get<string[]>('corsOrigins') ?? [];
-
-  const hasNonLocalCorsOrigin = corsOrigins.some((origin) => {
-    const normalized = origin.trim();
-
-    if (!normalized || normalized === '*') {
-      return false;
-    }
-
-    return !isLocalhostOrigin(normalized);
-  });
-
-  return (
-    otpProvider !== 'console' ||
-    attachmentProvider !== 'local' ||
-    abuseProtectionStore === 'postgres' ||
-    Boolean(healthCheckToken) ||
-    hasNonLocalCorsOrigin
-  );
-}
-
 function shouldValidateRuntimeConfig(config: ConfigService) {
   const strict = config.get<boolean>('runtimeConfig.strict') ?? false;
 
   if (strict) {
-    return true;
-  }
-
-  if (isProductionLikeConfiguration(config)) {
     return true;
   }
 
