@@ -1,0 +1,52 @@
+name: Frontend Release Gate
+
+on:
+  pull_request:
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend-release-gate.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend-release-gate.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: frontend-release-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  release-gate:
+    name: Release Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run frontend release gate
+        env:
+          NEXT_PUBLIC_API_BASE_URL: http://127.0.0.1:3001
+        run: npm run release:gate -- --skip-smoke
+
+      - name: Run frontend smoke checks (self-host)
+        run: npm run smoke:self-host:prod
+

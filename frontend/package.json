@@ -7,9 +7,13 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "typecheck": "tsc --noEmit",
     "smoke": "node scripts/smoke.mjs",
     "smoke:self-host": "node scripts/smoke.mjs --self-host",
-    "smoke:strict": "node scripts/smoke.mjs --require-api"
+    "smoke:self-host:prod": "node scripts/smoke.mjs --self-host-prod",
+    "smoke:strict": "node scripts/smoke.mjs --require-api",
+    "release:gate": "node scripts/release-gate.mjs",
+    "release:gate:strict": "node scripts/release-gate.mjs --require-api"
   },
   "dependencies": {
     "next": "16.1.6",

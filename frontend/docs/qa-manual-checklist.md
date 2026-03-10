@@ -135,8 +135,8 @@ Release candidate is ready when:
 - [ ] No blocker or critical bugs remain.
 - [ ] All checklist items above pass.
 - [ ] `npm run lint` passes.
-- [ ] `npm exec tsc -- --noEmit` passes.
-- [ ] `npm run smoke` passes in target environment.
+- [ ] `npm run typecheck` passes.
+- [ ] `npm run release:gate:strict` passes in target environment.
 
 ## 8) Bug report format
 
@@ -152,3 +152,4 @@ Use this format when a case fails:
 - Expected result:
 - Error message / screenshot:
 - Severity: blocker | critical | major | minor
+
