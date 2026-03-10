@@ -23,6 +23,7 @@ const routeItems: RouteItem[] = [
   { path: "/admin/requests/1", label: "Admin Request Detail", phase: "Phase 5" },
   { path: "/admin/settings", label: "Admin Settings", phase: "Phase 6" },
   { path: "/admin/audit", label: "Admin Audit", phase: "Phase 6" },
+  { path: "/unauthorized", label: "Unauthorized (403)", phase: "Phase 7" },
 ];
 
 const phaseSteps = [
@@ -74,3 +75,4 @@ export default function Home() {
     </main>
   );
 }
+

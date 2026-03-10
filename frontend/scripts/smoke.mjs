@@ -38,6 +38,7 @@ const routes = [
   "/admin/requests/sample-id",
   "/admin/settings",
   "/admin/audit",
+  "/unauthorized",
 ];
 
 const requireApi =
@@ -291,3 +292,4 @@ main().catch((error) => {
 
   process.exit(1);
 });
+

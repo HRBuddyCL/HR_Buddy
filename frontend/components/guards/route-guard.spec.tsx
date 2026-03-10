@@ -112,7 +112,7 @@ describe("RouteGuard", () => {
     });
   });
 
-  it("clears token and redirects when API returns unauthorized", async () => {
+  it("clears token and redirects to login when API returns 401", async () => {
     mocks.useAuthToken.mockReturnValue("expired-token");
     mocks.apiFetch.mockRejectedValue(new ApiError(401, { message: "Unauthorized" }, "Unauthorized"));
 
@@ -126,4 +126,20 @@ describe("RouteGuard", () => {
       expect(mocks.replace).toHaveBeenCalledWith("/admin/login?next=%2Fadmin");
     });
   });
+
+  it("redirects to unauthorized page when API returns 403", async () => {
+    mocks.useAuthToken.mockReturnValue("valid-token");
+    mocks.apiFetch.mockRejectedValue(new ApiError(403, { message: "Forbidden" }, "Forbidden"));
+
+    renderGuard();
+
+    await waitFor(() => {
+      expect(mocks.clearAuthToken).not.toHaveBeenCalled();
+    });
+
+    await waitFor(() => {
+      expect(mocks.replace).toHaveBeenCalledWith("/unauthorized?next=%2Fadmin");
+    });
+  });
 });
+

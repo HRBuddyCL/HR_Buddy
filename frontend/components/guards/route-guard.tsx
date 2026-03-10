@@ -88,11 +88,18 @@ export function RouteGuard({ tokenType, redirectTo, children }: RouteGuardProps)
           return;
         }
 
-        if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
+        if (error instanceof ApiError && error.status === 401) {
           clearAuthToken(tokenType);
           setIsValidated(false);
           setValidationError(null);
           router.replace(`${redirectTo}?next=${encodeURIComponent(pathname || "/")}`);
+          return;
+        }
+
+        if (error instanceof ApiError && error.status === 403) {
+          setIsValidated(false);
+          setValidationError(null);
+          router.replace(`/unauthorized?next=${encodeURIComponent(pathname || "/")}`);
           return;
         }
 
@@ -156,3 +163,4 @@ export function RouteGuard({ tokenType, redirectTo, children }: RouteGuardProps)
 
   return <>{children}</>;
 }
+
