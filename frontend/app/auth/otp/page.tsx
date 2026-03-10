@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { Suspense, useEffect, useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ApiError } from "@/lib/api/client";
@@ -12,6 +12,14 @@ import { Button, TextField } from "@/components/ui/form-controls";
 type Stage = "idle" | "code-sent";
 
 export default function Page() {
+  return (
+    <Suspense fallback={<OtpPageLoading />}>
+      <OtpPageContent />
+    </Suspense>
+  );
+}
+
+function OtpPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const nextRaw = searchParams.get("next") || "/my-requests";
@@ -181,6 +189,16 @@ export default function Page() {
       <Link href="/" className="text-sm font-medium text-slate-700 underline underline-offset-4">
         Back to Home
       </Link>
+    </main>
+  );
+}
+
+function OtpPageLoading() {
+  return (
+    <main className="mx-auto flex min-h-screen w-full max-w-3xl items-center justify-center px-6 py-10">
+      <div className="w-full rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm">
+        <p className="text-sm font-medium text-slate-600">Loading OTP...</p>
+      </div>
     </main>
   );
 }

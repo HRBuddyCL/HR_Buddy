@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { Suspense, useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button, TextField } from "@/components/ui/form-controls";
@@ -9,6 +9,14 @@ import { adminLogin, adminMe } from "@/lib/api/admin-auth";
 import { setAuthToken } from "@/lib/auth/tokens";
 
 export default function Page() {
+  return (
+    <Suspense fallback={<LoginPageLoading />}>
+      <LoginPageContent />
+    </Suspense>
+  );
+}
+
+function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -132,6 +140,16 @@ export default function Page() {
       <Link href="/" className="text-sm font-medium text-slate-700 underline underline-offset-4">
         Back to Home
       </Link>
+    </main>
+  );
+}
+
+function LoginPageLoading() {
+  return (
+    <main className="mx-auto flex min-h-screen w-full max-w-3xl items-center justify-center px-6 py-10">
+      <div className="w-full rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm">
+        <p className="text-sm font-medium text-slate-600">Loading login...</p>
+      </div>
     </main>
   );
 }

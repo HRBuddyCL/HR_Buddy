@@ -1,23 +1,43 @@
 import { apiFetch } from "@/lib/api/client";
 
+type GeoNameCode = {
+  name: string;
+  code: string;
+};
+
+type GeoListResponse = Array<string | GeoNameCode>;
+
+function normalizeGeoList(items: GeoListResponse): string[] {
+  return items
+    .map((item) => (typeof item === "string" ? item : item.name))
+    .map((name) => name.trim())
+    .filter((name) => name.length > 0);
+}
+
 export async function getGeoProvinces() {
-  return apiFetch<string[]>("/geo/provinces", {
+  const result = await apiFetch<GeoListResponse>("/geo/provinces", {
     method: "GET",
   });
+
+  return normalizeGeoList(result);
 }
 
 export async function getGeoDistricts(province: string) {
-  return apiFetch<string[]>("/geo/districts", {
+  const result = await apiFetch<GeoListResponse>("/geo/districts", {
     method: "GET",
     query: { province },
   });
+
+  return normalizeGeoList(result);
 }
 
 export async function getGeoSubdistricts(province: string, district: string) {
-  return apiFetch<string[]>("/geo/subdistricts", {
+  const result = await apiFetch<GeoListResponse>("/geo/subdistricts", {
     method: "GET",
     query: { province, district },
   });
+
+  return normalizeGeoList(result);
 }
 
 export async function getGeoPostalCode(
