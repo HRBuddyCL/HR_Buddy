@@ -21,3 +21,7 @@ This smoke script checks that core frontend routes are reachable and return HTML
 - The script validates route availability only (smoke level), not full user interactions.
 - If backend is down, `npm run smoke` still passes route checks and prints an API warning.
 - In constrained environments where process spawning is blocked, `smoke:self-host` may fail; use `smoke` against an existing running frontend.
+
+
+See also: qa-manual-checklist.md for full regression coverage beyond route smoke checks.
+
