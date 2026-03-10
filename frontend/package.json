@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "smoke": "node scripts/smoke.mjs",
+    "smoke:self-host": "node scripts/smoke.mjs --self-host",
+    "smoke:strict": "node scripts/smoke.mjs --require-api"
   },
   "dependencies": {
     "next": "16.1.6",
