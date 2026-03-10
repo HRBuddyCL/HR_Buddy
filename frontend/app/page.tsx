@@ -1,65 +1,76 @@
-import Image from "next/image";
+import Link from "next/link";
+
+type RouteItem = {
+  path: string;
+  label: string;
+  phase: string;
+};
+
+const routeItems: RouteItem[] = [
+  { path: "/", label: "Home", phase: "Phase 2" },
+  { path: "/requests/new/building", label: "New Building Request", phase: "Phase 2" },
+  { path: "/requests/new/vehicle", label: "New Vehicle Request", phase: "Phase 2" },
+  { path: "/requests/new/messenger", label: "New Messenger Request", phase: "Phase 2" },
+  { path: "/requests/new/document", label: "New Document Request", phase: "Phase 2" },
+  { path: "/requests/success/REQ-0001", label: "Request Success", phase: "Phase 2" },
+  { path: "/auth/otp", label: "OTP Gate", phase: "Phase 3" },
+  { path: "/my-requests", label: "My Requests", phase: "Phase 3" },
+  { path: "/my-requests/1", label: "My Request Detail", phase: "Phase 3" },
+  { path: "/messenger/link/sample-token", label: "Messenger Magic Link", phase: "Phase 4" },
+  { path: "/admin/login", label: "Admin Login", phase: "Phase 5" },
+  { path: "/admin", label: "Admin Dashboard", phase: "Phase 5" },
+  { path: "/admin/requests", label: "Admin Requests", phase: "Phase 5" },
+  { path: "/admin/requests/1", label: "Admin Request Detail", phase: "Phase 5" },
+  { path: "/admin/settings", label: "Admin Settings", phase: "Phase 6" },
+  { path: "/admin/audit", label: "Admin Audit", phase: "Phase 6" },
+];
+
+const phaseSteps = [
+  "Phase 1: Foundation (layout, shared UI, API client, auth token store)",
+  "Phase 2: Employee create request flow (4 forms + success)",
+  "Phase 3: OTP and tracking flow (OTP, my requests, detail)",
+  "Phase 4: Messenger magic link flow",
+  "Phase 5: Admin core flow (login, dashboard, requests, detail)",
+  "Phase 6: Admin settings and audit",
+  "Phase 7: QA and polish (responsive, accessibility, E2E)",
+];
 
 export default function Home() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+    <main className="mx-auto min-h-screen w-full max-w-6xl px-6 py-10 md:px-10">
+      <header className="rounded-2xl border border-slate-200 bg-gradient-to-r from-white to-slate-100 p-6 shadow-sm">
+        <p className="text-sm font-semibold uppercase tracking-wide text-slate-600">HR-Buddy Frontend Starter</p>
+        <h1 className="mt-2 text-3xl font-semibold text-slate-900">Route Map and UI Phase Plan</h1>
+        <p className="mt-3 text-slate-700">
+          This scaffold locks the URL structure first so we can build each phase without changing paths later.
+        </p>
+      </header>
+
+      <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 className="text-xl font-semibold text-slate-900">UI Phase Sequence</h2>
+        <ol className="mt-4 list-decimal space-y-2 pl-5 text-sm text-slate-700">
+          {phaseSteps.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ol>
+      </section>
+
+      <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 className="text-xl font-semibold text-slate-900">Route Map (All Pages)</h2>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          {routeItems.map((item) => (
+            <Link
+              key={item.path}
+              href={item.path}
+              className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 transition hover:border-slate-400 hover:bg-white"
             >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{item.phase}</p>
+              <p className="mt-1 font-medium text-slate-900">{item.label}</p>
+              <p className="mt-1 text-sm text-slate-600">{item.path}</p>
+            </Link>
+          ))}
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+      </section>
+    </main>
   );
 }
