@@ -131,7 +131,10 @@ export class AdminAuthService {
     const lockKey = `admin_login:${username.trim().toLowerCase()}`;
 
     await tx.$queryRaw`
-      SELECT pg_advisory_xact_lock(hashtext(${lockKey}))
+      WITH advisory_lock AS (
+        SELECT pg_advisory_xact_lock(hashtext(${lockKey}))
+      )
+      SELECT true AS "acquired"
     `;
   }
 

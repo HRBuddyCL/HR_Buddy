@@ -264,7 +264,10 @@ export class AuthOtpService {
     const lockKey = this.otpSendLockKey(phone, email);
 
     await tx.$queryRaw`
-      SELECT pg_advisory_xact_lock(hashtext(${lockKey}))
+      WITH advisory_lock AS (
+        SELECT pg_advisory_xact_lock(hashtext(${lockKey}))
+      )
+      SELECT true AS "acquired"
     `;
   }
 
