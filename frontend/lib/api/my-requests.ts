@@ -1,6 +1,7 @@
 import { apiFetch } from "@/lib/api/client";
 
 export type RequestType = "BUILDING" | "VEHICLE" | "MESSENGER" | "DOCUMENT";
+export type FileKind = "IMAGE" | "VIDEO" | "DOCUMENT";
 export type RequestStatus =
   | "NEW"
   | "APPROVED"
@@ -116,6 +117,22 @@ export type MyRequestsQuery = {
   limit?: number;
 };
 
+export type UploadTicketPayload = {
+  fileKind: FileKind;
+  fileName: string;
+  mimeType: string;
+  fileSize: number;
+};
+
+export type UploadTicketResponse = {
+  uploadToken: string;
+  storageKey: string;
+  uploadUrl: string;
+  uploadMethod: "PUT" | "POST";
+  uploadHeaders: Record<string, string>;
+  expiresAt: string;
+};
+
 export async function getMyRequests(query: MyRequestsQuery = {}) {
   return apiFetch<MyRequestsResponse>("/requests/my", {
     method: "GET",
@@ -152,4 +169,38 @@ export async function getMyRequestAttachmentDownloadUrl(requestId: string, attac
     method: "GET",
     tokenType: "employee",
   });
+}
+
+export async function issueMyAttachmentUploadTicket(requestId: string, payload: UploadTicketPayload) {
+  return apiFetch<UploadTicketResponse>(`/requests/${requestId}/attachments/presign`, {
+    method: "POST",
+    tokenType: "employee",
+    body: payload,
+  });
+}
+
+export async function completeMyAttachmentUpload(requestId: string, uploadToken: string) {
+  return apiFetch<{ id: string }>(`/requests/${requestId}/attachments/complete`, {
+    method: "POST",
+    tokenType: "employee",
+    body: { uploadToken },
+  });
+}
+
+export async function uploadFileToPresignedUrl(uploadTicket: UploadTicketResponse, file: File) {
+  const headers = new Headers(uploadTicket.uploadHeaders ?? {});
+
+  if (!headers.has("Content-Type") && file.type) {
+    headers.set("Content-Type", file.type);
+  }
+
+  const response = await fetch(uploadTicket.uploadUrl, {
+    method: uploadTicket.uploadMethod,
+    headers,
+    body: file,
+  });
+
+  if (!response.ok) {
+    throw new Error(`Upload failed (${response.status})`);
+  }
 }

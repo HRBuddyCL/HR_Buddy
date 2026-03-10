@@ -4,12 +4,16 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { RouteGuard } from "@/components/guards/route-guard";
-import { Button, TextareaField } from "@/components/ui/form-controls";
+import { Button, SelectField, TextareaField } from "@/components/ui/form-controls";
 import { ApiError } from "@/lib/api/client";
 import {
   cancelMyRequest,
+  completeMyAttachmentUpload,
   getMyRequestAttachmentDownloadUrl,
   getMyRequestDetail,
+  issueMyAttachmentUploadTicket,
+  uploadFileToPresignedUrl,
+  type FileKind,
   type RequestDetail,
   type RequestStatus,
 } from "@/lib/api/my-requests";
@@ -50,6 +54,36 @@ function formatFileSize(bytes: number) {
   return `${(kb / 1024).toFixed(1)} MB`;
 }
 
+function fileKindFromMime(mimeType: string): FileKind {
+  if (mimeType.startsWith("image/")) {
+    return "IMAGE";
+  }
+
+  if (mimeType.startsWith("video/")) {
+    return "VIDEO";
+  }
+
+  return "DOCUMENT";
+}
+
+function guessMimeType(fileName: string): string {
+  const lower = fileName.toLowerCase();
+
+  if (lower.endsWith(".pdf")) return "application/pdf";
+  if (lower.endsWith(".doc")) return "application/msword";
+  if (lower.endsWith(".docx")) return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+  if (lower.endsWith(".xls")) return "application/vnd.ms-excel";
+  if (lower.endsWith(".xlsx")) return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  if (lower.endsWith(".txt")) return "text/plain";
+  if (lower.endsWith(".mp4")) return "video/mp4";
+  if (lower.endsWith(".mov")) return "video/quicktime";
+  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+  if (lower.endsWith(".png")) return "image/png";
+  if (lower.endsWith(".webp")) return "image/webp";
+
+  return "application/octet-stream";
+}
+
 export default function Page() {
   return (
     <RouteGuard tokenType="employee" redirectTo="/auth/otp">
@@ -68,6 +102,10 @@ function MyRequestDetailContent() {
 
   const [cancelReason, setCancelReason] = useState("");
   const [canceling, setCanceling] = useState(false);
+
+  const [uploading, setUploading] = useState(false);
+  const [uploadFileKind, setUploadFileKind] = useState<FileKind>("DOCUMENT");
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
 
   const [downloadingAttachmentId, setDownloadingAttachmentId] = useState<string | null>(null);
 
@@ -134,6 +172,48 @@ function MyRequestDetailContent() {
       }
     } finally {
       setCanceling(false);
+    }
+  };
+
+  const handleUpload = async () => {
+    if (!detail || !uploadFile) {
+      setErrorMessage("Please choose a file before upload.");
+      return;
+    }
+
+    const inferredMimeType = uploadFile.type || guessMimeType(uploadFile.name);
+
+    if (!inferredMimeType || inferredMimeType === "application/octet-stream") {
+      setErrorMessage("Unsupported file type. Please choose a supported format.");
+      return;
+    }
+
+    setUploading(true);
+    setErrorMessage(null);
+
+    try {
+      const resolvedFileKind = uploadFileKind || fileKindFromMime(inferredMimeType);
+
+      const ticket = await issueMyAttachmentUploadTicket(detail.id, {
+        fileKind: resolvedFileKind,
+        fileName: uploadFile.name,
+        mimeType: inferredMimeType,
+        fileSize: uploadFile.size,
+      });
+
+      await uploadFileToPresignedUrl(ticket, uploadFile);
+      await completeMyAttachmentUpload(detail.id, ticket.uploadToken);
+
+      setUploadFile(null);
+      await loadDetail();
+    } catch (error) {
+      if (error instanceof ApiError) {
+        setErrorMessage(error.message);
+      } else {
+        setErrorMessage("Failed to upload attachment");
+      }
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -271,6 +351,54 @@ function MyRequestDetailContent() {
           </section>
 
           <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <h2 className="text-lg font-semibold text-slate-900">Upload attachment</h2>
+            <p className="mt-2 text-sm text-slate-700">Uses the same presign upload flow as production.</p>
+
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <SelectField
+                id="uploadFileKind"
+                label="File kind"
+                value={uploadFileKind}
+                onChange={(event) => setUploadFileKind(event.target.value as FileKind)}
+              >
+                <option value="DOCUMENT">DOCUMENT</option>
+                <option value="IMAGE">IMAGE</option>
+                <option value="VIDEO">VIDEO</option>
+              </SelectField>
+
+              <div className="space-y-2">
+                <label htmlFor="uploadFile" className="block text-sm font-medium text-slate-800">
+                  File
+                </label>
+                <input
+                  id="uploadFile"
+                  type="file"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0] || null;
+                    setUploadFile(file);
+                    if (file?.type) {
+                      setUploadFileKind(fileKindFromMime(file.type));
+                    }
+                  }}
+                />
+              </div>
+            </div>
+
+            {uploadFile ? (
+              <p className="mt-3 text-sm text-slate-700">
+                Selected: {uploadFile.name} ({formatFileSize(uploadFile.size)})
+              </p>
+            ) : null}
+
+            <div className="mt-4">
+              <Button type="button" disabled={uploading || !uploadFile} onClick={() => void handleUpload()}>
+                {uploading ? "Uploading..." : "Upload attachment"}
+              </Button>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             <h2 className="text-lg font-semibold text-slate-900">Attachments</h2>
 
             {detail.attachments.length === 0 ? (
@@ -282,7 +410,7 @@ function MyRequestDetailContent() {
                     <div className="text-sm text-slate-700">
                       <p className="font-medium text-slate-900">{attachment.fileName}</p>
                       <p>
-                        {attachment.mimeType} | {formatFileSize(attachment.fileSize)} | {formatDateTime(attachment.createdAt)}
+                        {attachment.fileKind} | {attachment.mimeType} | {formatFileSize(attachment.fileSize)} | {formatDateTime(attachment.createdAt)}
                       </p>
                     </div>
                     <Button
