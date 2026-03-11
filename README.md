@@ -79,6 +79,19 @@ npm.cmd run dev
 
 Default frontend URL (Next.js): usually `http://localhost:3000`
 
+### 4) Run backend + frontend together (single command)
+
+From repository root:
+
+```powershell
+npm.cmd install
+npm.cmd run dev
+```
+
+This starts:
+- backend (http://localhost:3001)
+- frontend (http://localhost:3000)
+
 ## Environment Files
 
 - Top-level `.env`: used by `docker-compose.yml` (DB + pgAdmin)
@@ -201,3 +214,4 @@ Read these docs before production deployment:
 - Production should use `npm.cmd run prisma:migrate:deploy`, not `migrate dev`.
 - Keep all real secrets out of git.
 - Configure backend `.env` with production-safe values before any real deployment.
+
