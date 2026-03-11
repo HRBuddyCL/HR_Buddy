@@ -18,5 +18,15 @@ body {
   margin: 0;
   background: radial-gradient(circle at top right, #dbeafe 0%, #f2f4f8 45%, #eef2ff 100%);
   color: var(--foreground);
-  font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+  font-family: var(--font-content), "Noto Sans Thai", "Segoe UI", sans-serif;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-headline), "Kanit", "Noto Sans Thai", sans-serif;
+  font-weight: 700;
 }

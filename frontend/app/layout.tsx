@@ -1,6 +1,21 @@
 import type { Metadata } from "next";
+import { Kanit, Noto_Sans_Thai } from "next/font/google";
 import "./globals.css";
 import { Navbar } from "./_components/navbar";
+
+const headlineFont = Kanit({
+  subsets: ["latin", "thai"],
+  weight: ["700"],
+  variable: "--font-headline",
+  display: "swap",
+});
+
+const contentFont = Noto_Sans_Thai({
+  subsets: ["latin", "thai"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-content",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "HR Buddy - ระบบจัดการคำขอพนักงาน",
@@ -14,7 +29,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="th">
-      <body className="antialiased pt-20">
+      <body className={`${contentFont.variable} ${headlineFont.variable} antialiased pt-20`}>
         <Navbar />
         {children}
       </body>
