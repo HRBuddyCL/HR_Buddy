@@ -52,7 +52,10 @@ function resolveErrorMessage(body: ApiErrorBody | null, fallbackMessage: string)
 
 function buildUrl(path: string, query?: ApiFetchOptions["query"]) {
   const apiBaseUrl = resolveApiBaseUrl();
-  const url = new URL(`${apiBaseUrl}${path}`);
+  const target = `${apiBaseUrl}${path}`;
+  const url = /^https?:\/\//i.test(apiBaseUrl)
+    ? new URL(target)
+    : new URL(target, typeof window !== "undefined" ? window.location.origin : "http://localhost");
 
   if (!query) {
     return url.toString();
