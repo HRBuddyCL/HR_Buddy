@@ -1,4 +1,4 @@
-﻿# HR-Buddy
+# HR-Buddy
 
 HR-Buddy is an internal service-request platform for Construction Lines.
 
@@ -63,7 +63,7 @@ cd backend
 npm.cmd install
 Copy-Item .env.example .env
 # edit backend/.env
-npx prisma migrate deploy
+npm.cmd run prisma:migrate:deploy
 npm.cmd run start:dev
 ```
 
@@ -82,7 +82,7 @@ Default frontend URL (Next.js): usually `http://localhost:3000`
 ## Environment Files
 
 - Top-level `.env`: used by `docker-compose.yml` (DB + pgAdmin)
-- `backend/.env`: used by backend runtime
+- `backend/.env`: used by backend runtime (supports optional `DIRECT_DATABASE_URL` for migration jobs)
 - `frontend`: no required production-grade env documented yet in this snapshot
 
 For backend variable details and production-safe guidance, use:
@@ -94,7 +94,7 @@ From `backend/`:
 
 ```powershell
 npx prisma generate
-npx prisma migrate deploy
+npm.cmd run prisma:migrate:deploy
 ```
 
 For local iterative development only:
@@ -198,7 +198,6 @@ Read these docs before production deployment:
 
 ## Important Notes
 
-- Production should use `npx prisma migrate deploy`, not `migrate dev`.
+- Production should use `npm.cmd run prisma:migrate:deploy`, not `migrate dev`.
 - Keep all real secrets out of git.
 - Configure backend `.env` with production-safe values before any real deployment.
-

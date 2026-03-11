@@ -1,4 +1,4 @@
-﻿# Backend Deploy Runbook
+# Backend Deploy Runbook
 
 This runbook is for deploying the HR-Buddy backend service to a production-like environment.
 
@@ -37,7 +37,8 @@ Copy-Item .env.example .env
 
 2. Update required values in `.env` at minimum:
 
-- `DATABASE_URL`
+- `DATABASE_URL` (runtime DB URL)
+- `DIRECT_DATABASE_URL` (optional direct DB URL for migrations, recommended for Neon/Supabase managed Postgres)
 - `CORS_ORIGINS` (non-localhost origins for production)
 - `CORS_ALLOW_CREDENTIALS`
 - `OTP_HASH_SECRET`
@@ -46,6 +47,12 @@ Copy-Item .env.example .env
 - `ADMIN_SESSION_SECRET`
 - `ADMIN_PASSWORD`
 - `RETENTION_ACTIVITY_LOGS_DAYS` (must be `>= 90` for production)
+Neon Managed PostgreSQL (recommended):
+
+- `DATABASE_URL=postgresql://<user>:<password>@<pooled-host>/<database>?sslmode=require` (runtime)
+- `DIRECT_DATABASE_URL=postgresql://<user>:<password>@<direct-host>/<database>?sslmode=require` (migrations)
+- Railway pre-deploy command: `npm run prisma:migrate:deploy`
+- Railway start command: `npm run start:prod`
 
 3. If using webhook providers, set:
 
@@ -66,10 +73,10 @@ npm.cmd run release:gate
 
 ## 5) Database Migration
 
-Apply schema migrations:
+Apply schema migrations (`DIRECT_DATABASE_URL` is preferred when present):
 
 ```powershell
-npx prisma migrate deploy
+npm.cmd run prisma:migrate:deploy
 ```
 
 Optional: generate Prisma client explicitly (if your pipeline does not run it):
@@ -202,5 +209,3 @@ If an official request/order is received from competent authority:
 Notes:
 - `test:e2e` in this repository uses mocked service integrations and does not require real OTP/attachment provider keys from `.env`.
 - `smoke:preprod` calls a running backend instance and therefore uses the keys/config already loaded by that target environment.
-
-
