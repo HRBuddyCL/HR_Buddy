@@ -1,4 +1,8 @@
-import { Injectable, ServiceUnavailableException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 import {
@@ -8,6 +12,8 @@ import {
 
 @Injectable()
 export class OtpSmtpDeliveryProvider implements OtpDeliveryProvider {
+  private readonly logger = new Logger(OtpSmtpDeliveryProvider.name);
+
   constructor(private readonly config: ConfigService) {}
 
   async sendOtp(payload: OtpDeliveryPayload): Promise<void> {
@@ -50,12 +56,73 @@ export class OtpSmtpDeliveryProvider implements OtpDeliveryProvider {
         text: this.buildText(payload.otpCode, payload.expiresAt),
         html: this.buildHtml(payload.otpCode, payload.expiresAt),
       });
-    } catch {
+    } catch (error) {
+      this.logger.error(
+        JSON.stringify({
+          event: 'otp_smtp_delivery_failed',
+          host,
+          port,
+          secure,
+          username: this.maskEmail(username),
+          fromEmail: this.maskEmail(fromEmail),
+          toEmail: this.maskEmail(payload.email),
+          reason: this.normalizeSmtpError(error),
+        }),
+      );
+
       throw new ServiceUnavailableException({
         code: 'OTP_DELIVERY_FAILED',
         message: 'Failed to deliver OTP via SMTP provider',
       });
     }
+  }
+
+  private normalizeSmtpError(error: unknown) {
+    if (!(error instanceof Error)) {
+      return { name: 'UnknownError', message: 'Unknown SMTP failure' };
+    }
+
+    const smtpLike = error as Error & {
+      code?: string;
+      command?: string;
+      responseCode?: number;
+      response?: string;
+      errno?: string | number;
+      syscall?: string;
+      address?: string;
+      port?: number;
+    };
+
+    return {
+      name: error.name,
+      message: error.message,
+      code: smtpLike.code ?? null,
+      command: smtpLike.command ?? null,
+      responseCode: smtpLike.responseCode ?? null,
+      response: smtpLike.response ?? null,
+      errno: smtpLike.errno ?? null,
+      syscall: smtpLike.syscall ?? null,
+      address: smtpLike.address ?? null,
+      port: smtpLike.port ?? null,
+    };
+  }
+
+  private maskEmail(email: string) {
+    const trimmed = email.trim();
+
+    if (!trimmed || !trimmed.includes('@')) {
+      return '[invalid-email]';
+    }
+
+    const [local, domain] = trimmed.split('@');
+
+    if (!local || !domain) {
+      return '[invalid-email]';
+    }
+
+    const visiblePrefix = local.slice(0, 2);
+
+    return `${visiblePrefix}***@${domain}`;
   }
 
   private buildText(otpCode: string, expiresAt: Date) {
