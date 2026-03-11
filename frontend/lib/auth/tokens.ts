@@ -11,7 +11,7 @@ const TOKEN_CHANGED_EVENT = "hrbuddy:auth-token-changed";
 type TokenStorageMode = "memory" | "session";
 
 const configuredStorageMode =
-  (process.env.NEXT_PUBLIC_AUTH_TOKEN_STORAGE?.toLowerCase() as TokenStorageMode | undefined) ?? "memory";
+  (process.env.NEXT_PUBLIC_AUTH_TOKEN_STORAGE?.toLowerCase() as TokenStorageMode | undefined) ?? "session";
 
 const tokenCache: Partial<Record<TokenType, string>> = {};
 
@@ -20,7 +20,7 @@ function canUseBrowserStorage() {
 }
 
 function getStorageMode(): TokenStorageMode {
-  return configuredStorageMode === "session" ? "session" : "memory";
+  return configuredStorageMode === "memory" ? "memory" : "session";
 }
 
 function resolveTokenStorage() {
@@ -29,6 +29,28 @@ function resolveTokenStorage() {
   }
 
   return window.sessionStorage;
+}
+
+function readPersistedToken(type: TokenType): string | null {
+  const storage = resolveTokenStorage();
+  if (!storage) {
+    return null;
+  }
+
+  const key = TOKEN_KEYS[type];
+  const persisted = storage.getItem(key);
+  if (persisted) {
+    return persisted;
+  }
+
+  // Backward compatibility: migrate old localStorage token to sessionStorage once.
+  const legacy = window.localStorage.getItem(key);
+  if (legacy) {
+    storage.setItem(key, legacy);
+    window.localStorage.removeItem(key);
+  }
+
+  return legacy;
 }
 
 function emitTokenChanged(type: TokenType) {
@@ -57,12 +79,7 @@ export function getAuthToken(type: TokenType): string | null {
     return fromCache;
   }
 
-  const storage = resolveTokenStorage();
-  if (!storage) {
-    return null;
-  }
-
-  const persisted = storage.getItem(TOKEN_KEYS[type]);
+  const persisted = readPersistedToken(type);
   if (persisted) {
     tokenCache[type] = persisted;
   }
@@ -84,9 +101,16 @@ export function setAuthToken(type: TokenType, token: string) {
 export function clearAuthToken(type: TokenType) {
   delete tokenCache[type];
 
+  const key = TOKEN_KEYS[type];
+
   const storage = resolveTokenStorage();
   if (storage) {
-    storage.removeItem(TOKEN_KEYS[type]);
+    storage.removeItem(key);
+  }
+
+  // Cleanup old storage format if present.
+  if (canUseBrowserStorage()) {
+    window.localStorage.removeItem(key);
   }
 
   emitTokenChanged(type);
