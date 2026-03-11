@@ -37,20 +37,8 @@ export class AdminAuthService {
       ttlMinutes: this.sessionTtlMinutes(),
     });
 
-    const now = new Date();
-
     await this.prisma.$transaction(async (tx) => {
       await this.acquireAdminLoginLock(tx, adminUsername);
-
-      await tx.adminSession.updateMany({
-        where: {
-          username: adminUsername,
-          revokedAt: null,
-        },
-        data: {
-          revokedAt: now,
-        },
-      });
 
       await tx.adminSession.create({
         data: {

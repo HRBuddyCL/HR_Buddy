@@ -17,7 +17,6 @@ describe('AdminAuthService', () => {
     $queryRaw: jest.fn(),
     adminSession: {
       create: jest.fn(),
-      updateMany: jest.fn(),
     },
   };
 
@@ -38,7 +37,6 @@ describe('AdminAuthService', () => {
 
     tx.$queryRaw.mockResolvedValue([{ pg_advisory_xact_lock: null }]);
     tx.adminSession.create.mockResolvedValue({ id: 'admin-session-1' });
-    tx.adminSession.updateMany.mockResolvedValue({ count: 1 });
     prisma.adminSession.findFirst.mockResolvedValue({
       username: 'admin',
       expiresAt: new Date('2030-01-01T00:00:00.000Z'),
@@ -56,16 +54,6 @@ describe('AdminAuthService', () => {
 
     expect(tx.$queryRaw).toHaveBeenCalledTimes(1);
 
-    expect(tx.adminSession.updateMany).toHaveBeenCalledWith({
-      where: {
-        username: 'admin',
-        revokedAt: null,
-      },
-      data: {
-        revokedAt: expect.any(Date),
-      },
-    });
-
     expect(tx.adminSession.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         username: 'admin',
@@ -76,6 +64,13 @@ describe('AdminAuthService', () => {
         id: true,
       },
     });
+  });
+
+  it('keeps previous sessions active when logging in again', async () => {
+    await service.login('admin', 'super-secure-password');
+    await service.login('admin', 'super-secure-password');
+
+    expect(tx.adminSession.create).toHaveBeenCalledTimes(2);
   });
 
   it('verifies session only when token exists in active admin_sessions row', async () => {
