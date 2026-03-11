@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { Navbar } from "./_components/navbar";
 
 export const metadata: Metadata = {
-  title: "HR-Buddy Frontend",
-  description: "HR-Buddy user and admin portal",
+  title: "HR Buddy - ระบบจัดการคำขอพนักงาน",
+  description: "ระบบจัดการคำขอและบริการสำหรับพนักงานบริษัท Construction Lines",
 };
 
 export default function RootLayout({
@@ -12,8 +13,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body className="antialiased">{children}</body>
+    <html lang="th">
+      <body className="antialiased pt-20">
+        <Navbar />
+        {children}
+      </body>
     </html>
   );
 }

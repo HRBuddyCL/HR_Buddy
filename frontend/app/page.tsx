@@ -1,78 +1,102 @@
 import Link from "next/link";
 
-type RouteItem = {
+type RequestType = {
   path: string;
-  label: string;
-  phase: string;
+  title: string;
+  description: string;
+  icon: string;
 };
 
-const routeItems: RouteItem[] = [
-  { path: "/", label: "Home", phase: "Phase 2" },
-  { path: "/requests/new/building", label: "New Building Request", phase: "Phase 2" },
-  { path: "/requests/new/vehicle", label: "New Vehicle Request", phase: "Phase 2" },
-  { path: "/requests/new/messenger", label: "New Messenger Request", phase: "Phase 2" },
-  { path: "/requests/new/document", label: "New Document Request", phase: "Phase 2" },
-  { path: "/requests/success/REQ-0001", label: "Request Success", phase: "Phase 2" },
-  { path: "/auth/otp", label: "OTP Gate", phase: "Phase 3" },
-  { path: "/my-requests", label: "My Requests", phase: "Phase 3" },
-  { path: "/my-requests/1", label: "My Request Detail", phase: "Phase 3" },
-  { path: "/messenger/link/sample-token", label: "Messenger Magic Link", phase: "Phase 4" },
-  { path: "/admin/login", label: "Admin Login", phase: "Phase 5" },
-  { path: "/admin", label: "Admin Dashboard", phase: "Phase 5" },
-  { path: "/admin/requests", label: "Admin Requests", phase: "Phase 5" },
-  { path: "/admin/requests/1", label: "Admin Request Detail", phase: "Phase 5" },
-  { path: "/admin/settings", label: "Admin Settings", phase: "Phase 6" },
-  { path: "/admin/audit", label: "Admin Audit", phase: "Phase 6" },
-  { path: "/unauthorized", label: "Unauthorized (403)", phase: "Phase 7" },
-];
-
-const phaseSteps = [
-  "Phase 1: Foundation (layout, shared UI, API client, auth token store)",
-  "Phase 2: Employee create request flow (4 forms + success)",
-  "Phase 3: OTP and tracking flow (OTP, my requests, detail)",
-  "Phase 4: Messenger magic link flow",
-  "Phase 5: Admin core flow (login, dashboard, requests, detail)",
-  "Phase 6: Admin settings and audit",
-  "Phase 7: QA and polish (responsive, accessibility, E2E)",
+const requestTypes: RequestType[] = [
+  {
+    path: "/requests/new/building",
+    title: "คำขอซ่อมแซมอาคาร",
+    description: "ส่งคำขอซ่อมแซมหรือปรับปรุงอาคารสำนักงาน",
+    icon: "🏢",
+  },
+  {
+    path: "/requests/new/vehicle",
+    title: "คำขอซ่อมรถยนต์",
+    description: "ส่งคำขอซ่อมแซมหรือบริการรถยนต์บริษัท",
+    icon: "🚗",
+  },
+  {
+    path: "/requests/new/messenger",
+    title: "คำขอใช้บริการส่งเอกสาร",
+    description: "ขอใช้บริการส่งเอกสารหรือพัสดุภายในบริษัท",
+    icon: "📬",
+  },
+  {
+    path: "/requests/new/document",
+    title: "คำขอเอกสาร",
+    description: "ขอเอกสารต่างๆ เช่น ใบรับรอง ใบลา เป็นต้น",
+    icon: "📄",
+  },
 ];
 
 export default function Home() {
   return (
-    <main className="mx-auto min-h-screen w-full max-w-6xl px-6 py-10 md:px-10">
-      <header className="rounded-2xl border border-slate-200 bg-gradient-to-r from-white to-slate-100 p-6 shadow-sm">
-        <p className="text-sm font-semibold uppercase tracking-wide text-slate-600">HR-Buddy Frontend Starter</p>
-        <h1 className="mt-2 text-3xl font-semibold text-slate-900">Route Map and UI Phase Plan</h1>
-        <p className="mt-3 text-slate-700">
-          This scaffold locks the URL structure first so we can build each phase without changing paths later.
-        </p>
-      </header>
+    <main className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+      <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
+        {/* Welcome Section */}
+        <div className="text-center mb-12">
+          <h1 className="text-4xl font-bold text-slate-900 mb-4">
+            ยินดีต้อนรับสู่ HR Buddy
+          </h1>
+          <p className="text-xl text-slate-600 max-w-2xl mx-auto">
+            ระบบจัดการคำขอและบริการสำหรับพนักงานบริษัท Construction Lines
+            ส่งคำขอของคุณได้อย่างง่ายดายและติดตามสถานะได้แบบเรียลไทม์
+          </p>
+        </div>
 
-      <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 className="text-xl font-semibold text-slate-900">UI Phase Sequence</h2>
-        <ol className="mt-4 list-decimal space-y-2 pl-5 text-sm text-slate-700">
-          {phaseSteps.map((item) => (
-            <li key={item}>{item}</li>
-          ))}
-        </ol>
-      </section>
-
-      <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 className="text-xl font-semibold text-slate-900">Route Map (All Pages)</h2>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          {routeItems.map((item) => (
+        {/* Quick Actions */}
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-12">
+          {requestTypes.map((request) => (
             <Link
-              key={item.path}
-              href={item.path}
-              className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 transition hover:border-slate-400 hover:bg-white"
+              key={request.path}
+              href={request.path}
+              className="group bg-white rounded-xl shadow-sm border border-slate-200 p-6 hover:shadow-lg hover:border-blue-300 transition-all duration-200"
             >
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{item.phase}</p>
-              <p className="mt-1 font-medium text-slate-900">{item.label}</p>
-              <p className="mt-1 text-sm text-slate-600">{item.path}</p>
+              <div className="text-3xl mb-4">{request.icon}</div>
+              <h3 className="text-lg font-semibold text-slate-900 mb-2 group-hover:text-blue-600 transition">
+                {request.title}
+              </h3>
+              <p className="text-sm text-slate-600">{request.description}</p>
             </Link>
           ))}
         </div>
-      </section>
+
+        {/* My Requests Section */}
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h2 className="text-2xl font-semibold text-slate-900">
+                คำขอของฉัน
+              </h2>
+              <p className="text-slate-600 mt-1">
+                ดูและติดตามสถานะคำขอที่คุณส่งแล้ว
+              </p>
+            </div>
+            <Link
+              href="/my-requests"
+              className="bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition"
+            >
+              ดูรายการทั้งหมด
+            </Link>
+          </div>
+
+          {/* Placeholder for recent requests */}
+          <div className="text-center py-8 text-slate-500">
+            <div className="text-4xl mb-4">📋</div>
+            <p>ยังไม่มีคำขอ เริ่มส่งคำขอแรกของคุณเลย!</p>
+          </div>
+        </div>
+
+        {/* Footer Info */}
+        <div className="mt-12 text-center text-slate-500">
+          <p>© 2026 Construction Lines - HR Buddy System</p>
+        </div>
+      </div>
     </main>
   );
 }
-

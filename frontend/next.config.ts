@@ -34,10 +34,18 @@ function buildContentSecurityPolicy() {
     connectSrc.add(source);
   }
 
-  if (process.env.NODE_ENV !== "production") {
+  const isProduction = process.env.NODE_ENV === "production";
+
+  if (!isProduction) {
     connectSrc.add("ws:");
     connectSrc.add("wss:");
   }
+
+  // Next.js App Router injects inline runtime/hydration scripts.
+  // Without nonce/hash plumbing, blocking inline scripts will break page boot.
+  const scriptSrc = isProduction
+    ? "script-src 'self' 'unsafe-inline'"
+    : "script-src 'self' 'unsafe-inline' 'unsafe-eval'";
 
   const directives = [
     "default-src 'self'",
@@ -45,14 +53,15 @@ function buildContentSecurityPolicy() {
     "frame-ancestors 'none'",
     "form-action 'self'",
     "object-src 'none'",
-    "script-src 'self'",
+    scriptSrc,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "font-src 'self' data:",
+    "worker-src 'self' blob:",
     `connect-src ${Array.from(connectSrc).join(" ")}`,
   ];
 
-  if (process.env.NODE_ENV === "production") {
+  if (isProduction) {
     directives.push("upgrade-insecure-requests");
   }
 

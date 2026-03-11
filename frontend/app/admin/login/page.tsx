@@ -59,7 +59,7 @@ function LoginPageContent() {
     setErrorMessage(null);
 
     if (!username.trim() || !password.trim()) {
-      setErrorMessage("Username and password are required.");
+      setErrorMessage("ต้องระบุชื่อผู้ใช้และรหัสผ่าน");
       return;
     }
 
@@ -77,7 +77,7 @@ function LoginPageContent() {
       if (error instanceof ApiError) {
         setErrorMessage(error.message);
       } else {
-        setErrorMessage("Failed to login");
+        setErrorMessage("เข้าสู่ระบบไม่สำเร็จ");
       }
     } finally {
       setSubmitting(false);
@@ -88,7 +88,9 @@ function LoginPageContent() {
     return (
       <main className="mx-auto flex min-h-screen w-full max-w-3xl items-center justify-center px-6 py-10">
         <div className="w-full rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm">
-          <p className="text-sm font-medium text-slate-600">Checking admin session...</p>
+          <p className="text-sm font-medium text-slate-600">
+            กำลังตรวจสอบเซสชันผู้ดูแลระบบ...
+          </p>
         </div>
       </main>
     );
@@ -97,16 +99,22 @@ function LoginPageContent() {
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-3xl flex-col gap-6 px-6 py-10 md:px-10">
       <header className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <p className="text-sm font-semibold uppercase tracking-wide text-slate-600">Phase 5 - Admin Core</p>
-        <h1 className="mt-2 text-3xl font-semibold text-slate-900">Admin Login</h1>
-        <p className="mt-3 text-slate-700">Sign in with admin credentials to access dashboard and request management.</p>
+        <p className="text-sm font-semibold uppercase tracking-wide text-slate-600">
+          Phase 5 - Admin Core
+        </p>
+        <h1 className="mt-2 text-3xl font-semibold text-slate-900">
+          เข้าสู่ระบบผู้ดูแลระบบ
+        </h1>
+        <p className="mt-3 text-slate-700">
+          เข้าสู่ระบบด้วยข้อมูลประจำตัวผู้ดูแลระบบเพื่อเข้าถึงแดชบอร์ดและจัดการคำขอ
+        </p>
       </header>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <form className="space-y-4" onSubmit={handleSubmit}>
           <TextField
             id="username"
-            label="Username"
+            label="ชื่อผู้ใช้"
             required
             value={username}
             onChange={(event) => setUsername(event.target.value)}
@@ -116,7 +124,7 @@ function LoginPageContent() {
 
           <TextField
             id="password"
-            label="Password"
+            label="รหัสผ่าน"
             required
             value={password}
             onChange={(event) => setPassword(event.target.value)}
@@ -126,7 +134,7 @@ function LoginPageContent() {
           />
 
           <Button type="submit" disabled={submitting}>
-            {submitting ? "Signing in..." : "Sign in"}
+            {submitting ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบ"}
           </Button>
         </form>
       </section>
@@ -137,8 +145,11 @@ function LoginPageContent() {
         </section>
       ) : null}
 
-      <Link href="/" className="text-sm font-medium text-slate-700 underline underline-offset-4">
-        Back to Home
+      <Link
+        href="/"
+        className="text-sm font-medium text-slate-700 underline underline-offset-4"
+      >
+        กลับสู่หน้าแรก
       </Link>
     </main>
   );
@@ -148,7 +159,9 @@ function LoginPageLoading() {
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-3xl items-center justify-center px-6 py-10">
       <div className="w-full rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm">
-        <p className="text-sm font-medium text-slate-600">Loading login...</p>
+        <p className="text-sm font-medium text-slate-600">
+          กำลังโหลดหน้าเข้าสู่ระบบ...
+        </p>
       </div>
     </main>
   );
