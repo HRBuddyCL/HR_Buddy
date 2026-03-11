@@ -75,7 +75,11 @@ describe('AdminRequestsService.updateStatus', () => {
   beforeEach(() => {
     jest.clearAllMocks();
 
-    tx.operator.findUnique.mockResolvedValue({ id: 'op-1', isActive: true });
+    tx.operator.findUnique.mockResolvedValue({
+      id: 'op-1',
+      isActive: true,
+      displayName: 'Operator 1',
+    });
     tx.request.update.mockResolvedValue({ id: 'req-1' });
     tx.requestActivityLog.create.mockResolvedValue({ id: 'log-1' });
     tx.documentRequestDetail.update.mockResolvedValue({ requestId: 'req-1' });
@@ -121,6 +125,21 @@ describe('AdminRequestsService.updateStatus', () => {
       'INVALID_OPERATOR_ID',
     );
 
+    expect(tx.request.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects when operator id is blank after trimming', async () => {
+    tx.request.findUnique.mockResolvedValue(makeRequest());
+
+    await expectBadRequestCode(
+      service.updateStatus('req-1', {
+        status: RequestStatus.APPROVED,
+        operatorId: '   ',
+      }),
+      'INVALID_OPERATOR_ID',
+    );
+
+    expect(tx.operator.findUnique).not.toHaveBeenCalled();
     expect(tx.request.update).not.toHaveBeenCalled();
   });
 

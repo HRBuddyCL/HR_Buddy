@@ -223,6 +223,14 @@ export class AdminRequestsService {
 
   async updateStatus(id: string, dto: AdminRequestActionDto) {
     return this.prisma.$transaction(async (tx) => {
+      const operatorId = dto.operatorId.trim();
+      if (!operatorId) {
+        throw new BadRequestException({
+          code: 'INVALID_OPERATOR_ID',
+          message: 'Invalid operatorId',
+        });
+      }
+
       const req = await tx.request.findUnique({
         where: { id },
         select: {
@@ -249,8 +257,8 @@ export class AdminRequestsService {
       }
 
       const operator = await tx.operator.findUnique({
-        where: { id: dto.operatorId },
-        select: { id: true, isActive: true },
+        where: { id: operatorId },
+        select: { id: true, isActive: true, displayName: true },
       });
 
       if (!operator) {
@@ -374,7 +382,8 @@ export class AdminRequestsService {
           fromStatus: req.status,
           toStatus: dto.status,
           actorRole: 'ADMIN',
-          operatorId: dto.operatorId,
+          operatorId,
+          actorDisplayName: operator.displayName,
           note: normalizedNote,
         },
       });

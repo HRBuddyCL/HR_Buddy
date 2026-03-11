@@ -351,8 +351,22 @@ function AdminAuditContent() {
                     <td className="px-3 py-3 text-slate-700">
                       {item.fromStatus ?? "-"} to {item.toStatus ?? "-"}
                     </td>
-                    <td className="px-3 py-3 text-slate-700">{item.actorRole}</td>
-                    <td className="px-3 py-3 text-slate-700">{item.operatorName ?? "-"}</td>
+                    <td className="px-3 py-3 text-slate-700">
+                      <div className="space-y-1">
+                        <p className="font-medium text-slate-900">{item.actorLabel}</p>
+                        <p className="text-xs text-slate-500">Role: {item.actorRole}</p>
+                      </div>
+                    </td>
+                    <td className="px-3 py-3 text-slate-700">
+                      {item.operatorName ? (
+                        <div className="space-y-1">
+                          <p className="font-medium text-slate-900">{item.operatorName}</p>
+                          <p className="text-xs text-slate-500">ID: {item.operatorId}</p>
+                        </div>
+                      ) : (
+                        "-"
+                      )}
+                    </td>
                     <td className="max-w-xs px-3 py-3 text-slate-700">{item.note ?? "-"}</td>
                   </tr>
                 ))}

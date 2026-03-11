@@ -52,21 +52,28 @@ export class AdminAuditService {
       }),
     ]);
 
-    const items = logs.map((log) => ({
-      id: log.id,
-      requestId: log.request.id,
-      requestNo: log.request.requestNo,
-      requestType: log.request.type,
-      requestStatus: log.request.status,
-      action: log.action,
-      fromStatus: log.fromStatus,
-      toStatus: log.toStatus,
-      actorRole: log.actorRole,
-      operatorId: log.operator?.id ?? null,
-      operatorName: log.operator?.displayName ?? null,
-      note: log.note,
-      createdAt: log.createdAt,
-    }));
+    const items = logs.map((log) => {
+      const actorLabel =
+        log.operator?.displayName ?? log.actorDisplayName ?? log.actorRole;
+
+      return {
+        id: log.id,
+        requestId: log.request.id,
+        requestNo: log.request.requestNo,
+        requestType: log.request.type,
+        requestStatus: log.request.status,
+        action: log.action,
+        fromStatus: log.fromStatus,
+        toStatus: log.toStatus,
+        actorRole: log.actorRole,
+        actorDisplayName: log.actorDisplayName,
+        actorLabel,
+        operatorId: log.operator?.id ?? null,
+        operatorName: log.operator?.displayName ?? null,
+        note: log.note,
+        createdAt: log.createdAt,
+      };
+    });
 
     return {
       items,
@@ -96,6 +103,7 @@ export class AdminAuditService {
         },
         operator: {
           select: {
+            id: true,
             displayName: true,
           },
         },
@@ -111,6 +119,8 @@ export class AdminAuditService {
       'fromStatus',
       'toStatus',
       'actorRole',
+      'actorDisplayName',
+      'operatorId',
       'operatorName',
       'note',
     ];
@@ -124,6 +134,8 @@ export class AdminAuditService {
       log.fromStatus,
       log.toStatus,
       log.actorRole,
+      log.actorDisplayName,
+      log.operator?.id ?? null,
       log.operator?.displayName ?? null,
       log.note,
     ]);

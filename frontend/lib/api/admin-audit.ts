@@ -24,6 +24,8 @@ export type AdminAuditLogItem = {
   fromStatus: string | null;
   toStatus: string | null;
   actorRole: AuditActorRole;
+  actorDisplayName: string | null;
+  actorLabel: string;
   operatorId: string | null;
   operatorName: string | null;
   note: string | null;
