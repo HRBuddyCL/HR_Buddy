@@ -64,7 +64,7 @@ npm.cmd install
 Copy-Item .env.example .env
 # edit backend/.env
 npm.cmd run prisma:migrate:deploy
-npm.cmd run start:dev
+npm.cmd run dev
 ```
 
 Default backend URL: `http://localhost:3001`
@@ -78,19 +78,6 @@ npm.cmd run dev
 ```
 
 Default frontend URL (Next.js): usually `http://localhost:3000`
-
-### 4) Run backend + frontend together (single command)
-
-From repository root:
-
-```powershell
-npm.cmd install
-npm.cmd run dev
-```
-
-This starts:
-- backend (http://localhost:3001)
-- frontend (http://localhost:3000)
 
 ## Environment Files
 
@@ -214,4 +201,3 @@ Read these docs before production deployment:
 - Production should use `npm.cmd run prisma:migrate:deploy`, not `migrate dev`.
 - Keep all real secrets out of git.
 - Configure backend `.env` with production-safe values before any real deployment.
-
