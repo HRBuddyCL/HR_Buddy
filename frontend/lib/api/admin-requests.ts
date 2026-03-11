@@ -1,3 +1,4 @@
+import { resolveApiBaseUrl } from "@/lib/api/base-url";
 import { apiFetch, ApiError } from "@/lib/api/client";
 import { getAuthToken } from "@/lib/auth/tokens";
 
@@ -203,8 +204,7 @@ export type AdminUploadTicketResponse = {
   expiresAt: string;
 };
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ?? "http://localhost:3001";
+const API_BASE_URL = resolveApiBaseUrl();
 
 function toQueryString(query: Record<string, string | number | undefined>) {
   const params = new URLSearchParams();
@@ -366,3 +366,4 @@ export async function downloadAdminRequestsCsv(
     csv: await response.text(),
   };
 }
+

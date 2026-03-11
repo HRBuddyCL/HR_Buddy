@@ -1,14 +1,19 @@
+import { resolveApiBaseUrl } from "@/lib/api/base-url";
 import { getAuthToken, type TokenType } from "@/lib/auth/tokens";
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ?? "http://localhost:3001";
-
 type PrimitiveQueryValue = string | number | boolean;
+
+type ApiRetryOptions = {
+  attempts?: number;
+  baseDelayMs?: number;
+  statuses?: number[];
+};
 
 type ApiFetchOptions = Omit<RequestInit, "body"> & {
   body?: unknown;
   tokenType?: TokenType;
   query?: Record<string, PrimitiveQueryValue | undefined | null>;
+  retry?: number | ApiRetryOptions;
 };
 
 export type ApiErrorBody = {
@@ -46,7 +51,8 @@ function resolveErrorMessage(body: ApiErrorBody | null, fallbackMessage: string)
 }
 
 function buildUrl(path: string, query?: ApiFetchOptions["query"]) {
-  const url = new URL(`${API_BASE_URL}${path}`);
+  const apiBaseUrl = resolveApiBaseUrl();
+  const url = new URL(`${apiBaseUrl}${path}`);
 
   if (!query) {
     return url.toString();
@@ -77,8 +83,34 @@ async function tryParseJson(response: Response) {
   }
 }
 
+function resolveRetryPolicy(method: string | undefined, retry: ApiFetchOptions["retry"]) {
+  const normalizedMethod = (method ?? "GET").toUpperCase();
+  const defaultAttempts = normalizedMethod === "GET" || normalizedMethod === "HEAD" || normalizedMethod === "OPTIONS" ? 3 : 1;
+
+  if (typeof retry === "number") {
+    return {
+      attempts: Math.max(1, retry),
+      baseDelayMs: 700,
+      statuses: new Set([502, 503, 504]),
+    };
+  }
+
+  return {
+    attempts: Math.max(1, retry?.attempts ?? defaultAttempts),
+    baseDelayMs: Math.max(100, retry?.baseDelayMs ?? 700),
+    statuses: new Set(retry?.statuses ?? [502, 503, 504]),
+  };
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
 export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise<T> {
-  const { tokenType, query, headers, body, ...rest } = options;
+  const { tokenType, query, headers, body, retry, ...rest } = options;
+  const retryPolicy = resolveRetryPolicy(rest.method, retry);
 
   const requestHeaders = new Headers(headers ?? {});
   requestHeaders.set("Accept", "application/json");
@@ -97,17 +129,40 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
     }
   }
 
-  const response = await fetch(buildUrl(path, query), {
-    ...rest,
-    headers: requestHeaders,
-    body: finalBody,
-  });
+  for (let attempt = 0; attempt < retryPolicy.attempts; attempt += 1) {
+    try {
+      const response = await fetch(buildUrl(path, query), {
+        ...rest,
+        headers: requestHeaders,
+        body: finalBody,
+      });
 
-  const json = (await tryParseJson(response)) as T | ApiErrorBody | null;
+      if (response.ok) {
+        const json = (await tryParseJson(response)) as T | null;
+        return (json ?? ({} as T)) as T;
+      }
 
-  if (!response.ok) {
-    throw new ApiError(response.status, (json as ApiErrorBody | null) ?? null, `Request failed: ${response.status}`);
+      const shouldRetry = attempt < retryPolicy.attempts - 1 && retryPolicy.statuses.has(response.status);
+      if (shouldRetry) {
+        await sleep(retryPolicy.baseDelayMs * (attempt + 1));
+        continue;
+      }
+
+      const json = (await tryParseJson(response)) as ApiErrorBody | null;
+      throw new ApiError(response.status, json, `Request failed: ${response.status}`);
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
+      }
+
+      if (attempt < retryPolicy.attempts - 1) {
+        await sleep(retryPolicy.baseDelayMs * (attempt + 1));
+        continue;
+      }
+
+      throw error;
+    }
   }
 
-  return (json ?? ({} as T)) as T;
+  throw new Error("Request exhausted retry attempts");
 }

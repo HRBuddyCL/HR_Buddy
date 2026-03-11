@@ -19,6 +19,10 @@ export async function adminLogin(payload: AdminLoginPayload) {
   return apiFetch<AdminLoginResponse>("/admin/auth/login", {
     method: "POST",
     body: payload,
+    retry: {
+      attempts: 2,
+      baseDelayMs: 900,
+    },
   });
 }
 
@@ -26,6 +30,10 @@ export async function adminMe() {
   return apiFetch<AdminSessionMe>("/admin/auth/me", {
     method: "GET",
     tokenType: "admin",
+    retry: {
+      attempts: 3,
+      baseDelayMs: 900,
+    },
   });
 }
 
