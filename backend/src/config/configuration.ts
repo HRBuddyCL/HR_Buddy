@@ -83,6 +83,22 @@ export default () => ({
         process.env.ABUSE_PROTECTION_POSTGRES_RETENTION_HOURS ?? '48',
         10,
       ),
+      transactionMaxWaitMs: parseInt(
+        process.env.ABUSE_PROTECTION_POSTGRES_TRANSACTION_MAX_WAIT_MS ?? '10000',
+        10,
+      ),
+      transactionTimeoutMs: parseInt(
+        process.env.ABUSE_PROTECTION_POSTGRES_TRANSACTION_TIMEOUT_MS ?? '12000',
+        10,
+      ),
+      transientRetries: parseInt(
+        process.env.ABUSE_PROTECTION_POSTGRES_TRANSIENT_RETRIES ?? '2',
+        10,
+      ),
+      transientRetryDelayMs: parseInt(
+        process.env.ABUSE_PROTECTION_POSTGRES_TRANSIENT_RETRY_DELAY_MS ?? '120',
+        10,
+      ),
       failClosedInProduction:
         (process.env.ABUSE_PROTECTION_POSTGRES_FAIL_CLOSED_IN_PRODUCTION ??
           'true') === 'true',
@@ -303,3 +319,4 @@ function parseTrustProxy(raw: string | undefined) {
 
   return trimmed;
 }
+

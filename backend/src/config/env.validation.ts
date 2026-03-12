@@ -81,6 +81,24 @@ export const envValidationSchema = Joi.object({
     .integer()
     .min(1)
     .default(48),
+  ABUSE_PROTECTION_POSTGRES_TRANSACTION_MAX_WAIT_MS: Joi.number()
+    .integer()
+    .min(100)
+    .default(10000),
+  ABUSE_PROTECTION_POSTGRES_TRANSACTION_TIMEOUT_MS: Joi.number()
+    .integer()
+    .min(500)
+    .default(12000),
+  ABUSE_PROTECTION_POSTGRES_TRANSIENT_RETRIES: Joi.number()
+    .integer()
+    .min(0)
+    .max(5)
+    .default(2),
+  ABUSE_PROTECTION_POSTGRES_TRANSIENT_RETRY_DELAY_MS: Joi.number()
+    .integer()
+    .min(0)
+    .max(2000)
+    .default(120),
   ABUSE_PROTECTION_POSTGRES_FAIL_CLOSED_IN_PRODUCTION:
     Joi.boolean().default(true),
   RATE_LIMIT_OTP_SEND_WINDOW_SECONDS: Joi.number().integer().min(1).default(60),
@@ -243,3 +261,4 @@ export const envValidationSchema = Joi.object({
     .default('dev-only-change-this-admin-session-secret'),
   ADMIN_SESSION_TTL_MINUTES: Joi.number().integer().min(30).default(480),
 });
+

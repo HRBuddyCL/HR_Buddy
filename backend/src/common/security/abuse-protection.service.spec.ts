@@ -24,6 +24,14 @@ describe('AbuseProtectionService', () => {
         return false;
       }
 
+      if (key === 'abuseProtection.postgres.transientRetries') {
+        return 2;
+      }
+
+      if (key === 'abuseProtection.postgres.transientRetryDelayMs') {
+        return 0;
+      }
+
       if (key === 'runtimeEnv') {
         return 'development';
       }
@@ -83,6 +91,14 @@ describe('AbuseProtectionService', () => {
         return false;
       }
 
+      if (key === 'abuseProtection.postgres.transientRetries') {
+        return 2;
+      }
+
+      if (key === 'abuseProtection.postgres.transientRetryDelayMs') {
+        return 0;
+      }
+
       if (key === 'runtimeEnv') {
         return 'development';
       }
@@ -114,6 +130,14 @@ describe('AbuseProtectionService', () => {
 
       if (key === 'abuseProtection.postgres.failClosedInProduction') {
         return true;
+      }
+
+      if (key === 'abuseProtection.postgres.transientRetries') {
+        return 2;
+      }
+
+      if (key === 'abuseProtection.postgres.transientRetryDelayMs') {
+        return 0;
       }
 
       if (key === 'runtimeEnv') {
@@ -159,6 +183,14 @@ describe('AbuseProtectionService', () => {
         return false;
       }
 
+      if (key === 'abuseProtection.postgres.transientRetries') {
+        return 2;
+      }
+
+      if (key === 'abuseProtection.postgres.transientRetryDelayMs') {
+        return 0;
+      }
+
       if (key === 'runtimeEnv') {
         return 'production';
       }
@@ -183,6 +215,64 @@ describe('AbuseProtectionService', () => {
     expect(memoryStore.consume).toHaveBeenCalledTimes(1);
   });
 
+  it('retries transient postgres failure before succeeding in production', async () => {
+    configGetMock.mockImplementation((key: string) => {
+      if (key === 'abuseProtection.store') {
+        return 'postgres';
+      }
+
+      if (key === 'abuseProtection.postgres.retryAfterSeconds') {
+        return 30;
+      }
+
+      if (key === 'abuseProtection.postgres.failClosedInProduction') {
+        return true;
+      }
+
+      if (key === 'abuseProtection.postgres.transientRetries') {
+        return 1;
+      }
+
+      if (key === 'abuseProtection.postgres.transientRetryDelayMs') {
+        return 0;
+      }
+
+      if (key === 'runtimeEnv') {
+        return 'production';
+      }
+
+      return undefined;
+    });
+
+    postgresStore.consume
+      .mockRejectedValueOnce(
+        new Error(
+          'Transaction API error: Unable to start a transaction in the given time.',
+        ),
+      )
+      .mockResolvedValueOnce({
+        allowed: true,
+        remaining: 2,
+        retryAfterSeconds: 0,
+        resetAtUnix: 1_700_000_200,
+      });
+
+    await expect(
+      service.consume({
+        scope: 'otpSend',
+        key: 'ip=1.1.1.1:phone=0812345678',
+        policy: { windowSeconds: 60, maxRequests: 5, blockSeconds: 300 },
+        nowMs: 1_000,
+      }),
+    ).resolves.toMatchObject({
+      allowed: true,
+      remaining: 2,
+    });
+
+    expect(postgresStore.consume).toHaveBeenCalledTimes(2);
+    expect(memoryStore.consume).not.toHaveBeenCalled();
+  });
+
   it('fails closed when postgres store fails in production and fail-closed is enabled', async () => {
     configGetMock.mockImplementation((key: string) => {
       if (key === 'abuseProtection.store') {
@@ -195,6 +285,14 @@ describe('AbuseProtectionService', () => {
 
       if (key === 'abuseProtection.postgres.failClosedInProduction') {
         return true;
+      }
+
+      if (key === 'abuseProtection.postgres.transientRetries') {
+        return 2;
+      }
+
+      if (key === 'abuseProtection.postgres.transientRetryDelayMs') {
+        return 0;
       }
 
       if (key === 'runtimeEnv') {
@@ -218,3 +316,4 @@ describe('AbuseProtectionService', () => {
     expect(memoryStore.consume).not.toHaveBeenCalled();
   });
 });
+

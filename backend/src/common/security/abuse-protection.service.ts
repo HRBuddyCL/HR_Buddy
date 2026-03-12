@@ -33,36 +33,59 @@ export class AbuseProtectionService {
         return this.memoryStore.consume(input);
       }
 
-      try {
-        return await this.postgresStore.consume(input);
-      } catch (error) {
-        const retryAfterSeconds = this.postgresRetryAfterSeconds();
+      const maxAttempts = this.postgresTransientRetries() + 1;
+      let lastError: unknown;
 
-        if (this.isProduction() && this.failClosedInProduction()) {
-          this.logger.error(
-            `Postgres abuse store failed in production; rejecting requests: ${(error as Error).message}`,
-          );
+      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        try {
+          return await this.postgresStore.consume(input);
+        } catch (error) {
+          lastError = error;
 
-          throw new ServiceUnavailableException({
-            code: 'ABUSE_PROTECTION_UNAVAILABLE',
-            message: 'Rate-limit store is temporarily unavailable',
-          });
+          const canRetry = attempt < maxAttempts;
+
+          if (canRetry && this.isTransientPostgresError(error)) {
+            const delayMs = this.postgresTransientRetryDelayMs();
+
+            this.logger.warn(
+              `Postgres abuse store transient failure (attempt ${attempt}/${maxAttempts}). Retrying in ${delayMs}ms: ${this.errorMessage(error)}`,
+            );
+
+            await this.delay(delayMs);
+            continue;
+          }
+
+          break;
         }
-
-        this.postgresDisabledUntilMs = nowMs + retryAfterSeconds * 1000;
-
-        const message = `Postgres abuse store failed. Fallback to memory for ${retryAfterSeconds}s: ${(error as Error).message}`;
-
-        if (this.isProduction()) {
-          this.logger.error(
-            `${message} (ABUSE_PROTECTION_POSTGRES_FAIL_CLOSED_IN_PRODUCTION=false)`,
-          );
-        } else {
-          this.logger.warn(message);
-        }
-
-        return this.memoryStore.consume(input);
       }
+
+      const retryAfterSeconds = this.postgresRetryAfterSeconds();
+      const errorMessage = this.errorMessage(lastError);
+
+      if (this.isProduction() && this.failClosedInProduction()) {
+        this.logger.error(
+          `Postgres abuse store failed in production; rejecting requests: ${errorMessage}`,
+        );
+
+        throw new ServiceUnavailableException({
+          code: 'ABUSE_PROTECTION_UNAVAILABLE',
+          message: 'Rate-limit store is temporarily unavailable',
+        });
+      }
+
+      this.postgresDisabledUntilMs = nowMs + retryAfterSeconds * 1000;
+
+      const message = `Postgres abuse store failed. Fallback to memory for ${retryAfterSeconds}s: ${errorMessage}`;
+
+      if (this.isProduction()) {
+        this.logger.error(
+          `${message} (ABUSE_PROTECTION_POSTGRES_FAIL_CLOSED_IN_PRODUCTION=false)`,
+        );
+      } else {
+        this.logger.warn(message);
+      }
+
+      return this.memoryStore.consume(input);
     }
 
     return this.memoryStore.consume(input);
@@ -93,6 +116,52 @@ export class AbuseProtectionService {
     );
   }
 
+  private postgresTransientRetries() {
+    return Math.max(
+      0,
+      this.config.get<number>('abuseProtection.postgres.transientRetries') ?? 2,
+    );
+  }
+
+  private postgresTransientRetryDelayMs() {
+    return Math.max(
+      0,
+      this.config.get<number>('abuseProtection.postgres.transientRetryDelayMs') ??
+        120,
+    );
+  }
+
+  private isTransientPostgresError(error: unknown) {
+    const message = this.errorMessage(error).toLowerCase();
+
+    return (
+      message.includes('unable to start a transaction in the given time') ||
+      message.includes('transaction api error') ||
+      message.includes('timed out fetching a new connection') ||
+      message.includes('timeout acquiring a connection') ||
+      message.includes('connection pool') ||
+      message.includes('too many clients')
+    );
+  }
+
+  private errorMessage(error: unknown) {
+    if (error instanceof Error) {
+      return error.message;
+    }
+
+    return String(error ?? 'unknown error');
+  }
+
+  private async delay(ms: number) {
+    if (ms <= 0) {
+      return;
+    }
+
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, ms);
+    });
+  }
+
   private isProduction() {
     return (
       (
@@ -103,3 +172,4 @@ export class AbuseProtectionService {
     );
   }
 }
+

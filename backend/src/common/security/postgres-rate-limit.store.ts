@@ -145,6 +145,9 @@ export class PostgresRateLimitStore {
         retryAfterSeconds: 0,
         resetAtUnix: Math.ceil((windowStartMs + windowMs) / 1000),
       };
+    }, {
+      maxWait: this.transactionMaxWaitMs(),
+      timeout: this.transactionTimeoutMs(),
     });
 
     await this.tryCleanup(nowMs);
@@ -183,6 +186,20 @@ export class PostgresRateLimitStore {
     }
   }
 
+  private transactionMaxWaitMs() {
+    return (
+      this.config.get<number>('abuseProtection.postgres.transactionMaxWaitMs') ??
+      10000
+    );
+  }
+
+  private transactionTimeoutMs() {
+    return (
+      this.config.get<number>('abuseProtection.postgres.transactionTimeoutMs') ??
+      12000
+    );
+  }
+
   private cleanupIntervalSeconds() {
     return (
       this.config.get<number>(
@@ -197,3 +214,4 @@ export class PostgresRateLimitStore {
     );
   }
 }
+
