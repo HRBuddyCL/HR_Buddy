@@ -76,8 +76,9 @@ export class CreateMessengerRequestDto {
   @MaxLength(20)
   phone!: string;
 
+  @IsOptional()
   @IsEnum(Urgency)
-  urgency!: Urgency;
+  urgency?: Urgency;
 
   @IsDateString()
   pickupDatetime!: string;

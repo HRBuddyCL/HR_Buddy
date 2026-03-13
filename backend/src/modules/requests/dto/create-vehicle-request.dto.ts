@@ -27,8 +27,9 @@ export class CreateVehicleRequestDto {
   @Matches(/^\+?\d{9,15}$/)
   phone!: string;
 
+  @IsOptional()
   @IsEnum(Urgency)
-  urgency!: Urgency;
+  urgency?: Urgency;
 
   @IsString()
   @IsNotEmpty()
@@ -54,3 +55,4 @@ export class CreateVehicleRequestDto {
   @MaxLength(2000)
   additionalDetails?: string;
 }
+

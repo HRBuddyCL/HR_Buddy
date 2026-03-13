@@ -39,7 +39,7 @@ export type CreateVehicleRequestPayload = {
   departmentId: string;
   departmentOther?: string;
   phone: string;
-  urgency: Urgency;
+  urgency?: Urgency;
   vehiclePlate: string;
   issueCategoryId: string;
   issueCategoryOther?: string;
@@ -52,7 +52,6 @@ export type CreateMessengerRequestPayload = {
   departmentId: string;
   departmentOther?: string;
   phone: string;
-  urgency: Urgency;
   pickupDatetime: string;
   itemType: ItemType;
   itemDescription: string;
@@ -111,3 +110,4 @@ export async function createDocumentRequest(payload: CreateDocumentRequestPayloa
     body: payload,
   });
 }
+

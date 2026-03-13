@@ -1,4 +1,4 @@
-import { DeliveryMethod, Prisma } from '@prisma/client';
+import { DeliveryMethod, Prisma, Urgency } from '@prisma/client';
 import { CreateBuildingRequestDto } from '../dto/create-building-request.dto';
 import { CreateDocumentRequestDto } from '../dto/create-document-request.dto';
 import { CreateMessengerRequestDto } from '../dto/create-messenger-request.dto';
@@ -144,87 +144,100 @@ export function isDuplicateVehicleRequest(
   dto: CreateVehicleRequestDto,
   recentRequests: RequestDedupeCandidate[],
 ) {
+  const normalizedDto = {
+    ...dto,
+    urgency: Urgency.NORMAL,
+  };
+
   return recentRequests.some((candidate) => {
     const detail = candidate.vehicleRepairDetail;
 
-    if (!detail || !matchesBaseFields(candidate, dto)) {
+    if (!detail || !matchesBaseFields(candidate, normalizedDto)) {
       return false;
     }
 
     return (
-      normalizeText(detail.vehiclePlate) === normalizeText(dto.vehiclePlate) &&
-      detail.issueCategoryId === dto.issueCategoryId &&
-      normalizeText(detail.symptom) === normalizeText(dto.symptom) &&
+      normalizeText(detail.vehiclePlate) === normalizeText(normalizedDto.vehiclePlate) &&
+      detail.issueCategoryId === normalizedDto.issueCategoryId &&
+      normalizeText(detail.symptom) === normalizeText(normalizedDto.symptom) &&
       normalizeOptionalText(detail.issueCategoryOther) ===
-        normalizeOptionalText(dto.issueCategoryOther) &&
+        normalizeOptionalText(normalizedDto.issueCategoryOther) &&
       normalizeOptionalText(detail.additionalDetails) ===
-        normalizeOptionalText(dto.additionalDetails)
+        normalizeOptionalText(normalizedDto.additionalDetails)
     );
   });
 }
-
 export function isDuplicateMessengerRequest(
   dto: CreateMessengerRequestDto,
   recentRequests: RequestDedupeCandidate[],
 ) {
+  const normalizedDto = {
+    ...dto,
+    urgency: Urgency.NORMAL,
+  };
+
   return recentRequests.some((candidate) => {
     const detail = candidate.messengerBookingDetail;
 
-    if (!detail || !matchesBaseFields(candidate, dto)) {
+    if (!detail || !matchesBaseFields(candidate, normalizedDto)) {
       return false;
     }
 
     return (
       normalizeDateTime(detail.pickupDatetime) ===
-        normalizeDateTime(dto.pickupDatetime) &&
-      detail.itemType === dto.itemType &&
+        normalizeDateTime(normalizedDto.pickupDatetime) &&
+      detail.itemType === normalizedDto.itemType &&
       normalizeText(detail.itemDescription) ===
-        normalizeText(dto.itemDescription) &&
-      detail.outsideBkkMetro === dto.outsideBkkMetro &&
-      (detail.deliveryService ?? null) === (dto.deliveryService ?? null) &&
+        normalizeText(normalizedDto.itemDescription) &&
+      detail.outsideBkkMetro === normalizedDto.outsideBkkMetro &&
+      (detail.deliveryService ?? null) === (normalizedDto.deliveryService ?? null) &&
       normalizeOptionalText(detail.deliveryServiceOther) ===
-        normalizeOptionalText(dto.deliveryServiceOther) &&
-      equalsAddress(dto.sender, detail.senderAddress) &&
-      equalsAddress(dto.receiver, detail.receiverAddress)
+        normalizeOptionalText(normalizedDto.deliveryServiceOther) &&
+      equalsAddress(normalizedDto.sender, detail.senderAddress) &&
+      equalsAddress(normalizedDto.receiver, detail.receiverAddress)
     );
   });
 }
-
 export function isDuplicateDocumentRequest(
   dto: CreateDocumentRequestDto,
   recentRequests: RequestDedupeCandidate[],
 ) {
+  const normalizedDto = {
+    ...dto,
+    urgency:
+      dto.deliveryMethod === DeliveryMethod.POSTAL ? Urgency.NORMAL : dto.urgency,
+  };
+
   return recentRequests.some((candidate) => {
     const detail = candidate.documentRequestDetail;
 
-    if (!detail || !matchesBaseFields(candidate, dto)) {
+    if (!detail || !matchesBaseFields(candidate, normalizedDto)) {
       return false;
     }
 
     const sameCore =
       normalizeSiteName(detail.siteNameNormalized) ===
-        normalizeSiteName(dto.siteNameRaw) &&
+        normalizeSiteName(normalizedDto.siteNameRaw) &&
       normalizeText(detail.documentDescription) ===
-        normalizeText(dto.documentDescription) &&
-      normalizeText(detail.purpose) === normalizeText(dto.purpose) &&
+        normalizeText(normalizedDto.documentDescription) &&
+      normalizeText(detail.purpose) === normalizeText(normalizedDto.purpose) &&
       normalizeDateTime(detail.neededDate) ===
-        normalizeDateTime(dto.neededDate) &&
-      detail.deliveryMethod === dto.deliveryMethod &&
-      normalizeOptionalText(detail.note) === normalizeOptionalText(dto.note);
+        normalizeDateTime(normalizedDto.neededDate) &&
+      detail.deliveryMethod === normalizedDto.deliveryMethod &&
+      normalizeOptionalText(detail.note) === normalizeOptionalText(normalizedDto.note);
 
     if (!sameCore) {
       return false;
     }
 
-    if (dto.deliveryMethod !== DeliveryMethod.POSTAL) {
+    if (normalizedDto.deliveryMethod !== DeliveryMethod.POSTAL) {
       return !detail.deliveryAddress;
     }
 
-    if (!dto.deliveryAddress) {
+    if (!normalizedDto.deliveryAddress) {
       return false;
     }
 
-    return equalsAddress(dto.deliveryAddress, detail.deliveryAddress);
+    return equalsAddress(normalizedDto.deliveryAddress, detail.deliveryAddress);
   });
 }
-

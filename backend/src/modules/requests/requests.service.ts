@@ -256,28 +256,33 @@ export class RequestsService {
   // Feature: VEHICLE
   // -----------------------------
   async createVehicle(dto: CreateVehicleRequestDto) {
-    assertVehicleOtherRule(dto);
+    const normalizedDto = {
+      ...dto,
+      urgency: Urgency.NORMAL,
+    };
+
+    assertVehicleOtherRule(normalizedDto);
 
     return this.createRequestCore({
       type: RequestType.VEHICLE,
-      urgency: dto.urgency,
-      employeeName: dto.employeeName,
-      departmentId: dto.departmentId,
-      departmentOther: dto.departmentOther,
-      phone: dto.phone,
+      urgency: Urgency.NORMAL,
+      employeeName: normalizedDto.employeeName,
+      departmentId: normalizedDto.departmentId,
+      departmentOther: normalizedDto.departmentOther,
+      phone: normalizedDto.phone,
       dedupeMatcher: (recentRequests) =>
-        isDuplicateVehicleRequest(dto, recentRequests),
+        isDuplicateVehicleRequest(normalizedDto, recentRequests),
       detailCreator: async (tx, requestId) => {
-        await assertVehicleRefsExist(tx, dto);
+        await assertVehicleRefsExist(tx, normalizedDto);
 
         await tx.vehicleRepairDetail.create({
           data: {
             requestId,
-            vehiclePlate: dto.vehiclePlate,
-            issueCategoryId: dto.issueCategoryId,
-            issueCategoryOther: dto.issueCategoryOther ?? null,
-            symptom: dto.symptom,
-            additionalDetails: dto.additionalDetails ?? null,
+            vehiclePlate: normalizedDto.vehiclePlate,
+            issueCategoryId: normalizedDto.issueCategoryId,
+            issueCategoryOther: normalizedDto.issueCategoryOther ?? null,
+            symptom: normalizedDto.symptom,
+            additionalDetails: normalizedDto.additionalDetails ?? null,
           },
         });
       },
@@ -292,7 +297,7 @@ export class RequestsService {
 
     return this.createRequestCore({
       type: RequestType.MESSENGER,
-      urgency: dto.urgency,
+      urgency: Urgency.NORMAL,
       employeeName: dto.employeeName,
       departmentId: dto.departmentId,
       departmentOther: dto.departmentOther,
@@ -337,10 +342,12 @@ export class RequestsService {
     assertDocumentCreateRule(dto);
 
     const siteNameNormalized = normalizeSiteName(dto.siteNameRaw);
+    const normalizedUrgency: Urgency =
+      dto.deliveryMethod === 'POSTAL' ? Urgency.NORMAL : dto.urgency;
 
     return this.createRequestCore({
       type: RequestType.DOCUMENT,
-      urgency: dto.urgency,
+      urgency: normalizedUrgency,
       employeeName: dto.employeeName,
       departmentId: dto.departmentId,
       departmentOther: dto.departmentOther,
@@ -605,5 +612,4 @@ export class RequestsService {
     return req;
   }
 }
-
 

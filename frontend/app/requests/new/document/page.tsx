@@ -14,11 +14,26 @@ import {
 } from "@/lib/api/requests";
 import { Button, SelectField, TextField, TextareaField } from "@/components/ui/form-controls";
 
-const urgencyOptions: Array<{ value: Urgency; label: string }> = [
-  { value: "LOW", label: "Low" },
-  { value: "NORMAL", label: "Normal" },
-  { value: "HIGH", label: "High" },
-  { value: "CRITICAL", label: "Critical" },
+const urgencyOptions: Array<{
+  value: Urgency;
+  label: string;
+  description: string;
+}> = [
+  {
+    value: "NORMAL",
+    label: "\u0e1b\u0e01\u0e15\u0e34",
+    description: "\u0e20\u0e32\u0e22\u0e43\u0e19 72 \u0e0a\u0e31\u0e48\u0e27\u0e42\u0e21\u0e07",
+  },
+  {
+    value: "HIGH",
+    label: "\u0e2a\u0e39\u0e07",
+    description: "\u0e20\u0e32\u0e22\u0e43\u0e19 24 \u0e0a\u0e31\u0e48\u0e27\u0e42\u0e21\u0e07",
+  },
+  {
+    value: "CRITICAL",
+    label: "\u0e40\u0e23\u0e48\u0e07\u0e14\u0e48\u0e27\u0e19",
+    description: "\u0e20\u0e32\u0e22\u0e43\u0e19 8 \u0e0a\u0e31\u0e48\u0e27\u0e42\u0e21\u0e07",
+  },
 ];
 
 const deliveryMethodOptions: Array<{ value: DeliveryMethod; label: string }> = [
@@ -147,7 +162,10 @@ export default function Page() {
 
   const isPostal = useMemo(() => form.deliveryMethod === "POSTAL", [form.deliveryMethod]);
   const isOtherDepartment = useMemo(() => form.departmentId === "dept_other", [form.departmentId]);
-
+  const selectedUrgencyOption = useMemo(
+    () => urgencyOptions.find((option) => option.value === form.urgency) ?? null,
+    [form.urgency],
+  );
   useEffect(() => {
     let active = true;
 
@@ -391,7 +409,7 @@ export default function Page() {
       employeeName: form.employeeName.trim(),
       departmentId: form.departmentId,
       phone: form.phone.trim(),
-      urgency: form.urgency,
+      urgency: isPostal ? "NORMAL" : form.urgency,
       siteNameRaw: form.siteNameRaw.trim(),
       documentDescription: form.documentDescription.trim(),
       purpose: form.purpose.trim(),
@@ -487,19 +505,26 @@ export default function Page() {
                 />
               ) : null}
 
-              <SelectField
-                id="urgency"
-                label="Urgency"
-                required
-                value={form.urgency}
-                onChange={(event) => onChange("urgency", event.target.value as Urgency)}
-              >
-                {urgencyOptions.map((item) => (
-                  <option key={item.value} value={item.value}>
-                    {item.label}
-                  </option>
-                ))}
-              </SelectField>
+              {!isPostal ? (
+                <div>
+                  <SelectField
+                    id="urgency"
+                    label="Urgency"
+                    required
+                    value={form.urgency}
+                    onChange={(event) => onChange("urgency", event.target.value as Urgency)}
+                  >
+                    {urgencyOptions.map((item) => (
+                      <option key={item.value} value={item.value}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </SelectField>
+                  {selectedUrgencyOption ? (
+                    <p className="mt-1 text-xs text-slate-500">{selectedUrgencyOption.description}</p>
+                  ) : null}
+                </div>
+              ) : null}
 
               <TextField
                 id="siteNameRaw"
@@ -549,7 +574,13 @@ export default function Page() {
                 label="Delivery Method"
                 required
                 value={form.deliveryMethod}
-                onChange={(event) => onChange("deliveryMethod", event.target.value as DeliveryMethod)}
+                onChange={(event) => {
+                  const nextDeliveryMethod = event.target.value as DeliveryMethod;
+                  onChange("deliveryMethod", nextDeliveryMethod);
+                  if (nextDeliveryMethod === "POSTAL" && form.urgency !== "NORMAL") {
+                    onChange("urgency", "NORMAL");
+                  }
+                }}
               >
                 {deliveryMethodOptions.map((item) => (
                   <option key={item.value} value={item.value}>
@@ -713,3 +744,5 @@ export default function Page() {
     </main>
   );
 }
+
+

@@ -11,16 +11,8 @@ import {
   type CreateMessengerRequestPayload,
   type DeliveryService,
   type ItemType,
-  type Urgency,
 } from "@/lib/api/requests";
 import { Button, SelectField, TextField, TextareaField } from "@/components/ui/form-controls";
-
-const urgencyOptions: Array<{ value: Urgency; label: string }> = [
-  { value: "LOW", label: "Low" },
-  { value: "NORMAL", label: "Normal" },
-  { value: "HIGH", label: "High" },
-  { value: "CRITICAL", label: "Critical" },
-];
 
 const itemTypeOptions: Array<{ value: ItemType; label: string }> = [
   { value: "DOCUMENT", label: "Document" },
@@ -47,7 +39,6 @@ type FormState = {
   departmentId: string;
   departmentOther: string;
   phone: string;
-  urgency: Urgency;
   pickupDatetime: string;
   itemType: ItemType;
   itemDescription: string;
@@ -74,7 +65,6 @@ const initialFormState: FormState = {
   departmentId: "",
   departmentOther: "",
   phone: "",
-  urgency: "NORMAL",
   pickupDatetime: "",
   itemType: "DOCUMENT",
   itemDescription: "",
@@ -528,7 +518,6 @@ export default function Page() {
       employeeName: form.employeeName.trim(),
       departmentId: form.departmentId,
       phone: form.phone.trim(),
-      urgency: form.urgency,
       pickupDatetime: new Date(form.pickupDatetime).toISOString(),
       itemType: form.itemType,
       itemDescription: form.itemDescription.trim(),
@@ -626,23 +615,7 @@ export default function Page() {
                   placeholder="Please specify department name"
                   maxLength={120}
                 />
-              ) : null}
-
-
-              <SelectField
-                id="urgency"
-                label="Urgency"
-                required
-                value={form.urgency}
-                onChange={(event) => onChange("urgency", event.target.value as Urgency)}
-              >
-                {urgencyOptions.map((item) => (
-                  <option key={item.value} value={item.value}>
-                    {item.label}
-                  </option>
-                ))}
-              </SelectField>
-
+              ) : null}\r\n
               <TextField
                 id="pickupDatetime"
                 label="Pickup Date and Time"
