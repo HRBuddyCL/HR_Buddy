@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import Image from "next/image";
 
 type ImagePreviewModalProps = {
   open: boolean;
@@ -49,11 +50,16 @@ export function ImagePreviewModal({ open, title, src, onClose }: ImagePreviewMod
         </div>
 
         <div className="bg-slate-100 p-2 sm:p-3">
-          <img
-            src={src}
-            alt={title}
-            className="h-[68vh] max-h-[760px] w-full rounded-lg border border-slate-200 bg-white object-contain"
-          />
+          <div className="relative h-[68vh] max-h-[760px] w-full overflow-hidden rounded-lg border border-slate-200 bg-white">
+            <Image
+              src={src}
+              alt={title}
+              fill
+              unoptimized
+              sizes="100vw"
+              className="object-contain"
+            />
+          </div>
         </div>
       </div>
     </div>
