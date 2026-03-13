@@ -20,8 +20,8 @@ const requestTypes: RequestType[] = [
   },
   {
     path: "/requests/new/vehicle",
-    title: "คำขอซ่อมรถยนต์",
-    description: "ส่งคำขอซ่อมแซมหรือบริการรถยนต์บริษัท",
+    title: "คำขอซ่อมยานพาหนะ",
+    description: "ส่งคำขอซ่อมแซมหรือบริการยานพาหนะของบริษัท",
     icon: "🚗",
     color: "from-[#b62026] to-[#d63338]",
     accentColor: "border-[#b62026]",
