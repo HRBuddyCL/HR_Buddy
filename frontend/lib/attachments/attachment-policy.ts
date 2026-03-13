@@ -6,7 +6,7 @@ type AttachmentPolicy = {
 };
 
 const MB = 1024 * 1024;
-const MAX_FILE_SIZE_BYTES = 50 * MB;
+const MAX_FILE_SIZE_BYTES = 100 * MB;
 
 export const ATTACHMENT_POLICY: Record<AttachmentFileKind, AttachmentPolicy> = {
   IMAGE: {
@@ -54,11 +54,13 @@ export const ATTACHMENT_POLICY: Record<AttachmentFileKind, AttachmentPolicy> = {
 const EXTENSION_MIME_MAP: Record<string, string> = {
   ".pdf": "application/pdf",
   ".doc": "application/msword",
-  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ".docx":
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   ".xls": "application/vnd.ms-excel",
   ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   ".ppt": "application/vnd.ms-powerpoint",
-  ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  ".pptx":
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
   ".rtf": "application/rtf",
   ".zip": "application/zip",
   ".txt": "text/plain",
@@ -96,7 +98,9 @@ function inferMimeTypeFromFileName(fileName: string) {
   return null;
 }
 
-export function inferFileKindFromMimeType(mimeType: string): AttachmentFileKind | null {
+export function inferFileKindFromMimeType(
+  mimeType: string,
+): AttachmentFileKind | null {
   const normalized = normalizeMimeType(mimeType);
 
   if (normalized.startsWith("image/")) {
@@ -123,7 +127,10 @@ export function resolveUploadMimeType(file: File) {
   return inferMimeTypeFromFileName(file.name);
 }
 
-export function validateAttachmentCandidate(file: File, requestedKind: AttachmentFileKind) {
+export function validateAttachmentCandidate(
+  file: File,
+  requestedKind: AttachmentFileKind,
+) {
   const mimeType = resolveUploadMimeType(file);
 
   if (!mimeType) {
@@ -163,4 +170,3 @@ export function getAttachmentPolicySummary(kind: AttachmentFileKind) {
   const maxSize = formatSizeLimit(policy.maxSizeBytes);
   return `Allowed: ${policy.allowedMimeTypes.join(", ")} | Max: ${maxSize}`;
 }
-
