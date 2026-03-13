@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/form-controls";
 import { VideoPreviewModal } from "@/components/ui/video-preview-modal";
 import { ImagePreviewModal } from "@/components/ui/image-preview-modal";
+import { DocumentPreviewModal } from "@/components/ui/document-preview-modal";
 import Link from "next/link";
 import Image from "next/image";
 
@@ -322,6 +323,9 @@ export default function Page() {
   const [imagePreview, setImagePreview] = useState<AttachmentPreview | null>(
     null,
   );
+  const [documentPreview, setDocumentPreview] = useState<AttachmentPreview | null>(
+    null,
+  );
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -450,6 +454,7 @@ export default function Page() {
     setErrorMessage(null);
     setVideoPreview(null);
     setImagePreview(null);
+    setDocumentPreview(null);
     setFieldErrors({});
   };
 
@@ -500,41 +505,11 @@ export default function Page() {
     setAttachmentFiles((prev) => prev.filter((f) => fileKey(f) !== targetKey));
     setVideoPreview((prev) => (prev?.key === targetKey ? null : prev));
     setImagePreview((prev) => (prev?.key === targetKey ? null : prev));
+    setDocumentPreview((prev) => (prev?.key === targetKey ? null : prev));
   };
 
-  // Open document:
-  // - PDF files should open in a new tab for quick viewing, with the correct title.
-  // - Other document types should download with the correct filename.
-  const escapeHtml = (str: string) =>
-    str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-
-  const handleOpenDocument = (file: File) => {
-    const pdfUrl = URL.createObjectURL(file);
-
-    if (file.type === "application/pdf") {
-      const htmlContent = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(
-        file.name,
-      )}</title><style>html,body{height:100%;margin:0}</style></head><body><iframe src="${pdfUrl}" style="border:0;width:100%;height:100%"></iframe></body></html>`;
-      const htmlBlob = new Blob([htmlContent], { type: "text/html" });
-      const htmlUrl = URL.createObjectURL(htmlBlob);
-      window.open(htmlUrl, "_blank", "noopener,noreferrer");
-      setTimeout(() => {
-        URL.revokeObjectURL(pdfUrl);
-        URL.revokeObjectURL(htmlUrl);
-      }, 10000);
-      return;
-    }
-
-    const url = URL.createObjectURL(file);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = file.name;
-    anchor.rel = "noopener noreferrer";
-    anchor.target = "_blank";
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  const handleOpenDocumentPreview = (preview: AttachmentPreview) => {
+    setDocumentPreview(preview);
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -1091,7 +1066,7 @@ export default function Page() {
                           {preview.fileKind === "DOCUMENT" && (
                             <button
                               type="button"
-                              onClick={() => handleOpenDocument(preview.file)}
+                              onClick={() => handleOpenDocumentPreview(preview)}
                               className="flex w-full items-center gap-2.5 rounded-lg border border-slate-100 bg-slate-50 p-2.5 text-left transition hover:border-[#0e2d4c]/20 hover:bg-[#0e2d4c]/5"
                             >
                               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#0e2d4c]/10 text-[#0e2d4c]">
@@ -1275,6 +1250,17 @@ export default function Page() {
         }
         src={imagePreview?.previewUrl ?? ""}
         onClose={() => setImagePreview(null)}
+      />
+      <DocumentPreviewModal
+        open={Boolean(documentPreview)}
+        title={
+          documentPreview
+            ? `Document preview: ${documentPreview.file.name}`
+            : "Document preview"
+        }
+        src={documentPreview?.previewUrl ?? ""}
+        mimeType={documentPreview?.mimeType}
+        onClose={() => setDocumentPreview(null)}
       />
       <VideoPreviewModal
         open={Boolean(videoPreview)}
