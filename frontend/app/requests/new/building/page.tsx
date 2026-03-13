@@ -23,8 +23,10 @@ import {
   validateAttachmentCandidate,
 } from "@/lib/attachments/attachment-policy";
 import { Button, SelectField, TextField, TextareaField } from "@/components/ui/form-controls";
+import { VideoPreviewModal } from "@/components/ui/video-preview-modal";
+import { ImagePreviewModal } from "@/components/ui/image-preview-modal";
 
-const MAX_ATTACHMENTS = 10;
+const MAX_ATTACHMENTS = 5;
 
 const urgencyOptions: Array<{ value: Urgency; label: string }> = [
   { value: "LOW", label: "Low" },
@@ -37,6 +39,33 @@ const buildingOptions: Array<{ value: BuildingSide; label: string }> = [
   { value: "FRONT", label: "Front building" },
   { value: "BACK", label: "Back building" },
 ];
+
+const PROBLEM_CATEGORY_ORDER = [
+  "pc_air",
+  "pc_electric",
+  "pc_plumbing",
+  "pc_network",
+  "pc_door_lock",
+  "pc_cleaning",
+  "pc_other",
+] as const;
+
+const problemCategoryOrderIndex = new Map<string, number>(
+  PROBLEM_CATEGORY_ORDER.map((id, index) => [id, index]),
+);
+
+function sortProblemCategoriesByBusinessOrder(items: ReferenceListItem[]) {
+  return [...items].sort((a, b) => {
+    const aIndex = problemCategoryOrderIndex.get(a.id) ?? Number.MAX_SAFE_INTEGER;
+    const bIndex = problemCategoryOrderIndex.get(b.id) ?? Number.MAX_SAFE_INTEGER;
+
+    if (aIndex !== bIndex) {
+      return aIndex - bIndex;
+    }
+
+    return a.name.localeCompare(b.name, "th");
+  });
+}
 
 const attachmentAccept = [
   getAcceptMimeTypes("IMAGE"),
@@ -65,6 +94,14 @@ type AttachmentCandidate = {
   mimeType: string;
 };
 
+type AttachmentPreview = {
+  key: string;
+  file: File;
+  fileKind: FileKind;
+  mimeType: string;
+  previewUrl: string;
+};
+
 const initialState: FormState = {
   employeeName: "",
   departmentId: "",
@@ -79,6 +116,27 @@ const initialState: FormState = {
   description: "",
   additionalDetails: "",
 };
+
+function fileKey(file: File) {
+  return `${file.name}-${file.size}-${file.lastModified}`;
+}
+
+function extractPhoneDigits(value: string) {
+  return value.replace(/\D/g, "").slice(0, 10);
+}
+
+function formatPhoneDisplay(value: string) {
+  const digits = extractPhoneDigits(value);
+  if (digits.length <= 3) {
+    return digits;
+  }
+
+  if (digits.length <= 6) {
+    return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+  }
+
+  return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6, 10)}`;
+}
 
 function prepareAttachmentCandidates(files: File[]) {
   const candidates: AttachmentCandidate[] = [];
@@ -127,9 +185,12 @@ export default function Page() {
   const [problemCategories, setProblemCategories] = useState<ReferenceListItem[]>([]);
   const [form, setForm] = useState<FormState>(initialState);
   const [attachmentFiles, setAttachmentFiles] = useState<File[]>([]);
+  const [attachmentNotice, setAttachmentNotice] = useState<string | null>(null);
   const [loadingReferences, setLoadingReferences] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [videoPreview, setVideoPreview] = useState<AttachmentPreview | null>(null);
+  const [imagePreview, setImagePreview] = useState<AttachmentPreview | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -149,7 +210,7 @@ export default function Page() {
         }
 
         setDepartments(departmentResult.items);
-        setProblemCategories(problemCategoryResult.items);
+        setProblemCategories(sortProblemCategoriesByBusinessOrder(problemCategoryResult.items));
       } catch (error) {
         if (!active) {
           return;
@@ -177,10 +238,50 @@ export default function Page() {
   const isOtherCategory = useMemo(() => form.problemCategoryId === "pc_other", [form.problemCategoryId]);
   const isOtherDepartment = useMemo(() => form.departmentId === "dept_other", [form.departmentId]);
 
+  const selectedProblemCategory = useMemo(
+    () => problemCategories.find((category) => category.id === form.problemCategoryId) ?? null,
+    [problemCategories, form.problemCategoryId],
+  );
+
+  const attachmentPreviews = useMemo<AttachmentPreview[]>(() => {
+    return attachmentFiles
+      .map((file) => {
+        const mimeType = resolveUploadMimeType(file);
+        if (!mimeType) {
+          return null;
+        }
+
+        const inferredFileKind = inferFileKindFromMimeType(mimeType);
+        if (!inferredFileKind) {
+          return null;
+        }
+
+        return {
+          key: fileKey(file),
+          file,
+          fileKind: inferredFileKind,
+          mimeType,
+          previewUrl: URL.createObjectURL(file),
+        } satisfies AttachmentPreview;
+      })
+      .filter((item): item is AttachmentPreview => item !== null);
+  }, [attachmentFiles]);
+
+  useEffect(() => {
+    return () => {
+      for (const preview of attachmentPreviews) {
+        URL.revokeObjectURL(preview.previewUrl);
+      }
+    };
+  }, [attachmentPreviews]);
+
   const onChange = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
+  const handlePhoneChange = (value: string) => {
+    onChange("phone", formatPhoneDisplay(value));
+  };
   const validateBeforeSubmit = () => {
     if (!form.employeeName.trim()) {
       return "Employee name is required";
@@ -194,8 +295,8 @@ export default function Page() {
       return "Please fill the other department name";
     }
 
-    if (!/^\+?\d{9,15}$/.test(form.phone.trim())) {
-      return "Phone must be 9-15 digits and may start with +";
+    if (extractPhoneDigits(form.phone).length !== 10) {
+      return "Phone number must contain exactly 10 digits";
     }
 
     if (!form.locationDetail.trim()) {
@@ -233,7 +334,62 @@ export default function Page() {
   const handleReset = () => {
     setForm(initialState);
     setAttachmentFiles([]);
+    setAttachmentNotice(null);
     setErrorMessage(null);
+    setVideoPreview(null);
+    setImagePreview(null);
+  };
+
+  const handleAttachmentPick = (files: File[]) => {
+    if (files.length === 0) {
+      return;
+    }
+
+    const merged = [...attachmentFiles];
+    const warnings: string[] = [];
+
+    for (const file of files) {
+      const key = fileKey(file);
+      const isDuplicate = merged.some((existing) => fileKey(existing) === key);
+      if (isDuplicate) {
+        warnings.push(`Skipped duplicate: ${file.name}`);
+        continue;
+      }
+
+      if (merged.length >= MAX_ATTACHMENTS) {
+        warnings.push(`Maximum ${MAX_ATTACHMENTS} files. Additional files were ignored.`);
+        break;
+      }
+
+      const mimeType = resolveUploadMimeType(file);
+      if (!mimeType) {
+        warnings.push(`Unsupported file type: ${file.name}`);
+        continue;
+      }
+
+      const fileKind = inferFileKindFromMimeType(mimeType);
+      if (!fileKind) {
+        warnings.push(`Unsupported file type: ${file.name}`);
+        continue;
+      }
+
+      const validation = validateAttachmentCandidate(file, fileKind);
+      if (!validation.ok) {
+        warnings.push(`${file.name}: ${validation.message}`);
+        continue;
+      }
+
+      merged.push(file);
+    }
+
+    setAttachmentFiles(merged);
+    setAttachmentNotice(warnings.length > 0 ? warnings.join(" | ") : null);
+  };
+
+  const handleRemoveAttachment = (targetKey: string) => {
+    setAttachmentFiles((prev) => prev.filter((file) => fileKey(file) !== targetKey));
+    setVideoPreview((prev) => (prev?.key === targetKey ? null : prev));
+    setImagePreview((prev) => (prev?.key === targetKey ? null : prev));
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -255,7 +411,7 @@ export default function Page() {
     const payload: CreateBuildingRequestPayload = {
       employeeName: form.employeeName.trim(),
       departmentId: form.departmentId,
-      phone: form.phone.trim(),
+      phone: extractPhoneDigits(form.phone),
       urgency: form.urgency,
       building: form.building,
       floor: Number(form.floor),
@@ -318,9 +474,7 @@ export default function Page() {
       <header className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <p className="text-sm font-semibold uppercase tracking-wide text-slate-600">Phase 2 - Employee Core</p>
         <h1 className="mt-2 text-3xl font-semibold text-slate-900">Building Repair Request</h1>
-        <p className="mt-3 text-slate-700">
-          Submit a building issue request with complete details and attachments.
-        </p>
+        <p className="mt-3 text-slate-700">Submit a building issue request with complete details and attachments.</p>
       </header>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -344,9 +498,12 @@ export default function Page() {
                 label="Phone"
                 required
                 value={form.phone}
-                onChange={(event) => onChange("phone", event.target.value)}
-                placeholder="+66812345678"
-                maxLength={15}
+                onChange={(event) => handlePhoneChange(event.target.value)}
+                placeholder="012-345-6789"
+                helpText="Enter 10 digits. It will be saved as numbers only."
+                inputMode="numeric"
+                pattern="[0-9]{3}-[0-9]{3}-[0-9]{4}"
+                maxLength={12}
               />
 
               <SelectField
@@ -444,6 +601,10 @@ export default function Page() {
               ))}
             </SelectField>
 
+            {selectedProblemCategory?.helperText ? (
+              <p className="-mt-2 text-sm text-slate-600">{selectedProblemCategory.helperText}</p>
+            ) : null}
+
             {isOtherCategory ? (
               <TextField
                 id="problemCategoryOther"
@@ -479,23 +640,133 @@ export default function Page() {
                 className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
                 onChange={(event) => {
                   const selected = Array.from(event.target.files ?? []);
-                  setAttachmentFiles(selected.slice(0, MAX_ATTACHMENTS));
+                  event.currentTarget.value = "";
+                  handleAttachmentPick(selected);
                 }}
               />
               <p className="text-xs text-slate-500">
-                Supports image, video, and document files (Word/Excel/PDF). Maximum {MAX_ATTACHMENTS} files.
+                Supports image, video, and document files. Maximum {MAX_ATTACHMENTS} files, up to 50 MB per file.
               </p>
-              {attachmentFiles.length > 0 ? (
-                <ul className="space-y-1 text-xs text-slate-700">
-                  {attachmentFiles.map((file) => (
-                    <li key={`${file.name}-${file.lastModified}`}>
-                      {file.name} ({Math.max(file.size / 1024 / 1024, 0.01).toFixed(2)} MB)
-                    </li>
-                  ))}
-                </ul>
+
+              {attachmentNotice ? (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700">
+                  {attachmentNotice}
+                </div>
+              ) : null}
+
+              {attachmentPreviews.length > 0 ? (
+                <>
+                  <p className="text-xs font-medium text-slate-600">
+                    Selected {attachmentPreviews.length}/{MAX_ATTACHMENTS} files
+                  </p>
+                  <ul className="grid gap-3 sm:grid-cols-2">
+                    {attachmentPreviews.map((preview) => (
+                      <li
+                        key={preview.key}
+                        className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"
+                      >
+                        <div className="flex items-start justify-between gap-2 border-b border-slate-100 bg-slate-50 px-3 py-2">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-slate-800">{preview.file.name}</p>
+                            <p className="text-[11px] text-slate-500">
+                              {Math.max(preview.file.size / 1024 / 1024, 0.01).toFixed(2)} MB
+                            </p>
+                          </div>
+                          <span className="shrink-0 rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-700">
+                            {preview.fileKind}
+                          </span>
+                        </div>
+
+                        <div className="space-y-2 px-3 py-3">
+                          {preview.fileKind === "IMAGE" ? (
+                            <>
+                              <button
+                                type="button"
+                                className="group relative block h-44 w-full overflow-hidden rounded-lg border border-slate-200 bg-slate-100"
+                                aria-label={`Preview image ${preview.file.name}`}
+                                onClick={() => setImagePreview(preview)}
+                              >
+                                <img
+                                  src={preview.previewUrl}
+                                  alt={preview.file.name}
+                                  className="h-full w-full bg-white object-contain"
+                                />
+                                <span className="pointer-events-none absolute inset-0 bg-slate-900/5 transition group-hover:bg-slate-900/10" />
+                                <span className="pointer-events-none absolute right-2 top-2 rounded-full bg-white/90 px-2 py-0.5 text-[10px] font-semibold text-slate-700 shadow-sm">
+                                  Preview
+                                </span>
+                              </button>
+                              <p className="text-[11px] text-slate-500">Tap image to open larger preview.</p>
+                            </>
+                          ) : null}
+                          {preview.fileKind === "VIDEO" ? (
+                            <>
+                              <button
+                                type="button"
+                                className="group relative block h-44 w-full overflow-hidden rounded-lg border border-slate-200 bg-black"
+                                aria-label="Play video preview"
+                                onClick={() => setVideoPreview(preview)}
+                              >
+                                <video className="h-full w-full object-cover" muted playsInline preload="metadata">
+                                  <source src={preview.previewUrl} type={preview.mimeType} />
+                                </video>
+                                <span className="pointer-events-none absolute inset-0 bg-slate-900/40 transition group-hover:bg-slate-900/25" />
+                                <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                                  <span className="inline-flex h-14 w-14 items-center justify-center rounded-full border border-white/90 bg-slate-900/75 text-white shadow-lg">
+                                    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-6 w-6 translate-x-[1px] fill-current">
+                                      <path d="M8 5v14l11-7z" />
+                                    </svg>
+                                  </span>
+                                </span>
+                              </button>
+                              <p className="text-[11px] text-slate-500">Tap thumbnail to open larger preview (muted by default).</p>
+                            </>
+                          ) : null}
+
+                          {preview.fileKind === "DOCUMENT" ? (
+                            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                              <a
+                                href={preview.previewUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="group block rounded-lg border border-slate-200 bg-white p-3 transition hover:border-slate-300 hover:shadow-sm"
+                              >
+                                <div className="flex items-center gap-3">
+                                  <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-700">
+                                    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5 fill-current">
+                                      <path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7z" />
+                                      <path d="M14 2v5h5" className="fill-white" />
+                                    </svg>
+                                  </span>
+                                  <div className="min-w-0 flex-1 text-left">
+                                    <p className="truncate text-sm font-semibold text-slate-800">{preview.file.name}</p>
+                                    <p className="text-[11px] uppercase tracking-wide text-slate-500">
+                                      {preview.mimeType.split("/")[1]?.toUpperCase() ?? "DOCUMENT"}
+                                    </p>
+                                  </div>
+                                  <span className="rounded-md bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white transition group-hover:bg-slate-700">
+                                    Open
+                                  </span>
+                                </div>
+                              </a>
+                              <p className="mt-2 text-[11px] text-slate-500">Document preview opens in a new tab.</p>
+                            </div>
+                          ) : null}
+
+                          <button
+                            type="button"
+                            className="rounded-md bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-200"
+                            onClick={() => handleRemoveAttachment(preview.key)}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </>
               ) : null}
             </div>
-
             <TextareaField
               id="additionalDetails"
               label="Additional Details"
@@ -528,6 +799,19 @@ export default function Page() {
           </form>
         )}
       </section>
+
+      <ImagePreviewModal
+        open={Boolean(imagePreview)}
+        title={imagePreview ? `Image preview: ${imagePreview.file.name}` : "Image preview"}
+        src={imagePreview?.previewUrl ?? ""}
+        onClose={() => setImagePreview(null)}
+      />
+      <VideoPreviewModal
+        open={Boolean(videoPreview)}
+        title={videoPreview ? `Video preview: ${videoPreview.file.name}` : "Video preview"}
+        src={videoPreview?.previewUrl ?? ""}
+        onClose={() => setVideoPreview(null)}
+      />
     </main>
   );
 }

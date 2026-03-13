@@ -6,10 +6,11 @@ type AttachmentPolicy = {
 };
 
 const MB = 1024 * 1024;
+const MAX_FILE_SIZE_BYTES = 50 * MB;
 
 export const ATTACHMENT_POLICY: Record<AttachmentFileKind, AttachmentPolicy> = {
   IMAGE: {
-    maxSizeBytes: 10 * MB,
+    maxSizeBytes: MAX_FILE_SIZE_BYTES,
     allowedMimeTypes: [
       "image/jpeg",
       "image/jpg",
@@ -21,7 +22,7 @@ export const ATTACHMENT_POLICY: Record<AttachmentFileKind, AttachmentPolicy> = {
     ],
   },
   VIDEO: {
-    maxSizeBytes: 100 * MB,
+    maxSizeBytes: MAX_FILE_SIZE_BYTES,
     allowedMimeTypes: [
       "video/mp4",
       "video/quicktime",
@@ -31,7 +32,7 @@ export const ATTACHMENT_POLICY: Record<AttachmentFileKind, AttachmentPolicy> = {
     ],
   },
   DOCUMENT: {
-    maxSizeBytes: 20 * MB,
+    maxSizeBytes: MAX_FILE_SIZE_BYTES,
     allowedMimeTypes: [
       "application/pdf",
       "application/msword",
@@ -162,3 +163,4 @@ export function getAttachmentPolicySummary(kind: AttachmentFileKind) {
   const maxSize = formatSizeLimit(policy.maxSizeBytes);
   return `Allowed: ${policy.allowedMimeTypes.join(", ")} | Max: ${maxSize}`;
 }
+

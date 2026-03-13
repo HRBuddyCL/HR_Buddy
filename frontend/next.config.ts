@@ -56,6 +56,8 @@ function buildContentSecurityPolicy() {
     scriptSrc,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
+    "media-src 'self' data: blob:",
+    "frame-src 'self' blob:",
     "font-src 'self' data:",
     "worker-src 'self' blob:",
     `connect-src ${Array.from(connectSrc).join(" ")}`,
