@@ -3,7 +3,12 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { ApiError } from "@/lib/api/client";
-import { getGeoDistricts, getGeoPostalCode, getGeoProvinces, getGeoSubdistricts } from "@/lib/api/geo";
+import {
+  getGeoDistricts,
+  getGeoPostalCode,
+  getGeoProvinces,
+  getGeoSubdistricts,
+} from "@/lib/api/geo";
 import { getDepartments, type ReferenceListItem } from "@/lib/api/reference";
 import {
   createDocumentRequest,
@@ -12,27 +17,42 @@ import {
   type DeliveryMethod,
   type Urgency,
 } from "@/lib/api/requests";
-import { Button, SelectField, TextField, TextareaField } from "@/components/ui/form-controls";
+import {
+  Button,
+  SelectField,
+  TextField,
+  TextareaField,
+} from "@/components/ui/form-controls";
 
 const urgencyOptions: Array<{
   value: Urgency;
   label: string;
   description: string;
+  color: string;
+  activeBg?: string;
+  activeBorder?: string;
+  icon?: string;
 }> = [
   {
     value: "NORMAL",
-    label: "\u0e1b\u0e01\u0e15\u0e34",
-    description: "\u0e20\u0e32\u0e22\u0e43\u0e19 72 \u0e0a\u0e31\u0e48\u0e27\u0e42\u0e21\u0e07",
+    label: "ปกติ",
+    description: "ตอบกลับภายในประมาณ 72 ชั่วโมง",
+    color: "text-blue-600",
+    icon: "🔵",
   },
   {
     value: "HIGH",
-    label: "\u0e2a\u0e39\u0e07",
-    description: "\u0e20\u0e32\u0e22\u0e43\u0e19 24 \u0e0a\u0e31\u0e48\u0e27\u0e42\u0e21\u0e07",
+    label: "สูง",
+    description: "ควรตอบกลับภายใน 24 ชั่วโมง",
+    color: "text-orange-600",
+    icon: "🟠",
   },
   {
     value: "CRITICAL",
-    label: "\u0e40\u0e23\u0e48\u0e07\u0e14\u0e48\u0e27\u0e19",
-    description: "\u0e20\u0e32\u0e22\u0e43\u0e19 8 \u0e0a\u0e31\u0e48\u0e27\u0e42\u0e21\u0e07",
+    label: "เร่งด่วน",
+    description: "ต้องดำเนินการทันที (ภายใน 8 ชั่วโมง)",
+    color: "text-red-600",
+    icon: "🔴",
   },
 ];
 
@@ -42,7 +62,11 @@ const deliveryMethodOptions: Array<{ value: DeliveryMethod; label: string }> = [
   { value: "PICKUP", label: "Pickup" },
 ];
 
-type AddressState = Omit<AddressPayload, "soi" | "road" | "extra"> & { soi: string; road: string; extra: string };
+type AddressState = Omit<AddressPayload, "soi" | "road" | "extra"> & {
+  soi: string;
+  road: string;
+  extra: string;
+};
 
 type AddressGeoState = {
   districts: string[];
@@ -154,16 +178,25 @@ export default function Page() {
   const [addressGeo, setAddressGeo] = useState<AddressGeoState>(emptyGeoState);
 
   const [form, setForm] = useState<FormState>(initialFormState);
-  const [address, setAddress] = useState<AddressState>(createInitialAddressState());
+  const [address, setAddress] = useState<AddressState>(
+    createInitialAddressState(),
+  );
 
   const [loadingReferences, setLoadingReferences] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const isPostal = useMemo(() => form.deliveryMethod === "POSTAL", [form.deliveryMethod]);
-  const isOtherDepartment = useMemo(() => form.departmentId === "dept_other", [form.departmentId]);
+  const isPostal = useMemo(
+    () => form.deliveryMethod === "POSTAL",
+    [form.deliveryMethod],
+  );
+  const isOtherDepartment = useMemo(
+    () => form.departmentId === "dept_other",
+    [form.departmentId],
+  );
   const selectedUrgencyOption = useMemo(
-    () => urgencyOptions.find((option) => option.value === form.urgency) ?? null,
+    () =>
+      urgencyOptions.find((option) => option.value === form.urgency) ?? null,
     [form.urgency],
   );
   useEffect(() => {
@@ -228,7 +261,12 @@ export default function Page() {
       }
 
       setAddressGeo(emptyGeoState);
-      setAddress((prev) => ({ ...prev, district: "", subdistrict: "", postalCode: "" }));
+      setAddress((prev) => ({
+        ...prev,
+        district: "",
+        subdistrict: "",
+        postalCode: "",
+      }));
 
       try {
         const districts = await getGeoDistricts(address.province);
@@ -272,7 +310,10 @@ export default function Page() {
       setAddress((prev) => ({ ...prev, subdistrict: "", postalCode: "" }));
 
       try {
-        const subdistricts = await getGeoSubdistricts(address.province, address.district);
+        const subdistricts = await getGeoSubdistricts(
+          address.province,
+          address.district,
+        );
 
         if (!active) {
           return;
@@ -303,19 +344,31 @@ export default function Page() {
     let active = true;
 
     async function loadPostalCode() {
-      if (!isPostal || !address.province || !address.district || !address.subdistrict) {
+      if (
+        !isPostal ||
+        !address.province ||
+        !address.district ||
+        !address.subdistrict
+      ) {
         setAddress((prev) => ({ ...prev, postalCode: "" }));
         return;
       }
 
       try {
-        const result = await getGeoPostalCode(address.province, address.district, address.subdistrict);
+        const result = await getGeoPostalCode(
+          address.province,
+          address.district,
+          address.subdistrict,
+        );
 
         if (!active) {
           return;
         }
 
-        setAddress((prev) => ({ ...prev, postalCode: result.postalCode ?? "" }));
+        setAddress((prev) => ({
+          ...prev,
+          postalCode: result.postalCode ?? "",
+        }));
       } catch (error) {
         if (!active) {
           return;
@@ -340,7 +393,10 @@ export default function Page() {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
-  const onAddressChange = <K extends keyof AddressState>(key: K, value: AddressState[K]) => {
+  const onAddressChange = <K extends keyof AddressState>(
+    key: K,
+    value: AddressState[K],
+  ) => {
     setAddress((prev) => ({ ...prev, [key]: value }));
   };
 
@@ -445,16 +501,23 @@ export default function Page() {
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-6 px-6 py-10 md:px-10">
       <header className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <p className="text-sm font-semibold uppercase tracking-wide text-slate-600">Phase 2 - Employee Core</p>
-        <h1 className="mt-2 text-3xl font-semibold text-slate-900">Document Request</h1>
+        <p className="text-sm font-semibold uppercase tracking-wide text-slate-600">
+          Phase 2 - Employee Core
+        </p>
+        <h1 className="mt-2 text-3xl font-semibold text-slate-900">
+          Document Request
+        </h1>
         <p className="mt-3 text-slate-700">
-          Request official documents with a clear delivery method. Postal flow is fully wired with geo dependent dropdown.
+          Request official documents with a clear delivery method. Postal flow
+          is fully wired with geo dependent dropdown.
         </p>
       </header>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         {loadingReferences ? (
-          <p className="text-sm text-slate-600">Loading departments and geo data...</p>
+          <p className="text-sm text-slate-600">
+            Loading departments and geo data...
+          </p>
         ) : (
           <form className="space-y-6" onSubmit={handleSubmit}>
             <div className="grid gap-4 md:grid-cols-2">
@@ -463,7 +526,9 @@ export default function Page() {
                 label="Employee Name"
                 required
                 value={form.employeeName}
-                onChange={(event) => onChange("employeeName", event.target.value)}
+                onChange={(event) =>
+                  onChange("employeeName", event.target.value)
+                }
                 placeholder="Thanaruk T."
                 maxLength={120}
               />
@@ -483,7 +548,9 @@ export default function Page() {
                 label="Department"
                 required
                 value={form.departmentId}
-                onChange={(event) => onChange("departmentId", event.target.value)}
+                onChange={(event) =>
+                  onChange("departmentId", event.target.value)
+                }
               >
                 <option value="">Select department</option>
                 {departments.map((department) => (
@@ -499,7 +566,9 @@ export default function Page() {
                   label="Other Department"
                   required
                   value={form.departmentOther}
-                  onChange={(event) => onChange("departmentOther", event.target.value)}
+                  onChange={(event) =>
+                    onChange("departmentOther", event.target.value)
+                  }
                   placeholder="Please specify department name"
                   maxLength={120}
                 />
@@ -512,16 +581,23 @@ export default function Page() {
                     label="Urgency"
                     required
                     value={form.urgency}
-                    onChange={(event) => onChange("urgency", event.target.value as Urgency)}
+                    onChange={(event) =>
+                      onChange("urgency", event.target.value as Urgency)
+                    }
                   >
                     {urgencyOptions.map((item) => (
                       <option key={item.value} value={item.value}>
-                        {item.label}
+                        {item.icon ? `${item.icon} ${item.label}` : item.label}
                       </option>
                     ))}
                   </SelectField>
                   {selectedUrgencyOption ? (
-                    <p className="mt-1 text-xs text-slate-500">{selectedUrgencyOption.description}</p>
+                    <p
+                      className={`mt-2 text-sm font-medium ${selectedUrgencyOption.color}`}
+                    >
+                      {selectedUrgencyOption.label} —{" "}
+                      {selectedUrgencyOption.description}
+                    </p>
                   ) : null}
                 </div>
               ) : null}
@@ -531,7 +607,9 @@ export default function Page() {
                 label="Site / Unit Name"
                 required
                 value={form.siteNameRaw}
-                onChange={(event) => onChange("siteNameRaw", event.target.value)}
+                onChange={(event) =>
+                  onChange("siteNameRaw", event.target.value)
+                }
                 placeholder="CL-HQ / Site ABC"
                 maxLength={200}
               />
@@ -551,7 +629,9 @@ export default function Page() {
               label="Document Description"
               required
               value={form.documentDescription}
-              onChange={(event) => onChange("documentDescription", event.target.value)}
+              onChange={(event) =>
+                onChange("documentDescription", event.target.value)
+              }
               placeholder="Describe the document request"
               rows={4}
               maxLength={2000}
@@ -575,9 +655,13 @@ export default function Page() {
                 required
                 value={form.deliveryMethod}
                 onChange={(event) => {
-                  const nextDeliveryMethod = event.target.value as DeliveryMethod;
+                  const nextDeliveryMethod = event.target
+                    .value as DeliveryMethod;
                   onChange("deliveryMethod", nextDeliveryMethod);
-                  if (nextDeliveryMethod === "POSTAL" && form.urgency !== "NORMAL") {
+                  if (
+                    nextDeliveryMethod === "POSTAL" &&
+                    form.urgency !== "NORMAL"
+                  ) {
                     onChange("urgency", "NORMAL");
                   }
                 }}
@@ -602,8 +686,12 @@ export default function Page() {
 
             {isPostal ? (
               <div className="rounded-xl border border-slate-200 p-4">
-                <h2 className="text-lg font-semibold text-slate-900">Postal Delivery Address</h2>
-                <p className="mt-1 text-sm text-slate-600">Required when delivery method is Postal.</p>
+                <h2 className="text-lg font-semibold text-slate-900">
+                  Postal Delivery Address
+                </h2>
+                <p className="mt-1 text-sm text-slate-600">
+                  Required when delivery method is Postal.
+                </p>
 
                 <div className="mt-4 grid gap-4 md:grid-cols-2">
                   <TextField
@@ -611,7 +699,9 @@ export default function Page() {
                     label="Receiver Name"
                     required
                     value={address.name}
-                    onChange={(event) => onAddressChange("name", event.target.value)}
+                    onChange={(event) =>
+                      onAddressChange("name", event.target.value)
+                    }
                     maxLength={120}
                   />
 
@@ -620,7 +710,9 @@ export default function Page() {
                     label="Receiver Phone"
                     required
                     value={address.phone}
-                    onChange={(event) => onAddressChange("phone", event.target.value)}
+                    onChange={(event) =>
+                      onAddressChange("phone", event.target.value)
+                    }
                     maxLength={20}
                   />
 
@@ -629,7 +721,9 @@ export default function Page() {
                     label="Province"
                     required
                     value={address.province}
-                    onChange={(event) => onAddressChange("province", event.target.value)}
+                    onChange={(event) =>
+                      onAddressChange("province", event.target.value)
+                    }
                   >
                     <option value="">Select province</option>
                     {provinces.map((province) => (
@@ -644,7 +738,9 @@ export default function Page() {
                     label="District"
                     required
                     value={address.district}
-                    onChange={(event) => onAddressChange("district", event.target.value)}
+                    onChange={(event) =>
+                      onAddressChange("district", event.target.value)
+                    }
                     disabled={!address.province}
                   >
                     <option value="">Select district</option>
@@ -660,7 +756,9 @@ export default function Page() {
                     label="Subdistrict"
                     required
                     value={address.subdistrict}
-                    onChange={(event) => onAddressChange("subdistrict", event.target.value)}
+                    onChange={(event) =>
+                      onAddressChange("subdistrict", event.target.value)
+                    }
                     disabled={!address.district}
                   >
                     <option value="">Select subdistrict</option>
@@ -676,7 +774,9 @@ export default function Page() {
                     label="Postal Code"
                     required
                     value={address.postalCode}
-                    onChange={(event) => onAddressChange("postalCode", event.target.value)}
+                    onChange={(event) =>
+                      onAddressChange("postalCode", event.target.value)
+                    }
                     maxLength={10}
                   />
 
@@ -685,7 +785,9 @@ export default function Page() {
                     label="House No."
                     required
                     value={address.houseNo}
-                    onChange={(event) => onAddressChange("houseNo", event.target.value)}
+                    onChange={(event) =>
+                      onAddressChange("houseNo", event.target.value)
+                    }
                     maxLength={120}
                   />
 
@@ -693,7 +795,9 @@ export default function Page() {
                     id="addressSoi"
                     label="Soi"
                     value={address.soi ?? ""}
-                    onChange={(event) => onAddressChange("soi", event.target.value)}
+                    onChange={(event) =>
+                      onAddressChange("soi", event.target.value)
+                    }
                     maxLength={120}
                   />
 
@@ -701,7 +805,9 @@ export default function Page() {
                     id="addressRoad"
                     label="Road"
                     value={address.road ?? ""}
-                    onChange={(event) => onAddressChange("road", event.target.value)}
+                    onChange={(event) =>
+                      onAddressChange("road", event.target.value)
+                    }
                     maxLength={120}
                   />
                 </div>
@@ -711,7 +817,9 @@ export default function Page() {
                     id="addressExtra"
                     label="Extra"
                     value={address.extra ?? ""}
-                    onChange={(event) => onAddressChange("extra", event.target.value)}
+                    onChange={(event) =>
+                      onAddressChange("extra", event.target.value)
+                    }
                     rows={2}
                     maxLength={200}
                   />
@@ -744,5 +852,3 @@ export default function Page() {
     </main>
   );
 }
-
-

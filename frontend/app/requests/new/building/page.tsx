@@ -44,22 +44,16 @@ const MAX_ATTACHMENTS = 5;
 const urgencyOptions: Array<{
   value: Urgency;
   label: string;
+  description: string;
   color: string;
   activeBg: string;
   activeBorder: string;
   icon: string;
 }> = [
   {
-    value: "LOW",
-    label: "ต่ำ",
-    color: "text-green-600",
-    activeBg: "bg-green-600 text-white",
-    activeBorder: "border-green-600",
-    icon: "🟢",
-  },
-  {
     value: "NORMAL",
     label: "ปกติ",
+    description: "ซ่อมได้ตามคิว ไม่ต้องเร่งด่วน",
     color: "text-blue-600",
     activeBg: "bg-blue-600 text-white",
     activeBorder: "border-blue-600",
@@ -68,6 +62,7 @@ const urgencyOptions: Array<{
   {
     value: "HIGH",
     label: "สูง",
+    description: "ควรรีบซ่อม รวดเร็วกว่าแบบปกติ แต่ยังไม่ถึงขั้นวิกฤต",
     color: "text-orange-600",
     activeBg: "bg-orange-600 text-white",
     activeBorder: "border-orange-600",
@@ -76,13 +71,13 @@ const urgencyOptions: Array<{
   {
     value: "CRITICAL",
     label: "เร่งด่วน",
+    description: "ต้องซ่อมทันที อาจเป็นอันตรายหรือไม่สามารถใช้งานได้",
     color: "text-red-600",
     activeBg: "bg-red-600 text-white",
     activeBorder: "border-red-600",
     icon: "🔴",
   },
 ];
-
 const buildingOptions: Array<{
   value: BuildingSide;
   label: string;
@@ -374,6 +369,10 @@ export default function Page() {
       problemCategories.find((c) => c.id === form.problemCategoryId) ?? null,
     [problemCategories, form.problemCategoryId],
   );
+  const selectedUrgencyOption = useMemo(
+    () => urgencyOptions.find((opt) => opt.value === form.urgency) ?? null,
+    [form.urgency],
+  );
 
   const attachmentPreviews = useMemo<AttachmentPreview[]>(() => {
     return attachmentFiles
@@ -457,18 +456,6 @@ export default function Page() {
     if (!av.ok) errors.attachments = av.message;
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
-  };
-
-  const handleReset = () => {
-    // Deprecated: use confirm modal instead via setShowConfirmReset(true)
-    setForm(initialState);
-    setAttachmentFiles([]);
-    setAttachmentNotice(null);
-    setErrorMessage(null);
-    setVideoPreview(null);
-    setImagePreview(null);
-    setDocumentPreview(null);
-    setFieldErrors({});
   };
 
   const [showConfirmReset, setShowConfirmReset] = useState(false);
@@ -659,7 +646,7 @@ export default function Page() {
             </div>
             <div>
               <h1 className="text-xl font-bold text-[#0e2d4c] sm:text-2xl">
-                แบบฟอร์มแจ้งซ่อมอาคาร
+                แบบฟอร์มคำขอซ่อมแซมอาคาร
               </h1>
               <p className="text-sm text-slate-500">
                 กรอกข้อมูลให้ครบถ้วนและแนบไฟล์แสดงปัญหา
@@ -693,7 +680,7 @@ export default function Page() {
                     required
                     value={form.employeeName}
                     onChange={(e) => onChange("employeeName", e.target.value)}
-                    placeholder="นายสมชาย ใจดี"
+                    placeholder="สมชาย ใจดี"
                     maxLength={120}
                   />
                   <FieldError message={fieldErrors.employeeName} />
@@ -824,31 +811,41 @@ export default function Page() {
                   <p className="mb-2 text-[13px] font-semibold text-slate-700">
                     ระดับความเร่งด่วน <RequiredMark />
                   </p>
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  <div className="grid grid-cols-3 gap-3">
                     {urgencyOptions.map((opt) => (
                       <button
                         key={opt.value}
                         type="button"
                         onClick={() => onChange("urgency", opt.value)}
-                        className={`w-full sm:w-auto flex items-center gap-3 rounded-xl border-2 px-4 py-3 text-sm font-semibold transition-all duration-150 ${
+                        className={`w-full flex flex-col items-center gap-3 rounded-xl border-2 px-4 py-4 text-sm font-semibold transition-all duration-150 ${
                           form.urgency === opt.value
                             ? `${opt.activeBg} ${opt.activeBorder} shadow-sm`
                             : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
                         }`}
                       >
                         <span
-                          className={`flex h-7 w-7 items-center justify-center rounded-full text-sm ${
+                          className={`flex h-10 w-10 items-center justify-center rounded-full text-xl ${
                             form.urgency === opt.value
                               ? "bg-white/20"
                               : "bg-slate-100"
                           }`}
+                          aria-hidden
                         >
                           {opt.icon}
                         </span>
-                        <span className="whitespace-nowrap">{opt.label}</span>
+                        <span className="whitespace-nowrap text-center">
+                          {opt.label}
+                        </span>
                       </button>
                     ))}
                   </div>
+                  {selectedUrgencyOption ? (
+                    <p
+                      className={`mt-2 text-sm font-medium ${selectedUrgencyOption.color}`}
+                    >
+                      {selectedUrgencyOption.description}
+                    </p>
+                  ) : null}
                 </div>
 
                 <Divider label="" />
@@ -976,7 +973,7 @@ export default function Page() {
                     </p>
                     <p className="mt-0.5 text-xs text-slate-500">
                       รูปภาพ · วิดีโอ · เอกสาร &nbsp;|&nbsp; สูงสุด{" "}
-                      {MAX_ATTACHMENTS} ไฟล์ · ไม่เกิน 50 MB/ไฟล์
+                      {MAX_ATTACHMENTS} ไฟล์ · ไม่เกิน 100 MB/ไฟล์
                     </p>
                   </div>
                   <input
@@ -1049,11 +1046,12 @@ export default function Page() {
                           <button
                             type="button"
                             onClick={() => handleRemoveAttachment(preview.key)}
-                            className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:bg-red-100 hover:text-[#b62026]"
+                            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-50 text-red-600 shadow-sm transition-shadow duration-150 hover:bg-red-600 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-red-300"
                             aria-label={`ลบ ${preview.file.name}`}
+                            title={`ลบ ${preview.file.name}`}
                           >
                             <svg
-                              className="h-3 w-3"
+                              className="h-5 w-5"
                               fill="none"
                               stroke="currentColor"
                               viewBox="0 0 24 24"
@@ -1061,7 +1059,7 @@ export default function Page() {
                               <path
                                 strokeLinecap="round"
                                 strokeLinejoin="round"
-                                strokeWidth={2.5}
+                                strokeWidth={3}
                                 d="M6 18L18 6M6 6l12 12"
                               />
                             </svg>
@@ -1356,8 +1354,8 @@ export default function Page() {
         open={Boolean(imagePreview)}
         title={
           imagePreview
-            ? `Image preview: ${imagePreview.file.name}`
-            : "Image preview"
+            ? `ตัวอย่างภาพ: ${imagePreview.file.name}`
+            : "ตัวอย่างภาพ"
         }
         src={imagePreview?.previewUrl ?? ""}
         onClose={() => setImagePreview(null)}
@@ -1366,8 +1364,8 @@ export default function Page() {
         open={Boolean(documentPreview)}
         title={
           documentPreview
-            ? `Document preview: ${documentPreview.file.name}`
-            : "Document preview"
+            ? `ตัวอย่างเอกสาร: ${documentPreview.file.name}`
+            : "ตัวอย่างเอกสาร"
         }
         src={documentPreview?.previewUrl ?? ""}
         mimeType={documentPreview?.mimeType}
@@ -1377,8 +1375,8 @@ export default function Page() {
         open={Boolean(videoPreview)}
         title={
           videoPreview
-            ? `Video preview: ${videoPreview.file.name}`
-            : "Video preview"
+            ? `ตัวอย่างวิดีโอ: ${videoPreview.file.name}`
+            : "ตัวอย่างวิดีโอ"
         }
         src={videoPreview?.previewUrl ?? ""}
         onClose={() => setVideoPreview(null)}

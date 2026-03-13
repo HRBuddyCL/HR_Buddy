@@ -1,6 +1,6 @@
 import { apiFetch } from "@/lib/api/client";
 
-export type Urgency = "LOW" | "NORMAL" | "HIGH" | "CRITICAL";
+export type Urgency = "NORMAL" | "HIGH" | "CRITICAL";
 export type BuildingSide = "FRONT" | "BACK";
 export type ItemType = "DOCUMENT" | "PACKAGE";
 export type DeliveryService = "POST" | "NAKHONCHAI_AIR" | "OTHER";
@@ -83,31 +83,38 @@ export type CreateRequestResponse = {
   status: string;
 };
 
-export async function createBuildingRequest(payload: CreateBuildingRequestPayload) {
+export async function createBuildingRequest(
+  payload: CreateBuildingRequestPayload,
+) {
   return apiFetch<CreateRequestResponse>("/requests/building", {
     method: "POST",
     body: payload,
   });
 }
 
-export async function createVehicleRequest(payload: CreateVehicleRequestPayload) {
+export async function createVehicleRequest(
+  payload: CreateVehicleRequestPayload,
+) {
   return apiFetch<CreateRequestResponse>("/requests/vehicle", {
     method: "POST",
     body: payload,
   });
 }
 
-export async function createMessengerRequest(payload: CreateMessengerRequestPayload) {
+export async function createMessengerRequest(
+  payload: CreateMessengerRequestPayload,
+) {
   return apiFetch<CreateRequestResponse>("/requests/messenger", {
     method: "POST",
     body: payload,
   });
 }
 
-export async function createDocumentRequest(payload: CreateDocumentRequestPayload) {
+export async function createDocumentRequest(
+  payload: CreateDocumentRequestPayload,
+) {
   return apiFetch<CreateRequestResponse>("/requests/document", {
     method: "POST",
     body: payload,
   });
 }
-

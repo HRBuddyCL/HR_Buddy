@@ -11,7 +11,7 @@ export type RequestStatus =
   | "REJECTED"
   | "CANCELED";
 
-export type Urgency = "LOW" | "NORMAL" | "HIGH" | "CRITICAL";
+export type Urgency = "NORMAL" | "HIGH" | "CRITICAL";
 
 export type MyRequestItem = {
   id: string;
@@ -149,17 +149,20 @@ export async function getMyRequestDetail(id: string) {
 }
 
 export async function cancelMyRequest(id: string, reason: string) {
-  return apiFetch<{ id: string; status: RequestStatus }>(`/requests/${id}/cancel`, {
-    method: "PATCH",
-    tokenType: "employee",
-    body: { reason },
-  });
+  return apiFetch<{ id: string; status: RequestStatus }>(
+    `/requests/${id}/cancel`,
+    {
+      method: "PATCH",
+      tokenType: "employee",
+      body: { reason },
+    },
+  );
 }
 
 export async function getMyRequestAttachmentDownloadUrl(
   requestId: string,
   attachmentId: string,
-  mode: 'download' | 'inline' = 'download',
+  mode: "download" | "inline" = "download",
 ) {
   return apiFetch<{
     attachmentId: string;
@@ -176,23 +179,38 @@ export async function getMyRequestAttachmentDownloadUrl(
   });
 }
 
-export async function issueMyAttachmentUploadTicket(requestId: string, payload: UploadTicketPayload) {
-  return apiFetch<UploadTicketResponse>(`/requests/${requestId}/attachments/presign`, {
-    method: "POST",
-    tokenType: "employee",
-    body: payload,
-  });
+export async function issueMyAttachmentUploadTicket(
+  requestId: string,
+  payload: UploadTicketPayload,
+) {
+  return apiFetch<UploadTicketResponse>(
+    `/requests/${requestId}/attachments/presign`,
+    {
+      method: "POST",
+      tokenType: "employee",
+      body: payload,
+    },
+  );
 }
 
-export async function completeMyAttachmentUpload(requestId: string, uploadToken: string) {
-  return apiFetch<{ id: string }>(`/requests/${requestId}/attachments/complete`, {
-    method: "POST",
-    tokenType: "employee",
-    body: { uploadToken },
-  });
+export async function completeMyAttachmentUpload(
+  requestId: string,
+  uploadToken: string,
+) {
+  return apiFetch<{ id: string }>(
+    `/requests/${requestId}/attachments/complete`,
+    {
+      method: "POST",
+      tokenType: "employee",
+      body: { uploadToken },
+    },
+  );
 }
 
-export async function uploadFileToPresignedUrl(uploadTicket: UploadTicketResponse, file: File) {
+export async function uploadFileToPresignedUrl(
+  uploadTicket: UploadTicketResponse,
+  file: File,
+) {
   const headers = new Headers(uploadTicket.uploadHeaders ?? {});
 
   if (!headers.has("Content-Type") && file.type) {

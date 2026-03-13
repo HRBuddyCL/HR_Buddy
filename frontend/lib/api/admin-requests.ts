@@ -2,7 +2,11 @@ import { resolveApiBaseUrl } from "@/lib/api/base-url";
 import { apiFetch, ApiError } from "@/lib/api/client";
 import { getAuthToken } from "@/lib/auth/tokens";
 
-export type AdminRequestType = "BUILDING" | "VEHICLE" | "MESSENGER" | "DOCUMENT";
+export type AdminRequestType =
+  | "BUILDING"
+  | "VEHICLE"
+  | "MESSENGER"
+  | "DOCUMENT";
 export type AdminRequestStatus =
   | "NEW"
   | "APPROVED"
@@ -12,7 +16,7 @@ export type AdminRequestStatus =
   | "REJECTED"
   | "CANCELED";
 
-export type AdminUrgency = "LOW" | "NORMAL" | "HIGH" | "CRITICAL";
+export type AdminUrgency = "NORMAL" | "HIGH" | "CRITICAL";
 export type FileKind = "IMAGE" | "VIDEO" | "DOCUMENT";
 
 export type AdminRequestListItem = {
@@ -231,11 +235,14 @@ export async function getAdminRequests(query: AdminRequestListQuery = {}) {
 export async function getAdminRequestSummary(
   query: Omit<AdminRequestListQuery, "page" | "limit"> = {},
 ) {
-  return apiFetch<AdminRequestSummaryResponse>("/admin/requests/report/summary", {
-    method: "GET",
-    tokenType: "admin",
-    query,
-  });
+  return apiFetch<AdminRequestSummaryResponse>(
+    "/admin/requests/report/summary",
+    {
+      method: "GET",
+      tokenType: "admin",
+      query,
+    },
+  );
 }
 
 export async function getAdminRequestDetail(requestId: string) {
@@ -249,39 +256,49 @@ export async function updateAdminRequestStatus(
   requestId: string,
   payload: AdminStatusUpdatePayload,
 ) {
-  return apiFetch<{ id: string; status: AdminRequestStatus; magicLink?: { url: string; expiresAt: string } }>(
-    `/admin/requests/${requestId}/status`,
-    {
-      method: "PATCH",
-      tokenType: "admin",
-      body: payload,
-    },
-  );
+  return apiFetch<{
+    id: string;
+    status: AdminRequestStatus;
+    magicLink?: { url: string; expiresAt: string };
+  }>(`/admin/requests/${requestId}/status`, {
+    method: "PATCH",
+    tokenType: "admin",
+    body: payload,
+  });
 }
 
 export async function issueAdminAttachmentUploadTicket(
   requestId: string,
   payload: AdminUploadTicketPayload,
 ) {
-  return apiFetch<AdminUploadTicketResponse>(`/admin/requests/${requestId}/attachments/presign`, {
-    method: "POST",
-    tokenType: "admin",
-    body: payload,
-  });
+  return apiFetch<AdminUploadTicketResponse>(
+    `/admin/requests/${requestId}/attachments/presign`,
+    {
+      method: "POST",
+      tokenType: "admin",
+      body: payload,
+    },
+  );
 }
 
-export async function completeAdminAttachmentUpload(requestId: string, uploadToken: string) {
-  return apiFetch<{ id: string }>(`/admin/requests/${requestId}/attachments/complete`, {
-    method: "POST",
-    tokenType: "admin",
-    body: { uploadToken },
-  });
+export async function completeAdminAttachmentUpload(
+  requestId: string,
+  uploadToken: string,
+) {
+  return apiFetch<{ id: string }>(
+    `/admin/requests/${requestId}/attachments/complete`,
+    {
+      method: "POST",
+      tokenType: "admin",
+      body: { uploadToken },
+    },
+  );
 }
 
 export async function getAdminAttachmentDownloadUrl(
   requestId: string,
   attachmentId: string,
-  mode: 'download' | 'inline' = 'download',
+  mode: "download" | "inline" = "download",
 ) {
   return apiFetch<{
     attachmentId: string;
@@ -315,7 +332,11 @@ export async function uploadFileToPresignedUrl(
   });
 
   if (!response.ok) {
-    throw new ApiError(response.status, null, `Upload failed (${response.status})`);
+    throw new ApiError(
+      response.status,
+      null,
+      `Upload failed (${response.status})`,
+    );
   }
 }
 
@@ -337,13 +358,16 @@ export async function downloadAdminRequestsCsv(
     limit: query.limit,
   });
 
-  const response = await fetch(`${API_BASE_URL}/admin/requests/export/csv${queryString ? `?${queryString}` : ""}`, {
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: "text/csv",
+  const response = await fetch(
+    `${API_BASE_URL}/admin/requests/export/csv${queryString ? `?${queryString}` : ""}`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "text/csv",
+      },
     },
-  });
+  );
 
   if (!response.ok) {
     let message = `Failed to export csv (${response.status})`;
