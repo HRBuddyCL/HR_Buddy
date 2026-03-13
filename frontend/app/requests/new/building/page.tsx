@@ -35,6 +35,7 @@ import { VideoPreviewModal } from "@/components/ui/video-preview-modal";
 import { ImagePreviewModal } from "@/components/ui/image-preview-modal";
 import { DocumentPreviewModal } from "@/components/ui/document-preview-modal";
 import { getDocumentTypeLabel } from "@/lib/attachments/document-type-label";
+import ConfirmModal from "@/components/ui/confirm-modal";
 import Link from "next/link";
 import Image from "next/image";
 
@@ -293,7 +294,7 @@ function ToggleButton({
     <button
       type="button"
       onClick={onClick}
-      className={`flex items-center justify-center gap-2 rounded-xl border-2 px-4 py-2.5 text-sm font-semibold transition-all duration-150 ${
+      className={`w-full flex items-center justify-center gap-2 rounded-xl border-2 px-4 py-3 text-sm font-semibold transition-all duration-150 ${
         active
           ? (activeClass ?? "border-[#0e2d4c] bg-[#0e2d4c] text-white")
           : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
@@ -324,9 +325,8 @@ export default function Page() {
   const [imagePreview, setImagePreview] = useState<AttachmentPreview | null>(
     null,
   );
-  const [documentPreview, setDocumentPreview] = useState<AttachmentPreview | null>(
-    null,
-  );
+  const [documentPreview, setDocumentPreview] =
+    useState<AttachmentPreview | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -423,6 +423,17 @@ export default function Page() {
     }
   };
 
+  // When building or floor changes, reset the location detail to avoid stale text
+  const setBuildingAndResetLocation = (b: BuildingSide) => {
+    onChange("building", b);
+    onChange("locationDetail", "");
+  };
+
+  const setFloorAndResetLocation = (f: number) => {
+    onChange("floor", f);
+    onChange("locationDetail", "");
+  };
+
   const validateBeforeSubmit = () => {
     const errors: Record<string, string> = {};
     if (!form.employeeName.trim()) errors.employeeName = "กรุณากรอกชื่อพนักงาน";
@@ -449,6 +460,7 @@ export default function Page() {
   };
 
   const handleReset = () => {
+    // Deprecated: use confirm modal instead via setShowConfirmReset(true)
     setForm(initialState);
     setAttachmentFiles([]);
     setAttachmentNotice(null);
@@ -457,6 +469,78 @@ export default function Page() {
     setImagePreview(null);
     setDocumentPreview(null);
     setFieldErrors({});
+  };
+
+  const [showConfirmReset, setShowConfirmReset] = useState(false);
+  const [showConfirmSubmit, setShowConfirmSubmit] = useState(false);
+
+  const doReset = () => {
+    setShowConfirmReset(false);
+    setForm(initialState);
+    setAttachmentFiles([]);
+    setAttachmentNotice(null);
+    setErrorMessage(null);
+    setVideoPreview(null);
+    setImagePreview(null);
+    setDocumentPreview(null);
+    setFieldErrors({});
+  };
+
+  const performSubmit = async () => {
+    setShowConfirmSubmit(false);
+    setSubmitting(true);
+    setErrorMessage(null);
+
+    const attachmentCandidatesResult =
+      prepareAttachmentCandidates(attachmentFiles);
+    const payload: CreateBuildingRequestPayload = {
+      employeeName: form.employeeName.trim(),
+      departmentId: form.departmentId,
+      phone: extractPhoneDigits(form.phone),
+      urgency: form.urgency,
+      building: form.building,
+      floor: Number(form.floor),
+      locationDetail: form.locationDetail.trim(),
+      problemCategoryId: form.problemCategoryId,
+      description: form.description.trim(),
+    };
+    if (isOtherDepartment)
+      payload.departmentOther = form.departmentOther.trim();
+    if (isOtherCategory)
+      payload.problemCategoryOther = form.problemCategoryOther.trim();
+    if (form.additionalDetails.trim())
+      payload.additionalDetails = form.additionalDetails.trim();
+
+    let createdRequestNo: string | null = null;
+    try {
+      const createResult = await createBuildingRequest(payload);
+      createdRequestNo = createResult.requestNo;
+      for (const candidate of attachmentCandidatesResult.candidates!) {
+        const ticket = await issueMyAttachmentUploadTicket(createResult.id, {
+          fileKind: candidate.fileKind,
+          fileName: candidate.file.name,
+          mimeType: candidate.mimeType,
+          fileSize: candidate.file.size,
+        });
+        await uploadFileToPresignedUrl(ticket, candidate.file);
+        await completeMyAttachmentUpload(createResult.id, ticket.uploadToken);
+      }
+      router.push(
+        `/requests/success/${encodeURIComponent(createResult.requestNo)}`,
+      );
+    } catch (error) {
+      if (createdRequestNo) {
+        router.push(
+          `/requests/success/${encodeURIComponent(createdRequestNo)}?attachments=partial`,
+        );
+        return;
+      }
+      setErrorMessage(
+        error instanceof ApiError ? error.message : "ไม่สามารถส่งคำขอซ่อมได้",
+      );
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleAttachmentPick = (files: File[]) => {
@@ -537,57 +621,8 @@ export default function Page() {
     setErrorMessage(null);
     if (!validateBeforeSubmit()) return;
 
-    const attachmentCandidatesResult =
-      prepareAttachmentCandidates(attachmentFiles);
-    const payload: CreateBuildingRequestPayload = {
-      employeeName: form.employeeName.trim(),
-      departmentId: form.departmentId,
-      phone: extractPhoneDigits(form.phone),
-      urgency: form.urgency,
-      building: form.building,
-      floor: Number(form.floor),
-      locationDetail: form.locationDetail.trim(),
-      problemCategoryId: form.problemCategoryId,
-      description: form.description.trim(),
-    };
-    if (isOtherDepartment)
-      payload.departmentOther = form.departmentOther.trim();
-    if (isOtherCategory)
-      payload.problemCategoryOther = form.problemCategoryOther.trim();
-    if (form.additionalDetails.trim())
-      payload.additionalDetails = form.additionalDetails.trim();
-
-    setSubmitting(true);
-    let createdRequestNo: string | null = null;
-    try {
-      const createResult = await createBuildingRequest(payload);
-      createdRequestNo = createResult.requestNo;
-      for (const candidate of attachmentCandidatesResult.candidates!) {
-        const ticket = await issueMyAttachmentUploadTicket(createResult.id, {
-          fileKind: candidate.fileKind,
-          fileName: candidate.file.name,
-          mimeType: candidate.mimeType,
-          fileSize: candidate.file.size,
-        });
-        await uploadFileToPresignedUrl(ticket, candidate.file);
-        await completeMyAttachmentUpload(createResult.id, ticket.uploadToken);
-      }
-      router.push(
-        `/requests/success/${encodeURIComponent(createResult.requestNo)}`,
-      );
-    } catch (error) {
-      if (createdRequestNo) {
-        router.push(
-          `/requests/success/${encodeURIComponent(createdRequestNo)}?attachments=partial`,
-        );
-        return;
-      }
-      setErrorMessage(
-        error instanceof ApiError ? error.message : "ไม่สามารถส่งคำขอซ่อมได้",
-      );
-    } finally {
-      setSubmitting(false);
-    }
+    // open confirm modal for submission
+    setShowConfirmSubmit(true);
   };
 
   /* ══════════════════════════════════════════════════════
@@ -732,7 +767,7 @@ export default function Page() {
                         <ToggleButton
                           key={opt.value}
                           active={form.building === opt.value}
-                          onClick={() => onChange("building", opt.value)}
+                          onClick={() => setBuildingAndResetLocation(opt.value)}
                         >
                           <span>{opt.icon}</span>
                           {opt.label}
@@ -751,7 +786,7 @@ export default function Page() {
                         <button
                           key={floor}
                           type="button"
-                          onClick={() => onChange("floor", floor)}
+                          onClick={() => setFloorAndResetLocation(floor)}
                           className={`h-12 w-full rounded-xl border-2 text-sm font-bold transition-all duration-150 ${
                             form.floor === floor
                               ? "border-[#0e2d4c] bg-[#0e2d4c] text-white"
@@ -795,16 +830,22 @@ export default function Page() {
                         key={opt.value}
                         type="button"
                         onClick={() => onChange("urgency", opt.value)}
-                        className={`flex items-center justify-center gap-2 rounded-xl border-2 px-3 py-2.5 text-sm font-semibold transition-all duration-150 ${
+                        className={`w-full sm:w-auto flex items-center gap-3 rounded-xl border-2 px-4 py-3 text-sm font-semibold transition-all duration-150 ${
                           form.urgency === opt.value
-                            ? `${opt.activeBg} ${opt.activeBorder}`
+                            ? `${opt.activeBg} ${opt.activeBorder} shadow-sm`
                             : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
                         }`}
                       >
-                        <span className="text-base leading-none">
+                        <span
+                          className={`flex h-7 w-7 items-center justify-center rounded-full text-sm ${
+                            form.urgency === opt.value
+                              ? "bg-white/20"
+                              : "bg-slate-100"
+                          }`}
+                        >
                           {opt.icon}
                         </span>
-                        {opt.label}
+                        <span className="whitespace-nowrap">{opt.label}</span>
                       </button>
                     ))}
                   </div>
@@ -1110,11 +1151,17 @@ export default function Page() {
                                   {preview.file.name}
                                 </p>
                                 <p className="mt-0.5 text-[10px] uppercase tracking-wide text-slate-400">
-                                  {getDocumentTypeLabel(preview.mimeType, preview.file.name)}
+                                  {getDocumentTypeLabel(
+                                    preview.mimeType,
+                                    preview.file.name,
+                                  )}
                                 </p>
                               </div>
                               <span className="shrink-0 rounded-md bg-[#0e2d4c] px-2 py-0.5 text-[10px] font-bold text-white">
-                                {preview.mimeType.toLowerCase() === "application/pdf" ? "Open" : "Download"}
+                                {preview.mimeType.toLowerCase() ===
+                                "application/pdf"
+                                  ? "Open"
+                                  : "Download"}
                               </span>
                             </button>
                           )}
@@ -1181,60 +1228,12 @@ export default function Page() {
               </div>
 
               <div className="flex flex-col-reverse gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-                {/* Reset */}
-                <button
-                  type="button"
-                  onClick={handleReset}
-                  disabled={submitting}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
-                >
-                  <svg
-                    className="h-4 w-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                    />
-                  </svg>
-                  รีเซ็ตฟอร์ม
-                </button>
-
-                {/* Submit */}
-                <button
-                  type="submit"
-                  disabled={submitting || loadingReferences}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#0e2d4c] px-8 py-2.5 text-sm font-bold text-white transition hover:bg-[#1a4a7a] disabled:opacity-60 sm:w-auto"
-                >
-                  {submitting ? (
-                    <>
-                      <svg
-                        className="h-4 w-4 animate-spin"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                      >
-                        <circle
-                          className="opacity-25"
-                          cx="12"
-                          cy="12"
-                          r="10"
-                          stroke="currentColor"
-                          strokeWidth="4"
-                        />
-                        <path
-                          className="opacity-75"
-                          fill="currentColor"
-                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                        />
-                      </svg>
-                      กำลังส่งคำขอ...
-                    </>
-                  ) : (
-                    <>
+                <div className="flex w-full flex-col-reverse items-stretch gap-3 sm:flex-row sm:items-center sm:w-auto">
+                  <div className="flex items-center gap-2 sm:order-1">
+                    <Link
+                      href="/"
+                      className="w-full sm:w-auto inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                    >
                       <svg
                         className="h-4 w-4"
                         fill="none"
@@ -1245,13 +1244,87 @@ export default function Page() {
                           strokeLinecap="round"
                           strokeLinejoin="round"
                           strokeWidth={2}
-                          d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+                          d="M15 19l-7-7 7-7"
                         />
                       </svg>
-                      ส่งคำขอซ่อมแซม
-                    </>
-                  )}
-                </button>
+                      กลับสู่หน้าหลัก
+                    </Link>
+
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmReset(true)}
+                      disabled={submitting}
+                      aria-label="รีเซ็ตแบบฟอร์ม"
+                      className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50 shadow-sm"
+                    >
+                      <svg
+                        className="h-4 w-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                        />
+                      </svg>
+                      รีเซ็ตแบบฟอร์ม
+                    </button>
+                  </div>
+                </div>
+
+                {/* Submit */}
+                <div className="sm:order-2">
+                  <button
+                    type="submit"
+                    disabled={submitting || loadingReferences}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#0e2d4c] px-10 py-3 text-sm font-bold text-white transition hover:bg-[#1a4a7a] disabled:opacity-60 sm:w-auto shadow-lg"
+                  >
+                    {submitting ? (
+                      <>
+                        <svg
+                          className="h-4 w-4 animate-spin"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                        >
+                          <circle
+                            className="opacity-25"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            strokeWidth="4"
+                          />
+                          <path
+                            className="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                          />
+                        </svg>
+                        กำลังส่งคำขอ...
+                      </>
+                    ) : (
+                      <>
+                        <svg
+                          className="h-4 w-4"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+                          />
+                        </svg>
+                        ส่งคำขอซ่อมแซม
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
           </form>
@@ -1259,6 +1332,26 @@ export default function Page() {
       </div>
 
       {/* ── Modals ── */}
+      <ConfirmModal
+        open={showConfirmReset}
+        title="รีเซ็ตฟอร์ม"
+        description="ต้องการรีเซ็ตฟอร์ม? ข้อมูลที่กรอกจะถูกลบทั้งหมด"
+        confirmLabel="รีเซ็ต"
+        cancelLabel="ยกเลิก"
+        onConfirm={doReset}
+        onClose={() => setShowConfirmReset(false)}
+      />
+
+      <ConfirmModal
+        open={showConfirmSubmit}
+        title="ยืนยันการส่งคำขอ"
+        description="ยืนยันการส่งคำขอ? คุณจะไม่สามารถแก้ไขคำขอได้หลังจากส่ง"
+        confirmLabel="ส่งคำขอ"
+        cancelLabel="ยกเลิก"
+        onConfirm={performSubmit}
+        onClose={() => setShowConfirmSubmit(false)}
+      />
+
       <ImagePreviewModal
         open={Boolean(imagePreview)}
         title={
@@ -1293,5 +1386,3 @@ export default function Page() {
     </main>
   );
 }
-
-
