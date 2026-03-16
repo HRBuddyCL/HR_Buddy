@@ -84,7 +84,8 @@ export default () => ({
         10,
       ),
       transactionMaxWaitMs: parseInt(
-        process.env.ABUSE_PROTECTION_POSTGRES_TRANSACTION_MAX_WAIT_MS ?? '10000',
+        process.env.ABUSE_PROTECTION_POSTGRES_TRANSACTION_MAX_WAIT_MS ??
+          '10000',
         10,
       ),
       transactionTimeoutMs: parseInt(
@@ -319,4 +320,3 @@ function parseTrustProxy(raw: string | undefined) {
 
   return trimmed;
 }
-

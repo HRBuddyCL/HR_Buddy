@@ -316,4 +316,3 @@ describe('AbuseProtectionService', () => {
     expect(memoryStore.consume).not.toHaveBeenCalled();
   });
 });
-

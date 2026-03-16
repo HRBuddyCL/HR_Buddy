@@ -126,8 +126,9 @@ export class AbuseProtectionService {
   private postgresTransientRetryDelayMs() {
     return Math.max(
       0,
-      this.config.get<number>('abuseProtection.postgres.transientRetryDelayMs') ??
-        120,
+      this.config.get<number>(
+        'abuseProtection.postgres.transientRetryDelayMs',
+      ) ?? 120,
     );
   }
 
@@ -149,7 +150,27 @@ export class AbuseProtectionService {
       return error.message;
     }
 
-    return String(error ?? 'unknown error');
+    if (typeof error === 'string') {
+      return error;
+    }
+
+    if (
+      typeof error === 'number' ||
+      typeof error === 'boolean' ||
+      typeof error === 'bigint'
+    ) {
+      return String(error);
+    }
+
+    if (error && typeof error === 'object') {
+      try {
+        return JSON.stringify(error);
+      } catch {
+        return 'unknown error';
+      }
+    }
+
+    return 'unknown error';
   }
 
   private async delay(ms: number) {
@@ -172,4 +193,3 @@ export class AbuseProtectionService {
     );
   }
 }
-

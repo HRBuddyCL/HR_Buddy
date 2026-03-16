@@ -31,8 +31,9 @@ export class PostgresRateLimitStore {
     const blockMs = Math.max(0, input.policy.blockSeconds) * 1000;
     const keyHash = this.hashKey(input.key);
 
-    const result = await this.prisma.$transaction(async (tx) => {
-      await tx.$executeRaw`
+    const result = await this.prisma.$transaction(
+      async (tx) => {
+        await tx.$executeRaw`
         INSERT INTO abuse_rate_limit_counters (
           scope,
           key_hash,
@@ -52,7 +53,7 @@ export class PostgresRateLimitStore {
         ON CONFLICT (scope, key_hash) DO NOTHING
       `;
 
-      const rows = await tx.$queryRaw<CounterRow[]>`
+        const rows = await tx.$queryRaw<CounterRow[]>`
         SELECT
           window_start_at AS "windowStartAt",
           request_count AS "requestCount",
@@ -63,48 +64,48 @@ export class PostgresRateLimitStore {
         FOR UPDATE
       `;
 
-      const row = rows[0];
+        const row = rows[0];
 
-      if (!row) {
-        throw new Error('Rate limit counter row not found');
-      }
+        if (!row) {
+          throw new Error('Rate limit counter row not found');
+        }
 
-      let windowStartMs = row.windowStartAt.getTime();
-      let requestCount = Number(row.requestCount);
-      let blockedUntilMs = row.blockedUntil ? row.blockedUntil.getTime() : 0;
+        let windowStartMs = row.windowStartAt.getTime();
+        let requestCount = Number(row.requestCount);
+        let blockedUntilMs = row.blockedUntil ? row.blockedUntil.getTime() : 0;
 
-      if (blockedUntilMs > nowMs) {
-        await tx.$executeRaw`
+        if (blockedUntilMs > nowMs) {
+          await tx.$executeRaw`
           UPDATE abuse_rate_limit_counters
           SET updated_at = ${nowAt}
           WHERE scope = ${input.scope}
             AND key_hash = ${keyHash}
         `;
 
-        return {
-          allowed: false,
-          remaining: 0,
-          retryAfterSeconds: Math.max(
-            1,
-            Math.ceil((blockedUntilMs - nowMs) / 1000),
-          ),
-          resetAtUnix: Math.ceil(blockedUntilMs / 1000),
-        };
-      }
+          return {
+            allowed: false,
+            remaining: 0,
+            retryAfterSeconds: Math.max(
+              1,
+              Math.ceil((blockedUntilMs - nowMs) / 1000),
+            ),
+            resetAtUnix: Math.ceil(blockedUntilMs / 1000),
+          };
+        }
 
-      if (nowMs - windowStartMs >= windowMs) {
-        windowStartMs = nowMs;
-        requestCount = 0;
-        blockedUntilMs = 0;
-      }
+        if (nowMs - windowStartMs >= windowMs) {
+          windowStartMs = nowMs;
+          requestCount = 0;
+          blockedUntilMs = 0;
+        }
 
-      if (requestCount >= input.policy.maxRequests) {
-        const windowResetMs = windowStartMs + windowMs;
-        const effectiveBlockedUntilMs =
-          blockMs > 0 ? nowMs + blockMs : windowResetMs;
-        blockedUntilMs = Math.max(effectiveBlockedUntilMs, windowResetMs);
+        if (requestCount >= input.policy.maxRequests) {
+          const windowResetMs = windowStartMs + windowMs;
+          const effectiveBlockedUntilMs =
+            blockMs > 0 ? nowMs + blockMs : windowResetMs;
+          blockedUntilMs = Math.max(effectiveBlockedUntilMs, windowResetMs);
 
-        await tx.$executeRaw`
+          await tx.$executeRaw`
           UPDATE abuse_rate_limit_counters
           SET
             window_start_at = ${new Date(windowStartMs)},
@@ -115,20 +116,20 @@ export class PostgresRateLimitStore {
             AND key_hash = ${keyHash}
         `;
 
-        return {
-          allowed: false,
-          remaining: 0,
-          retryAfterSeconds: Math.max(
-            1,
-            Math.ceil((blockedUntilMs - nowMs) / 1000),
-          ),
-          resetAtUnix: Math.ceil(blockedUntilMs / 1000),
-        };
-      }
+          return {
+            allowed: false,
+            remaining: 0,
+            retryAfterSeconds: Math.max(
+              1,
+              Math.ceil((blockedUntilMs - nowMs) / 1000),
+            ),
+            resetAtUnix: Math.ceil(blockedUntilMs / 1000),
+          };
+        }
 
-      requestCount += 1;
+        requestCount += 1;
 
-      await tx.$executeRaw`
+        await tx.$executeRaw`
         UPDATE abuse_rate_limit_counters
         SET
           window_start_at = ${new Date(windowStartMs)},
@@ -139,16 +140,18 @@ export class PostgresRateLimitStore {
           AND key_hash = ${keyHash}
       `;
 
-      return {
-        allowed: true,
-        remaining: Math.max(0, input.policy.maxRequests - requestCount),
-        retryAfterSeconds: 0,
-        resetAtUnix: Math.ceil((windowStartMs + windowMs) / 1000),
-      };
-    }, {
-      maxWait: this.transactionMaxWaitMs(),
-      timeout: this.transactionTimeoutMs(),
-    });
+        return {
+          allowed: true,
+          remaining: Math.max(0, input.policy.maxRequests - requestCount),
+          retryAfterSeconds: 0,
+          resetAtUnix: Math.ceil((windowStartMs + windowMs) / 1000),
+        };
+      },
+      {
+        maxWait: this.transactionMaxWaitMs(),
+        timeout: this.transactionTimeoutMs(),
+      },
+    );
 
     await this.tryCleanup(nowMs);
 
@@ -188,15 +191,17 @@ export class PostgresRateLimitStore {
 
   private transactionMaxWaitMs() {
     return (
-      this.config.get<number>('abuseProtection.postgres.transactionMaxWaitMs') ??
-      10000
+      this.config.get<number>(
+        'abuseProtection.postgres.transactionMaxWaitMs',
+      ) ?? 10000
     );
   }
 
   private transactionTimeoutMs() {
     return (
-      this.config.get<number>('abuseProtection.postgres.transactionTimeoutMs') ??
-      12000
+      this.config.get<number>(
+        'abuseProtection.postgres.transactionTimeoutMs',
+      ) ?? 12000
     );
   }
 
@@ -214,4 +219,3 @@ export class PostgresRateLimitStore {
     );
   }
 }
-

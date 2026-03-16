@@ -261,4 +261,3 @@ export const envValidationSchema = Joi.object({
     .default('dev-only-change-this-admin-session-secret'),
   ADMIN_SESSION_TTL_MINUTES: Joi.number().integer().min(30).default(480),
 });
-
