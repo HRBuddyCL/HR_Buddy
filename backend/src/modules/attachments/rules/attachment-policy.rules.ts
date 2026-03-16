@@ -85,4 +85,3 @@ export function assertAttachmentCountLimit(currentCount: number) {
 export function attachmentCountLimit() {
   return MAX_ATTACHMENTS_PER_REQUEST;
 }
-

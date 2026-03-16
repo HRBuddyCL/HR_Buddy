@@ -32,8 +32,9 @@ function toAsciiFallback(fileName: string) {
 
 function encodeRfc5987Value(value: string) {
   return encodeURIComponent(value)
-    .replace(/['()]/g, (char) =>
-      `%${char.charCodeAt(0).toString(16).toUpperCase()}`,
+    .replace(
+      /['()]/g,
+      (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`,
     )
     .replace(/\*/g, '%2A');
 }

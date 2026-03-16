@@ -32,7 +32,7 @@ describe('attachment-policy rules', () => {
       assertAttachmentPolicy({
         fileKind: 'DOCUMENT',
         mimeType: 'application/pdf',
-        fileSize: 21 * 1024 * 1024,
+        fileSize: 51 * 1024 * 1024,
       }),
     ).toThrow(BadRequestException);
   });

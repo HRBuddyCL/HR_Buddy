@@ -55,4 +55,3 @@ export class CreateVehicleRequestDto {
   @MaxLength(2000)
   additionalDetails?: string;
 }
-

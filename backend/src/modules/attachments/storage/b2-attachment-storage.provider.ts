@@ -185,7 +185,6 @@ export class B2AttachmentStorageProvider implements AttachmentStorageProvider {
     return Math.min(Math.max(diffSeconds, 1), Math.max(maxTtl, 1));
   }
 
-
   private isNotFoundError(error: unknown) {
     if (!error || typeof error !== 'object') {
       return false;

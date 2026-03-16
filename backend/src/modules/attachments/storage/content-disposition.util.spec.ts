@@ -9,7 +9,9 @@ describe('buildContentDispositionHeader', () => {
     });
 
     expect(header).toContain('attachment; filename="');
-    expect(header).toContain(`filename*=UTF-8''${encodeURIComponent(fileName)}`);
+    expect(header).toContain(
+      `filename*=UTF-8''${encodeURIComponent(fileName)}`,
+    );
   });
 
   it('sanitizes CRLF and quotes to prevent header injection', () => {

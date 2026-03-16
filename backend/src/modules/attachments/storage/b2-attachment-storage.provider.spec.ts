@@ -143,4 +143,3 @@ describe('B2AttachmentStorageProvider', () => {
     ).rejects.toBeInstanceOf(ServiceUnavailableException);
   });
 });
-

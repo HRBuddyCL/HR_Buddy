@@ -319,7 +319,6 @@ export class LocalMockAttachmentStorageController {
     return null;
   }
 
-
   private normalizeDisposition(value: string | undefined) {
     if (value === 'inline') {
       return 'inline';
