@@ -58,7 +58,6 @@ export type CreateMessengerRequestPayload = {
   outsideBkkMetro: boolean;
   deliveryService?: DeliveryService;
   deliveryServiceOther?: string;
-  sender: AddressPayload;
   receiver: AddressPayload;
 };
 

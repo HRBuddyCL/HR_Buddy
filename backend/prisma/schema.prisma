@@ -25,7 +25,6 @@ enum RequestStatus {
 }
 
 enum Urgency {
-  LOW
   NORMAL
   HIGH
   CRITICAL
@@ -304,8 +303,8 @@ model MessengerBookingDetail {
   deliveryService      DeliveryService? @map("delivery_service")
   deliveryServiceOther String?          @map("delivery_service_other")
 
-  senderAddressId String  @map("sender_address_id")
-  senderAddress   Address @relation("SenderAddress", fields: [senderAddressId], references: [id])
+  senderAddressId String?  @map("sender_address_id")
+  senderAddress   Address? @relation("SenderAddress", fields: [senderAddressId], references: [id])
 
   receiverAddressId String  @map("receiver_address_id")
   receiverAddress   Address @relation("ReceiverAddress", fields: [receiverAddressId], references: [id])

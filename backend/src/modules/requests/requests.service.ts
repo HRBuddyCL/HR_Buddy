@@ -306,10 +306,6 @@ export class RequestsService {
         isDuplicateMessengerRequest(dto, recentRequests),
 
       detailCreator: async (tx, requestId) => {
-        const sender = await tx.address.create({
-          data: dto.sender,
-        });
-
         const receiver = await tx.address.create({
           data: dto.receiver,
         });
@@ -327,7 +323,7 @@ export class RequestsService {
             deliveryService: dto.deliveryService ?? null,
             deliveryServiceOther: dto.deliveryServiceOther ?? null,
 
-            senderAddressId: sender.id,
+            senderAddressId: null,
             receiverAddressId: receiver.id,
           },
         });
@@ -412,7 +408,6 @@ export class RequestsService {
       SELECT true AS "acquired"
     `;
   }
-
 
   private async acquireRequestMutationLock(tx: Tx, requestId: string) {
     const lockKey = `request_mutation:${requestId}`;
@@ -612,4 +607,3 @@ export class RequestsService {
     return req;
   }
 }
-

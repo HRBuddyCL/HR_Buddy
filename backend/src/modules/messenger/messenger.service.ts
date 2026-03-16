@@ -32,6 +32,7 @@ type LinkRequestBase = {
   requestNo: string;
   type: RequestType;
   status: RequestStatus;
+  employeeName: string;
   phone: string;
 };
 
@@ -87,6 +88,8 @@ export class MessengerService {
         status: link.request.status,
         type: link.request.type,
         urgency: link.request.urgency,
+        employeeName: link.request.employeeName,
+        phone: link.request.phone,
         latestActivityAt: link.request.latestActivityAt,
       },
       messengerDetail: link.request.messengerBookingDetail,
@@ -297,6 +300,7 @@ export class MessengerService {
             requestNo: true,
             type: true,
             status: true,
+            employeeName: true,
             phone: true,
           },
         },
@@ -461,4 +465,3 @@ export class MessengerService {
     return normalized;
   }
 }
-

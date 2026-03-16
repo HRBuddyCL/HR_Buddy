@@ -1,10 +1,21 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+} from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { RouteGuard } from "@/components/guards/route-guard";
-import { Button, SelectField, TextField, TextareaField } from "@/components/ui/form-controls";
+import {
+  Button,
+  SelectField,
+  TextField,
+  TextareaField,
+} from "@/components/ui/form-controls";
 import { VideoPreviewModal } from "@/components/ui/video-preview-modal";
 import { downloadFileFromPresignedUrl } from "@/lib/attachments/download";
 import { getDocumentTypeLabel } from "@/lib/attachments/document-type-label";
@@ -26,11 +37,18 @@ import {
   type AdminRequestDetail,
   type AdminRequestStatus,
   type AdminRequestType,
+  type AdminUrgency,
   type FileKind,
 } from "@/lib/api/admin-requests";
-import { getAdminOperators, type AdminOperator } from "@/lib/api/admin-settings";
+import {
+  getAdminOperators,
+  type AdminOperator,
+} from "@/lib/api/admin-settings";
 
-const transitionByType: Record<AdminRequestType, Record<AdminRequestStatus, AdminRequestStatus[]>> = {
+const transitionByType: Record<
+  AdminRequestType,
+  Record<AdminRequestStatus, AdminRequestStatus[]>
+> = {
   BUILDING: {
     NEW: ["APPROVED", "REJECTED", "CANCELED"],
     APPROVED: ["IN_PROGRESS", "DONE", "CANCELED"],
@@ -77,6 +95,12 @@ const statusColorClass: Record<AdminRequestStatus, string> = {
   DONE: "bg-emerald-100 text-emerald-800",
   REJECTED: "bg-rose-100 text-rose-800",
   CANCELED: "bg-slate-200 text-slate-800",
+};
+
+const urgencyLabelMap: Record<AdminUrgency, string> = {
+  NORMAL: "ปกติ",
+  HIGH: "สูง",
+  CRITICAL: "เร่งด่วน",
 };
 
 function formatDateTime(iso?: string | null) {
@@ -131,15 +155,28 @@ function AdminRequestDetailContent() {
   const [pickupNote, setPickupNote] = useState("");
   const [digitalAttachmentId, setDigitalAttachmentId] = useState("");
   const [submittingStatus, setSubmittingStatus] = useState(false);
-  const [messengerMagicLink, setMessengerMagicLink] = useState<{ url: string; expiresAt: string } | null>(null);
-  const [magicLinkCopyState, setMagicLinkCopyState] = useState<"idle" | "copied" | "failed">("idle");
+  const [messengerMagicLink, setMessengerMagicLink] = useState<{
+    url: string;
+    expiresAt: string;
+  } | null>(null);
+  const [magicLinkCopyState, setMagicLinkCopyState] = useState<
+    "idle" | "copied" | "failed"
+  >("idle");
 
   const [uploading, setUploading] = useState(false);
   const [uploadFileKind, setUploadFileKind] = useState<FileKind>("DOCUMENT");
   const [uploadFile, setUploadFile] = useState<File | null>(null);
-  const [downloadingAttachmentId, setDownloadingAttachmentId] = useState<string | null>(null);
-  const [previewingAttachmentId, setPreviewingAttachmentId] = useState<string | null>(null);
-  const [videoPreview, setVideoPreview] = useState<{ attachmentId: string; fileName: string; url: string } | null>(null);
+  const [downloadingAttachmentId, setDownloadingAttachmentId] = useState<
+    string | null
+  >(null);
+  const [previewingAttachmentId, setPreviewingAttachmentId] = useState<
+    string | null
+  >(null);
+  const [videoPreview, setVideoPreview] = useState<{
+    attachmentId: string;
+    fileName: string;
+    url: string;
+  } | null>(null);
 
   const availableTransitions = useMemo(() => {
     if (!detail) {
@@ -180,7 +217,9 @@ function AdminRequestDetailContent() {
       setTargetStatus(detailResult.status);
       setOperatorId((prev) => prev || operatorsResult.items[0]?.id || "");
       setPickupNote(detailResult.documentRequestDetail?.pickupNote || "");
-      setDigitalAttachmentId(detailResult.documentRequestDetail?.digitalFileAttachmentId || "");
+      setDigitalAttachmentId(
+        detailResult.documentRequestDetail?.digitalFileAttachmentId || "",
+      );
     } catch (error) {
       if (error instanceof ApiError) {
         setErrorMessage(error.message);
@@ -215,12 +254,16 @@ function AdminRequestDetailContent() {
 
     if (detail.type === "DOCUMENT" && targetStatus === "DONE") {
       if (documentDeliveryMethod === "PICKUP" && !pickupNote.trim()) {
-        setErrorMessage("pickupNote is required for DOCUMENT/PICKUP when setting DONE.");
+        setErrorMessage(
+          "pickupNote is required for DOCUMENT/PICKUP when setting DONE.",
+        );
         return;
       }
 
       if (documentDeliveryMethod === "DIGITAL" && !digitalAttachmentId) {
-        setErrorMessage("digitalFileAttachmentId is required for DOCUMENT/DIGITAL when setting DONE.");
+        setErrorMessage(
+          "digitalFileAttachmentId is required for DOCUMENT/DIGITAL when setting DONE.",
+        );
         return;
       }
     }
@@ -324,7 +367,11 @@ function AdminRequestDetailContent() {
     setErrorMessage(null);
 
     try {
-      const result = await getAdminAttachmentDownloadUrl(detail.id, attachmentId, "download");
+      const result = await getAdminAttachmentDownloadUrl(
+        detail.id,
+        attachmentId,
+        "download",
+      );
       await downloadFileFromPresignedUrl({
         downloadUrl: result.downloadUrl,
         fallbackFileName: result.fileName,
@@ -340,7 +387,10 @@ function AdminRequestDetailContent() {
     }
   };
 
-  const handlePreviewAttachment = async (attachmentId: string, fileName: string) => {
+  const handlePreviewAttachment = async (
+    attachmentId: string,
+    fileName: string,
+  ) => {
     if (!detail) {
       return;
     }
@@ -349,7 +399,11 @@ function AdminRequestDetailContent() {
     setErrorMessage(null);
 
     try {
-      const result = await getAdminAttachmentDownloadUrl(detail.id, attachmentId, "inline");
+      const result = await getAdminAttachmentDownloadUrl(
+        detail.id,
+        attachmentId,
+        "inline",
+      );
       setVideoPreview({
         attachmentId,
         fileName,
@@ -371,9 +425,15 @@ function AdminRequestDetailContent() {
       <header className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-wide text-slate-600">Phase 5 - Admin Core</p>
-            <h1 className="mt-2 text-3xl font-semibold text-slate-900">Admin Request Detail</h1>
-            <p className="mt-2 text-slate-700">Manage status transitions, operator audit data, and attachments.</p>
+            <p className="text-sm font-semibold uppercase tracking-wide text-slate-600">
+              Phase 5 - Admin Core
+            </p>
+            <h1 className="mt-2 text-3xl font-semibold text-slate-900">
+              Admin Request Detail
+            </h1>
+            <p className="mt-2 text-slate-700">
+              Manage status transitions, operator audit data, and attachments.
+            </p>
           </div>
 
           <div className="flex items-center gap-2">
@@ -384,45 +444,66 @@ function AdminRequestDetailContent() {
             >
               Refresh
             </Button>
-            <Link href="/admin/requests" className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white">
+            <Link
+              href="/admin/requests"
+              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white"
+            >
               Back to requests
             </Link>
           </div>
         </div>
       </header>
 
-      {loading ? <p className="text-sm text-slate-700">Loading request detail...</p> : null}
+      {loading ? (
+        <p className="text-sm text-slate-700">Loading request detail...</p>
+      ) : null}
 
       {!loading && detail ? (
         <>
           <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{detail.type}</p>
-                <h2 className="text-2xl font-semibold text-slate-900">{detail.requestNo}</h2>
-                <p className="text-sm text-slate-700">{detail.employeeName} | {detail.phone}</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  {detail.type}
+                </p>
+                <h2 className="text-2xl font-semibold text-slate-900">
+                  {detail.requestNo}
+                </h2>
+                <p className="text-sm text-slate-700">
+                  {detail.employeeName} | {detail.phone}
+                </p>
               </div>
-              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusColorClass[detail.status]}`}>
+              <span
+                className={`rounded-full px-3 py-1 text-xs font-semibold ${statusColorClass[detail.status]}`}
+              >
                 {detail.status}
               </span>
             </div>
 
             <div className="mt-4 grid gap-3 md:grid-cols-4">
               <div className="rounded-lg bg-slate-50 p-3">
-                <p className="text-xs text-slate-500">Urgency</p>
-                <p className="font-medium text-slate-900">{detail.urgency}</p>
+                <p className="text-xs text-slate-500">ความเร่งด่วน</p>
+                <p className="font-medium text-slate-900">
+                  {urgencyLabelMap[detail.urgency]}
+                </p>
               </div>
               <div className="rounded-lg bg-slate-50 p-3">
                 <p className="text-xs text-slate-500">Department</p>
-                <p className="font-medium text-slate-900">{detail.department.name}</p>
+                <p className="font-medium text-slate-900">
+                  {detail.department.name}
+                </p>
               </div>
               <div className="rounded-lg bg-slate-50 p-3">
                 <p className="text-xs text-slate-500">Created</p>
-                <p className="font-medium text-slate-900">{formatDateTime(detail.createdAt)}</p>
+                <p className="font-medium text-slate-900">
+                  {formatDateTime(detail.createdAt)}
+                </p>
               </div>
               <div className="rounded-lg bg-slate-50 p-3">
                 <p className="text-xs text-slate-500">Latest activity</p>
-                <p className="font-medium text-slate-900">{formatDateTime(detail.latestActivityAt)}</p>
+                <p className="font-medium text-slate-900">
+                  {formatDateTime(detail.latestActivityAt)}
+                </p>
               </div>
             </div>
 
@@ -442,9 +523,14 @@ function AdminRequestDetailContent() {
           </section>
 
           <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-semibold text-slate-900">Status action</h2>
+            <h2 className="text-lg font-semibold text-slate-900">
+              Status action
+            </h2>
             <p className="mt-2 text-sm text-slate-700">
-              Allowed next statuses: {availableTransitions.length > 0 ? availableTransitions.join(", ") : "No transitions allowed"}
+              Allowed next statuses:{" "}
+              {availableTransitions.length > 0
+                ? availableTransitions.join(", ")
+                : "No transitions allowed"}
             </p>
 
             <form className="mt-4 space-y-4" onSubmit={handleUpdateStatus}>
@@ -454,7 +540,9 @@ function AdminRequestDetailContent() {
                   label="Next status"
                   required
                   value={targetStatus}
-                  onChange={(event) => setTargetStatus(event.target.value as AdminRequestStatus)}
+                  onChange={(event) =>
+                    setTargetStatus(event.target.value as AdminRequestStatus)
+                  }
                 >
                   <option value="">Select status</option>
                   {availableTransitions.map((status) => (
@@ -490,7 +578,9 @@ function AdminRequestDetailContent() {
                 placeholder="Optional action note"
               />
 
-              {detail.type === "DOCUMENT" && targetStatus === "DONE" && documentDeliveryMethod === "PICKUP" ? (
+              {detail.type === "DOCUMENT" &&
+              targetStatus === "DONE" &&
+              documentDeliveryMethod === "PICKUP" ? (
                 <TextField
                   id="pickupNote"
                   label="Pickup note"
@@ -502,13 +592,17 @@ function AdminRequestDetailContent() {
                 />
               ) : null}
 
-              {detail.type === "DOCUMENT" && targetStatus === "DONE" && documentDeliveryMethod === "DIGITAL" ? (
+              {detail.type === "DOCUMENT" &&
+              targetStatus === "DONE" &&
+              documentDeliveryMethod === "DIGITAL" ? (
                 <SelectField
                   id="digitalFileAttachmentId"
                   label="Digital file attachment"
                   required
                   value={digitalAttachmentId}
-                  onChange={(event) => setDigitalAttachmentId(event.target.value)}
+                  onChange={(event) =>
+                    setDigitalAttachmentId(event.target.value)
+                  }
                 >
                   <option value="">Select document attachment</option>
                   {documentAttachmentOptions.map((attachment) => (
@@ -519,7 +613,10 @@ function AdminRequestDetailContent() {
                 </SelectField>
               ) : null}
 
-              <Button type="submit" disabled={submittingStatus || availableTransitions.length === 0}>
+              <Button
+                type="submit"
+                disabled={submittingStatus || availableTransitions.length === 0}
+              >
                 {submittingStatus ? "Updating..." : "Update status"}
               </Button>
             </form>
@@ -528,7 +625,9 @@ function AdminRequestDetailContent() {
               <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
                 <p className="font-semibold">Messenger magic link generated</p>
                 <p className="mt-1 break-all">{messengerMagicLink.url}</p>
-                <p className="mt-1 text-xs text-emerald-800">Expires: {formatDateTime(messengerMagicLink.expiresAt)}</p>
+                <p className="mt-1 text-xs text-emerald-800">
+                  Expires: {formatDateTime(messengerMagicLink.expiresAt)}
+                </p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Button
                     type="button"
@@ -547,22 +646,30 @@ function AdminRequestDetailContent() {
                   </a>
                 </div>
                 {magicLinkCopyState === "failed" ? (
-                  <p className="mt-2 text-xs text-rose-700">Copy failed. Please copy link manually.</p>
+                  <p className="mt-2 text-xs text-rose-700">
+                    Copy failed. Please copy link manually.
+                  </p>
                 ) : null}
               </div>
             ) : null}
           </section>
 
           <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-semibold text-slate-900">Upload attachment</h2>
-            <p className="mt-2 text-sm text-slate-700">Uses presign, upload, and complete flow (same as production path).</p>
+            <h2 className="text-lg font-semibold text-slate-900">
+              Upload attachment
+            </h2>
+            <p className="mt-2 text-sm text-slate-700">
+              Uses presign, upload, and complete flow (same as production path).
+            </p>
 
             <div className="mt-4 grid gap-4 md:grid-cols-2">
               <SelectField
                 id="uploadFileKind"
                 label="File kind"
                 value={uploadFileKind}
-                onChange={(event) => setUploadFileKind(event.target.value as FileKind)}
+                onChange={(event) =>
+                  setUploadFileKind(event.target.value as FileKind)
+                }
               >
                 <option value="DOCUMENT">DOCUMENT</option>
                 <option value="IMAGE">IMAGE</option>
@@ -570,7 +677,10 @@ function AdminRequestDetailContent() {
               </SelectField>
 
               <div className="space-y-2">
-                <label htmlFor="uploadFile" className="block text-sm font-medium text-slate-800">
+                <label
+                  htmlFor="uploadFile"
+                  className="block text-sm font-medium text-slate-800"
+                >
                   File
                 </label>
                 <input
@@ -582,7 +692,9 @@ function AdminRequestDetailContent() {
                     const file = event.target.files?.[0] || null;
                     setUploadFile(file);
                     if (file) {
-                      const inferredKind = inferFileKindFromMimeType(resolveUploadMimeType(file) ?? "");
+                      const inferredKind = inferFileKindFromMimeType(
+                        resolveUploadMimeType(file) ?? "",
+                      );
                       if (inferredKind) {
                         setUploadFileKind(inferredKind);
                       }
@@ -591,7 +703,9 @@ function AdminRequestDetailContent() {
                 />
               </div>
             </div>
-            <p className="mt-2 text-xs text-slate-500">{getAttachmentPolicySummary(uploadFileKind)}</p>
+            <p className="mt-2 text-xs text-slate-500">
+              {getAttachmentPolicySummary(uploadFileKind)}
+            </p>
 
             {uploadFile ? (
               <p className="mt-3 text-sm text-slate-700">
@@ -600,55 +714,88 @@ function AdminRequestDetailContent() {
             ) : null}
 
             <div className="mt-4">
-              <Button type="button" disabled={uploading || !uploadFile} onClick={() => void handleUpload()}>
+              <Button
+                type="button"
+                disabled={uploading || !uploadFile}
+                onClick={() => void handleUpload()}
+              >
                 {uploading ? "Uploading..." : "Upload attachment"}
               </Button>
             </div>
           </section>
 
           <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-semibold text-slate-900">Attachments</h2>
+            <h2 className="text-lg font-semibold text-slate-900">
+              Attachments
+            </h2>
 
             {detail.attachments.length === 0 ? (
               <p className="mt-3 text-sm text-slate-600">No attachments.</p>
             ) : (
               <>
                 <ul className="mt-3 space-y-2">
-                {detail.attachments.map((attachment) => (
-                  <li key={attachment.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                    <div className="text-sm text-slate-700">
-                      <p className="font-medium text-slate-900">{attachment.fileName}</p>
-                      <p>
-                        {attachment.fileKind} | {attachment.fileKind === "DOCUMENT" ? getDocumentTypeLabel(attachment.mimeType, attachment.fileName) : attachment.mimeType} | {formatFileSize(attachment.fileSize)}
-                      </p>
-                      <p className="text-xs text-slate-500">{formatDateTime(attachment.createdAt)}</p>
-                    </div>
+                  {detail.attachments.map((attachment) => (
+                    <li
+                      key={attachment.id}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"
+                    >
+                      <div className="text-sm text-slate-700">
+                        <p className="font-medium text-slate-900">
+                          {attachment.fileName}
+                        </p>
+                        <p>
+                          {attachment.fileKind} |{" "}
+                          {attachment.fileKind === "DOCUMENT"
+                            ? getDocumentTypeLabel(
+                                attachment.mimeType,
+                                attachment.fileName,
+                              )
+                            : attachment.mimeType}{" "}
+                          | {formatFileSize(attachment.fileSize)}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          {formatDateTime(attachment.createdAt)}
+                        </p>
+                      </div>
 
-                    <div className="flex items-center gap-2">
-                      {isVideoAttachment(attachment.fileKind, attachment.mimeType) ? (
+                      <div className="flex items-center gap-2">
+                        {isVideoAttachment(
+                          attachment.fileKind,
+                          attachment.mimeType,
+                        ) ? (
+                          <Button
+                            type="button"
+                            className="bg-white text-slate-700 ring-1 ring-slate-300 hover:bg-slate-100"
+                            onClick={() =>
+                              void handlePreviewAttachment(
+                                attachment.id,
+                                attachment.fileName,
+                              )
+                            }
+                            disabled={previewingAttachmentId === attachment.id}
+                          >
+                            {previewingAttachmentId === attachment.id
+                              ? "Preparing..."
+                              : "Preview"}
+                          </Button>
+                        ) : null}
+
                         <Button
                           type="button"
                           className="bg-white text-slate-700 ring-1 ring-slate-300 hover:bg-slate-100"
-                          onClick={() => void handlePreviewAttachment(attachment.id, attachment.fileName)}
-                          disabled={previewingAttachmentId === attachment.id}
+                          onClick={() =>
+                            void handleDownloadAttachment(attachment.id)
+                          }
+                          disabled={downloadingAttachmentId === attachment.id}
                         >
-                          {previewingAttachmentId === attachment.id ? "Preparing..." : "Preview"}
+                          {downloadingAttachmentId === attachment.id
+                            ? "Preparing..."
+                            : "Download"}
                         </Button>
-                      ) : null}
-
-                      <Button
-                        type="button"
-                        className="bg-white text-slate-700 ring-1 ring-slate-300 hover:bg-slate-100"
-                        onClick={() => void handleDownloadAttachment(attachment.id)}
-                        disabled={downloadingAttachmentId === attachment.id}
-                      >
-                        {downloadingAttachmentId === attachment.id ? "Preparing..." : "Download"}
-                      </Button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-
+                      </div>
+                    </li>
+                  ))}
+                </ul>
               </>
             )}
           </section>
@@ -661,14 +808,24 @@ function AdminRequestDetailContent() {
             ) : (
               <ol className="mt-3 space-y-3">
                 {detail.activityLogs.map((log) => (
-                  <li key={log.id} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                  <li
+                    key={log.id}
+                    className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700"
+                  >
                     <p className="font-semibold text-slate-900">{log.action}</p>
                     <p>
                       {log.fromStatus ?? "-"} to {log.toStatus ?? "-"}
                     </p>
-                    <p>By: {log.operator?.displayName || log.actorDisplayName || log.actorRole}</p>
+                    <p>
+                      By:{" "}
+                      {log.operator?.displayName ||
+                        log.actorDisplayName ||
+                        log.actorRole}
+                    </p>
                     {log.note ? <p>Note: {log.note}</p> : null}
-                    <p className="text-xs text-slate-500">{formatDateTime(log.createdAt)}</p>
+                    <p className="text-xs text-slate-500">
+                      {formatDateTime(log.createdAt)}
+                    </p>
                   </li>
                 ))}
               </ol>
@@ -685,7 +842,11 @@ function AdminRequestDetailContent() {
 
       <VideoPreviewModal
         open={Boolean(videoPreview)}
-        title={videoPreview ? `Video preview: ${videoPreview.fileName}` : "Video preview"}
+        title={
+          videoPreview
+            ? `Video preview: ${videoPreview.fileName}`
+            : "Video preview"
+        }
         src={videoPreview?.url ?? ""}
         onClose={() => setVideoPreview(null)}
       />

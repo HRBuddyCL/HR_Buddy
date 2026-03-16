@@ -22,6 +22,8 @@ export type MessengerLinkDetail = {
     type: "MESSENGER";
     status: RequestStatus;
     urgency: Urgency;
+    employeeName: string;
+    phone: string;
     latestActivityAt: string;
   };
   messengerDetail: {
@@ -31,7 +33,7 @@ export type MessengerLinkDetail = {
     outsideBkkMetro: boolean;
     deliveryService: "POST" | "NAKHONCHAI_AIR" | "OTHER" | null;
     deliveryServiceOther: string | null;
-    senderAddress: MessengerAddress;
+    senderAddress: MessengerAddress | null;
     receiverAddress: MessengerAddress;
   };
   expiresAt: string;
@@ -55,12 +57,18 @@ export async function getMessengerLink(token: string) {
   });
 }
 
-export async function updateMessengerLinkStatus(token: string, payload: MessengerStatusUpdatePayload) {
-  return apiFetch<{ id: string; requestNo: string; status: RequestStatus }>("/messenger/link/status", {
-    method: "PATCH",
-    headers: tokenHeaders(token),
-    body: payload,
-  });
+export async function updateMessengerLinkStatus(
+  token: string,
+  payload: MessengerStatusUpdatePayload,
+) {
+  return apiFetch<{ id: string; requestNo: string; status: RequestStatus }>(
+    "/messenger/link/status",
+    {
+      method: "PATCH",
+      headers: tokenHeaders(token),
+      body: payload,
+    },
+  );
 }
 
 export async function reportMessengerProblem(token: string, note: string) {

@@ -89,7 +89,7 @@ async function upsertRequest(base: {
     | 'DONE'
     | 'REJECTED'
     | 'CANCELED';
-  urgency: 'LOW' | 'NORMAL' | 'HIGH' | 'CRITICAL';
+  urgency: 'NORMAL' | 'HIGH' | 'CRITICAL';
   employeeName: string;
   departmentId: string;
   phone: string;

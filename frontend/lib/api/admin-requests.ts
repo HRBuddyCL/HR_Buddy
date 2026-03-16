@@ -140,7 +140,7 @@ export type AdminRequestDetail = {
       soi: string | null;
       road: string | null;
       extra: string | null;
-    };
+    } | null;
     receiverAddress: {
       name: string;
       phone: string;

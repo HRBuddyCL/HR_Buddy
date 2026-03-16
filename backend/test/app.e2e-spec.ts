@@ -949,15 +949,6 @@ describe('HR Buddy API (e2e)', () => {
         itemType: 'PACKAGE',
         itemDescription: 'Documents package',
         outsideBkkMetro: false,
-        sender: {
-          name: 'John',
-          phone: '0811111111',
-          province: 'Bangkok',
-          district: 'Chatuchak',
-          subdistrict: 'Chatuchak',
-          postalCode: '10900',
-          houseNo: '1/1',
-        },
         receiver: {
           name: 'Jane',
           phone: '0899999999',

@@ -31,7 +31,7 @@ type AnonymizeRequestProjection = {
   status: RequestStatus;
   closedAt: Date | null;
   messengerBookingDetail: {
-    senderAddressId: string;
+    senderAddressId: string | null;
     receiverAddressId: string;
   } | null;
   documentRequestDetail: {

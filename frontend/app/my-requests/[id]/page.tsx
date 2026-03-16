@@ -1,10 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+} from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { RouteGuard } from "@/components/guards/route-guard";
-import { Button, SelectField, TextareaField } from "@/components/ui/form-controls";
+import {
+  Button,
+  SelectField,
+  TextareaField,
+} from "@/components/ui/form-controls";
 import { VideoPreviewModal } from "@/components/ui/video-preview-modal";
 import { downloadFileFromPresignedUrl } from "@/lib/attachments/download";
 import { getDocumentTypeLabel } from "@/lib/attachments/document-type-label";
@@ -26,6 +36,7 @@ import {
   type FileKind,
   type RequestDetail,
   type RequestStatus,
+  type Urgency,
 } from "@/lib/api/my-requests";
 
 const cancellableStatuses: RequestStatus[] = ["NEW", "APPROVED"];
@@ -38,6 +49,12 @@ const statusColorClass: Record<RequestStatus, string> = {
   DONE: "bg-emerald-100 text-emerald-800",
   REJECTED: "bg-rose-100 text-rose-800",
   CANCELED: "bg-slate-200 text-slate-800",
+};
+
+const urgencyLabelMap: Record<Urgency, string> = {
+  NORMAL: "ปกติ",
+  HIGH: "สูง",
+  CRITICAL: "เร่งด่วน",
 };
 
 function formatDateTime(iso?: string | null) {
@@ -91,9 +108,17 @@ function MyRequestDetailContent() {
   const [uploadFileKind, setUploadFileKind] = useState<FileKind>("DOCUMENT");
   const [uploadFile, setUploadFile] = useState<File | null>(null);
 
-  const [downloadingAttachmentId, setDownloadingAttachmentId] = useState<string | null>(null);
-  const [previewingAttachmentId, setPreviewingAttachmentId] = useState<string | null>(null);
-  const [videoPreview, setVideoPreview] = useState<{ attachmentId: string; fileName: string; url: string } | null>(null);
+  const [downloadingAttachmentId, setDownloadingAttachmentId] = useState<
+    string | null
+  >(null);
+  const [previewingAttachmentId, setPreviewingAttachmentId] = useState<
+    string | null
+  >(null);
+  const [videoPreview, setVideoPreview] = useState<{
+    attachmentId: string;
+    fileName: string;
+    url: string;
+  } | null>(null);
 
   const canCancel = useMemo(() => {
     if (!detail) {
@@ -211,7 +236,11 @@ function MyRequestDetailContent() {
     setErrorMessage(null);
 
     try {
-      const result = await getMyRequestAttachmentDownloadUrl(detail.id, attachmentId, "download");
+      const result = await getMyRequestAttachmentDownloadUrl(
+        detail.id,
+        attachmentId,
+        "download",
+      );
       await downloadFileFromPresignedUrl({
         downloadUrl: result.downloadUrl,
         fallbackFileName: result.fileName,
@@ -227,7 +256,10 @@ function MyRequestDetailContent() {
     }
   };
 
-  const handlePreviewAttachment = async (attachmentId: string, fileName: string) => {
+  const handlePreviewAttachment = async (
+    attachmentId: string,
+    fileName: string,
+  ) => {
     if (!detail) {
       return;
     }
@@ -236,7 +268,11 @@ function MyRequestDetailContent() {
     setErrorMessage(null);
 
     try {
-      const result = await getMyRequestAttachmentDownloadUrl(detail.id, attachmentId, "inline");
+      const result = await getMyRequestAttachmentDownloadUrl(
+        detail.id,
+        attachmentId,
+        "inline",
+      );
       setVideoPreview({
         attachmentId,
         fileName,
@@ -258,9 +294,16 @@ function MyRequestDetailContent() {
       <header className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-wide text-slate-600">Phase 3 - OTP and Tracking</p>
-            <h1 className="mt-2 text-3xl font-semibold text-slate-900">Request Detail</h1>
-            <p className="mt-2 text-slate-700">View timeline, attachments, and available actions for your request.</p>
+            <p className="text-sm font-semibold uppercase tracking-wide text-slate-600">
+              Phase 3 - OTP and Tracking
+            </p>
+            <h1 className="mt-2 text-3xl font-semibold text-slate-900">
+              Request Detail
+            </h1>
+            <p className="mt-2 text-slate-700">
+              View timeline, attachments, and available actions for your
+              request.
+            </p>
           </div>
 
           <div className="flex items-center gap-2">
@@ -271,40 +314,57 @@ function MyRequestDetailContent() {
             >
               Refresh
             </Button>
-            <Link href="/my-requests" className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white">
+            <Link
+              href="/my-requests"
+              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white"
+            >
               Back to list
             </Link>
           </div>
         </div>
       </header>
 
-      {loading ? <p className="text-sm text-slate-700">Loading request detail...</p> : null}
+      {loading ? (
+        <p className="text-sm text-slate-700">Loading request detail...</p>
+      ) : null}
 
       {!loading && detail ? (
         <>
           <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{detail.type}</p>
-                <h2 className="text-2xl font-semibold text-slate-900">{detail.requestNo}</h2>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  {detail.type}
+                </p>
+                <h2 className="text-2xl font-semibold text-slate-900">
+                  {detail.requestNo}
+                </h2>
               </div>
-              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusColorClass[detail.status]}`}>
+              <span
+                className={`rounded-full px-3 py-1 text-xs font-semibold ${statusColorClass[detail.status]}`}
+              >
                 {detail.status}
               </span>
             </div>
 
             <div className="mt-4 grid gap-3 md:grid-cols-3">
               <div className="rounded-lg bg-slate-50 p-3">
-                <p className="text-xs text-slate-500">Urgency</p>
-                <p className="font-medium text-slate-900">{detail.urgency}</p>
+                <p className="text-xs text-slate-500">ความเร่งด่วน</p>
+                <p className="font-medium text-slate-900">
+                  {urgencyLabelMap[detail.urgency]}
+                </p>
               </div>
               <div className="rounded-lg bg-slate-50 p-3">
                 <p className="text-xs text-slate-500">Department</p>
-                <p className="font-medium text-slate-900">{detail.department.name}</p>
+                <p className="font-medium text-slate-900">
+                  {detail.department.name}
+                </p>
               </div>
               <div className="rounded-lg bg-slate-50 p-3">
                 <p className="text-xs text-slate-500">Latest activity</p>
-                <p className="font-medium text-slate-900">{formatDateTime(detail.latestActivityAt)}</p>
+                <p className="font-medium text-slate-900">
+                  {formatDateTime(detail.latestActivityAt)}
+                </p>
               </div>
             </div>
 
@@ -324,14 +384,18 @@ function MyRequestDetailContent() {
           </section>
 
           <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-semibold text-slate-900">Service detail</h2>
+            <h2 className="text-lg font-semibold text-slate-900">
+              Service detail
+            </h2>
 
             {detail.buildingRepairDetail ? (
               <div className="mt-3 space-y-2 text-sm text-slate-700">
                 <p>Building: {detail.buildingRepairDetail.building}</p>
                 <p>Floor: {detail.buildingRepairDetail.floor}</p>
                 <p>Location: {detail.buildingRepairDetail.locationDetail}</p>
-                <p>Category: {detail.buildingRepairDetail.problemCategory.name}</p>
+                <p>
+                  Category: {detail.buildingRepairDetail.problemCategory.name}
+                </p>
                 <p>Description: {detail.buildingRepairDetail.description}</p>
               </div>
             ) : null}
@@ -339,41 +403,66 @@ function MyRequestDetailContent() {
             {detail.vehicleRepairDetail ? (
               <div className="mt-3 space-y-2 text-sm text-slate-700">
                 <p>Vehicle plate: {detail.vehicleRepairDetail.vehiclePlate}</p>
-                <p>Issue category: {detail.vehicleRepairDetail.issueCategory.name}</p>
+                <p>
+                  Issue category:{" "}
+                  {detail.vehicleRepairDetail.issueCategory.name}
+                </p>
                 <p>Symptom: {detail.vehicleRepairDetail.symptom}</p>
               </div>
             ) : null}
 
             {detail.messengerBookingDetail ? (
               <div className="mt-3 space-y-2 text-sm text-slate-700">
-                <p>Pickup datetime: {formatDateTime(detail.messengerBookingDetail.pickupDatetime)}</p>
+                <p>
+                  Pickup datetime:{" "}
+                  {formatDateTime(detail.messengerBookingDetail.pickupDatetime)}
+                </p>
                 <p>Item type: {detail.messengerBookingDetail.itemType}</p>
-                <p>Item description: {detail.messengerBookingDetail.itemDescription}</p>
-                <p>Outside BKK metro: {detail.messengerBookingDetail.outsideBkkMetro ? "Yes" : "No"}</p>
+                <p>
+                  Item description:{" "}
+                  {detail.messengerBookingDetail.itemDescription}
+                </p>
+                <p>
+                  Outside BKK metro:{" "}
+                  {detail.messengerBookingDetail.outsideBkkMetro ? "Yes" : "No"}
+                </p>
               </div>
             ) : null}
 
             {detail.documentRequestDetail ? (
               <div className="mt-3 space-y-2 text-sm text-slate-700">
                 <p>Site: {detail.documentRequestDetail.siteNameRaw}</p>
-                <p>Document: {detail.documentRequestDetail.documentDescription}</p>
+                <p>
+                  Document: {detail.documentRequestDetail.documentDescription}
+                </p>
                 <p>Purpose: {detail.documentRequestDetail.purpose}</p>
-                <p>Needed date: {formatDateTime(detail.documentRequestDetail.neededDate)}</p>
-                <p>Delivery method: {detail.documentRequestDetail.deliveryMethod}</p>
+                <p>
+                  Needed date:{" "}
+                  {formatDateTime(detail.documentRequestDetail.neededDate)}
+                </p>
+                <p>
+                  Delivery method: {detail.documentRequestDetail.deliveryMethod}
+                </p>
               </div>
             ) : null}
           </section>
 
           <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-semibold text-slate-900">Upload attachment</h2>
-            <p className="mt-2 text-sm text-slate-700">Uses the same presign upload flow as production.</p>
+            <h2 className="text-lg font-semibold text-slate-900">
+              Upload attachment
+            </h2>
+            <p className="mt-2 text-sm text-slate-700">
+              Uses the same presign upload flow as production.
+            </p>
 
             <div className="mt-4 grid gap-4 md:grid-cols-2">
               <SelectField
                 id="uploadFileKind"
                 label="File kind"
                 value={uploadFileKind}
-                onChange={(event) => setUploadFileKind(event.target.value as FileKind)}
+                onChange={(event) =>
+                  setUploadFileKind(event.target.value as FileKind)
+                }
               >
                 <option value="DOCUMENT">DOCUMENT</option>
                 <option value="IMAGE">IMAGE</option>
@@ -381,7 +470,10 @@ function MyRequestDetailContent() {
               </SelectField>
 
               <div className="space-y-2">
-                <label htmlFor="uploadFile" className="block text-sm font-medium text-slate-800">
+                <label
+                  htmlFor="uploadFile"
+                  className="block text-sm font-medium text-slate-800"
+                >
                   File
                 </label>
                 <input
@@ -393,7 +485,9 @@ function MyRequestDetailContent() {
                     const file = event.target.files?.[0] || null;
                     setUploadFile(file);
                     if (file) {
-                      const inferredKind = inferFileKindFromMimeType(resolveUploadMimeType(file) ?? "");
+                      const inferredKind = inferFileKindFromMimeType(
+                        resolveUploadMimeType(file) ?? "",
+                      );
                       if (inferredKind) {
                         setUploadFileKind(inferredKind);
                       }
@@ -402,7 +496,9 @@ function MyRequestDetailContent() {
                 />
               </div>
             </div>
-            <p className="mt-2 text-xs text-slate-500">{getAttachmentPolicySummary(uploadFileKind)}</p>
+            <p className="mt-2 text-xs text-slate-500">
+              {getAttachmentPolicySummary(uploadFileKind)}
+            </p>
 
             {uploadFile ? (
               <p className="mt-3 text-sm text-slate-700">
@@ -411,53 +507,85 @@ function MyRequestDetailContent() {
             ) : null}
 
             <div className="mt-4">
-              <Button type="button" disabled={uploading || !uploadFile} onClick={() => void handleUpload()}>
+              <Button
+                type="button"
+                disabled={uploading || !uploadFile}
+                onClick={() => void handleUpload()}
+              >
                 {uploading ? "Uploading..." : "Upload attachment"}
               </Button>
             </div>
           </section>
 
           <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-semibold text-slate-900">Attachments</h2>
+            <h2 className="text-lg font-semibold text-slate-900">
+              Attachments
+            </h2>
 
             {detail.attachments.length === 0 ? (
               <p className="mt-3 text-sm text-slate-600">No attachments.</p>
             ) : (
               <>
                 <ul className="mt-3 space-y-2">
-                {detail.attachments.map((attachment) => (
-                  <li key={attachment.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                    <div className="text-sm text-slate-700">
-                      <p className="font-medium text-slate-900">{attachment.fileName}</p>
-                      <p>
-                        {attachment.fileKind} | {attachment.fileKind === "DOCUMENT" ? getDocumentTypeLabel(attachment.mimeType, attachment.fileName) : attachment.mimeType} | {formatFileSize(attachment.fileSize)} | {formatDateTime(attachment.createdAt)}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {isVideoAttachment(attachment.fileKind, attachment.mimeType) ? (
+                  {detail.attachments.map((attachment) => (
+                    <li
+                      key={attachment.id}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"
+                    >
+                      <div className="text-sm text-slate-700">
+                        <p className="font-medium text-slate-900">
+                          {attachment.fileName}
+                        </p>
+                        <p>
+                          {attachment.fileKind} |{" "}
+                          {attachment.fileKind === "DOCUMENT"
+                            ? getDocumentTypeLabel(
+                                attachment.mimeType,
+                                attachment.fileName,
+                              )
+                            : attachment.mimeType}{" "}
+                          | {formatFileSize(attachment.fileSize)} |{" "}
+                          {formatDateTime(attachment.createdAt)}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {isVideoAttachment(
+                          attachment.fileKind,
+                          attachment.mimeType,
+                        ) ? (
+                          <Button
+                            type="button"
+                            className="bg-white text-slate-700 ring-1 ring-slate-300 hover:bg-slate-100"
+                            onClick={() =>
+                              void handlePreviewAttachment(
+                                attachment.id,
+                                attachment.fileName,
+                              )
+                            }
+                            disabled={previewingAttachmentId === attachment.id}
+                          >
+                            {previewingAttachmentId === attachment.id
+                              ? "Preparing..."
+                              : "Preview"}
+                          </Button>
+                        ) : null}
+
                         <Button
                           type="button"
                           className="bg-white text-slate-700 ring-1 ring-slate-300 hover:bg-slate-100"
-                          onClick={() => void handlePreviewAttachment(attachment.id, attachment.fileName)}
-                          disabled={previewingAttachmentId === attachment.id}
+                          onClick={() =>
+                            void handleDownloadAttachment(attachment.id)
+                          }
+                          disabled={downloadingAttachmentId === attachment.id}
                         >
-                          {previewingAttachmentId === attachment.id ? "Preparing..." : "Preview"}
+                          {downloadingAttachmentId === attachment.id
+                            ? "Preparing..."
+                            : "Download"}
                         </Button>
-                      ) : null}
-
-                      <Button
-                        type="button"
-                        className="bg-white text-slate-700 ring-1 ring-slate-300 hover:bg-slate-100"
-                        onClick={() => void handleDownloadAttachment(attachment.id)}
-                        disabled={downloadingAttachmentId === attachment.id}
-                      >
-                        {downloadingAttachmentId === attachment.id ? "Preparing..." : "Download"}
-                      </Button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-
+                      </div>
+                    </li>
+                  ))}
+                </ul>
               </>
             )}
           </section>
@@ -470,14 +598,24 @@ function MyRequestDetailContent() {
             ) : (
               <ol className="mt-3 space-y-3">
                 {detail.activityLogs.map((log) => (
-                  <li key={log.id} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                  <li
+                    key={log.id}
+                    className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700"
+                  >
                     <p className="font-semibold text-slate-900">{log.action}</p>
                     <p>
                       {log.fromStatus ?? "-"} to {log.toStatus ?? "-"}
                     </p>
-                    <p>By: {log.operator?.displayName || log.actorDisplayName || log.actorRole}</p>
+                    <p>
+                      By:{" "}
+                      {log.operator?.displayName ||
+                        log.actorDisplayName ||
+                        log.actorRole}
+                    </p>
                     {log.note ? <p>Note: {log.note}</p> : null}
-                    <p className="text-xs text-slate-500">{formatDateTime(log.createdAt)}</p>
+                    <p className="text-xs text-slate-500">
+                      {formatDateTime(log.createdAt)}
+                    </p>
                   </li>
                 ))}
               </ol>
@@ -486,8 +624,12 @@ function MyRequestDetailContent() {
 
           {canCancel ? (
             <section className="rounded-2xl border border-rose-200 bg-white p-6 shadow-sm">
-              <h2 className="text-lg font-semibold text-slate-900">Cancel request</h2>
-              <p className="mt-2 text-sm text-slate-700">You can cancel only when status is NEW or APPROVED.</p>
+              <h2 className="text-lg font-semibold text-slate-900">
+                Cancel request
+              </h2>
+              <p className="mt-2 text-sm text-slate-700">
+                You can cancel only when status is NEW or APPROVED.
+              </p>
 
               <form className="mt-4 space-y-3" onSubmit={handleCancel}>
                 <TextareaField
@@ -501,7 +643,11 @@ function MyRequestDetailContent() {
                   placeholder="Please provide cancellation reason"
                 />
 
-                <Button type="submit" disabled={canceling} className="bg-rose-600 hover:bg-rose-500">
+                <Button
+                  type="submit"
+                  disabled={canceling}
+                  className="bg-rose-600 hover:bg-rose-500"
+                >
                   {canceling ? "Canceling..." : "Confirm cancel request"}
                 </Button>
               </form>
@@ -518,7 +664,11 @@ function MyRequestDetailContent() {
 
       <VideoPreviewModal
         open={Boolean(videoPreview)}
-        title={videoPreview ? `Video preview: ${videoPreview.fileName}` : "Video preview"}
+        title={
+          videoPreview
+            ? `Video preview: ${videoPreview.fileName}`
+            : "Video preview"
+        }
         src={videoPreview?.url ?? ""}
         onClose={() => setVideoPreview(null)}
       />

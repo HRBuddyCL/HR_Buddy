@@ -103,10 +103,10 @@ export class CreateMessengerRequestDto {
   @MaxLength(120)
   deliveryServiceOther?: string;
 
-  @IsDefined()
+  @IsOptional()
   @ValidateNested()
   @Type(() => AddressDto)
-  sender!: AddressDto;
+  sender?: AddressDto;
 
   @IsDefined()
   @ValidateNested()

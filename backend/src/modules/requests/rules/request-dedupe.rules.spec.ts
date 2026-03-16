@@ -80,7 +80,7 @@ describe('request dedupe rules', () => {
     expect(duplicated).toBe(false);
   });
 
-  it('detects duplicate messenger request with same sender/receiver snapshot', () => {
+  it('detects duplicate messenger request with same receiver snapshot', () => {
     const recent = {
       ...baseCandidate(),
       messengerBookingDetail: {
@@ -90,18 +90,7 @@ describe('request dedupe rules', () => {
         outsideBkkMetro: false,
         deliveryService: null,
         deliveryServiceOther: null,
-        senderAddress: {
-          name: 'Alice',
-          phone: '0811111111',
-          province: 'Bangkok',
-          district: 'Sathon',
-          subdistrict: 'Yan Nawa',
-          postalCode: '10120',
-          houseNo: '88/1',
-          soi: null,
-          road: null,
-          extra: null,
-        },
+        senderAddress: null,
         receiverAddress: {
           name: 'Bob',
           phone: '0822222222',
@@ -127,15 +116,6 @@ describe('request dedupe rules', () => {
         itemType: 'DOCUMENT',
         itemDescription: 'contract papers',
         outsideBkkMetro: false,
-        sender: {
-          name: 'Alice',
-          phone: '0811111111',
-          province: 'Bangkok',
-          district: 'Sathon',
-          subdistrict: 'Yan Nawa',
-          postalCode: '10120',
-          houseNo: '88/1',
-        },
         receiver: {
           name: 'Bob',
           phone: '0822222222',

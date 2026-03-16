@@ -4,12 +4,12 @@ const OTHER_DEPARTMENT_ID = 'dept_other';
 
 export function assertDepartmentOtherRule(params: {
   departmentId: string;
-  departmentName: string;
+  departmentName?: string | null;
   departmentOther?: string | null;
 }) {
   const { departmentId, departmentName, departmentOther } = params;
 
-  const normalizedDepartmentName = departmentName.trim().toLowerCase();
+  const normalizedDepartmentName = (departmentName ?? '').trim().toLowerCase();
   const isOtherDepartment =
     departmentId === OTHER_DEPARTMENT_ID ||
     normalizedDepartmentName === 'other' ||

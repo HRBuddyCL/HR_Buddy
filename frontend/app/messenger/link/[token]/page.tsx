@@ -158,7 +158,10 @@ export default function Page() {
       return false;
     }
 
-    return detail.request.status === "APPROVED" || detail.request.status === "IN_TRANSIT";
+    return (
+      detail.request.status === "APPROVED" ||
+      detail.request.status === "IN_TRANSIT"
+    );
   }, [detail]);
 
   const handleUpdateStatus = async () => {
@@ -259,8 +262,12 @@ export default function Page() {
     return (
       <main className="mx-auto flex min-h-screen w-full max-w-3xl flex-col gap-6 px-4 py-8 sm:px-6">
         <section className="rounded-2xl border border-rose-200 bg-rose-50 p-6 shadow-sm">
-          <h1 className="text-xl font-semibold text-rose-900">Messenger link unavailable</h1>
-          <p className="mt-2 text-sm text-rose-700">{errorMessage ?? "This link is invalid or expired"}</p>
+          <h1 className="text-xl font-semibold text-rose-900">
+            Messenger link unavailable
+          </h1>
+          <p className="mt-2 text-sm text-rose-700">
+            {errorMessage ?? "This link is invalid or expired"}
+          </p>
         </section>
       </main>
     );
@@ -269,13 +276,21 @@ export default function Page() {
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-3xl flex-col gap-6 px-4 py-8 sm:px-6">
       <header className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Messenger Magic Link</p>
-        <h1 className="mt-2 text-2xl font-semibold text-slate-900">{detail.request.requestNo}</h1>
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          Messenger Magic Link
+        </p>
+        <h1 className="mt-2 text-2xl font-semibold text-slate-900">
+          {detail.request.requestNo}
+        </h1>
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${statusBadgeClass(detail.request.status)}`}>
+          <span
+            className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${statusBadgeClass(detail.request.status)}`}
+          >
             {statusLabel(detail.request.status)}
           </span>
-          <span className="text-xs text-slate-500">Expires: {formatDateTime(detail.expiresAt)}</span>
+          <span className="text-xs text-slate-500">
+            Expires: {formatDateTime(detail.expiresAt)}
+          </span>
         </div>
         {isExpired ? (
           <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">
@@ -288,23 +303,31 @@ export default function Page() {
         <h2 className="text-lg font-semibold text-slate-900">Job Detail</h2>
         <div className="mt-4 space-y-2 text-sm text-slate-700">
           <p>
-            <span className="font-medium text-slate-900">Pickup:</span> {formatDateTime(detail.messengerDetail.pickupDatetime)}
+            <span className="font-medium text-slate-900">Pickup:</span>{" "}
+            {formatDateTime(detail.messengerDetail.pickupDatetime)}
           </p>
           <p>
-            <span className="font-medium text-slate-900">Item Type:</span> {detail.messengerDetail.itemType}
+            <span className="font-medium text-slate-900">Item Type:</span>{" "}
+            {detail.messengerDetail.itemType}
           </p>
           <p>
-            <span className="font-medium text-slate-900">Description:</span> {detail.messengerDetail.itemDescription}
+            <span className="font-medium text-slate-900">Description:</span>{" "}
+            {detail.messengerDetail.itemDescription}
           </p>
           <p>
-            <span className="font-medium text-slate-900">Outside BKK Metro:</span> {detail.messengerDetail.outsideBkkMetro ? "Yes" : "No"}
+            <span className="font-medium text-slate-900">
+              Outside BKK Metro:
+            </span>{" "}
+            {detail.messengerDetail.outsideBkkMetro ? "Yes" : "No"}
           </p>
           {detail.messengerDetail.outsideBkkMetro ? (
             <p>
-              <span className="font-medium text-slate-900">Delivery Service:</span>{" "}
+              <span className="font-medium text-slate-900">
+                Delivery Service:
+              </span>{" "}
               {detail.messengerDetail.deliveryService === "OTHER"
-                ? detail.messengerDetail.deliveryServiceOther ?? "OTHER"
-                : detail.messengerDetail.deliveryService ?? "-"}
+                ? (detail.messengerDetail.deliveryServiceOther ?? "OTHER")
+                : (detail.messengerDetail.deliveryService ?? "-")}
             </p>
           ) : null}
         </div>
@@ -313,10 +336,16 @@ export default function Page() {
       <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <h2 className="text-lg font-semibold text-slate-900">Sender</h2>
         <div className="mt-3 space-y-1 text-sm text-slate-700">
-          <p>{detail.messengerDetail.senderAddress.name}</p>
-          <p>{detail.messengerDetail.senderAddress.phone}</p>
-          <p>{renderAddressLines(detail.messengerDetail.senderAddress)}</p>
-          {detail.messengerDetail.senderAddress.extra ? <p>Note: {detail.messengerDetail.senderAddress.extra}</p> : null}
+          <p>{detail.request.employeeName}</p>
+          <p>{detail.request.phone}</p>
+          {detail.messengerDetail.senderAddress ? (
+            <>
+              <p>{renderAddressLines(detail.messengerDetail.senderAddress)}</p>
+              {detail.messengerDetail.senderAddress.extra ? (
+                <p>Note: {detail.messengerDetail.senderAddress.extra}</p>
+              ) : null}
+            </>
+          ) : null}
         </div>
       </section>
 
@@ -326,17 +355,23 @@ export default function Page() {
           <p>{detail.messengerDetail.receiverAddress.name}</p>
           <p>{detail.messengerDetail.receiverAddress.phone}</p>
           <p>{renderAddressLines(detail.messengerDetail.receiverAddress)}</p>
-          {detail.messengerDetail.receiverAddress.extra ? <p>Note: {detail.messengerDetail.receiverAddress.extra}</p> : null}
+          {detail.messengerDetail.receiverAddress.extra ? (
+            <p>Note: {detail.messengerDetail.receiverAddress.extra}</p>
+          ) : null}
         </div>
       </section>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <h2 className="text-lg font-semibold text-slate-900">Actions</h2>
-        <p className="mt-1 text-sm text-slate-600">Update status, record pickup event, or report issue to HR.</p>
+        <p className="mt-1 text-sm text-slate-600">
+          Update status, record pickup event, or report issue to HR.
+        </p>
 
         <div className="mt-4 space-y-4">
           <div className="rounded-xl border border-slate-200 p-4">
-            <h3 className="text-sm font-semibold text-slate-900">Update Status</h3>
+            <h3 className="text-sm font-semibold text-slate-900">
+              Update Status
+            </h3>
             <p className="mt-1 text-xs text-slate-500">
               Allowed: APPROVED ? IN_TRANSIT, IN_TRANSIT ? DONE
             </p>
@@ -355,7 +390,13 @@ export default function Page() {
               <Button
                 type="button"
                 onClick={handleUpdateStatus}
-                disabled={!nextStatus || isExpired || updatingStatus || sendingPickup || sendingProblem}
+                disabled={
+                  !nextStatus ||
+                  isExpired ||
+                  updatingStatus ||
+                  sendingPickup ||
+                  sendingProblem
+                }
               >
                 {updatingStatus
                   ? "Updating..."
@@ -367,7 +408,9 @@ export default function Page() {
           </div>
 
           <div className="rounded-xl border border-slate-200 p-4">
-            <h3 className="text-sm font-semibold text-slate-900">Pickup Event</h3>
+            <h3 className="text-sm font-semibold text-slate-900">
+              Pickup Event
+            </h3>
             <div className="mt-3">
               <TextareaField
                 id="pickupNote"
@@ -383,7 +426,13 @@ export default function Page() {
               <Button
                 type="button"
                 onClick={handlePickupEvent}
-                disabled={!canSendPickup || isExpired || sendingPickup || updatingStatus || sendingProblem}
+                disabled={
+                  !canSendPickup ||
+                  isExpired ||
+                  sendingPickup ||
+                  updatingStatus ||
+                  sendingProblem
+                }
               >
                 {sendingPickup ? "Sending..." : "Mark Pickup Event"}
               </Button>
@@ -391,7 +440,9 @@ export default function Page() {
           </div>
 
           <div className="rounded-xl border border-slate-200 p-4">
-            <h3 className="text-sm font-semibold text-slate-900">Report Problem</h3>
+            <h3 className="text-sm font-semibold text-slate-900">
+              Report Problem
+            </h3>
             <div className="mt-3">
               <TextareaField
                 id="problemNote"
@@ -408,7 +459,9 @@ export default function Page() {
               <Button
                 type="button"
                 onClick={handleReportProblem}
-                disabled={isExpired || sendingProblem || updatingStatus || sendingPickup}
+                disabled={
+                  isExpired || sendingProblem || updatingStatus || sendingPickup
+                }
               >
                 {sendingProblem ? "Sending..." : "Report to HR"}
               </Button>

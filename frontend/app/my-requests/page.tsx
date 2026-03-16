@@ -8,6 +8,7 @@ import { ApiError } from "@/lib/api/client";
 import {
   getMyRequests,
   type MyRequestItem,
+  type Urgency,
   type RequestStatus,
   type RequestType,
 } from "@/lib/api/my-requests";
@@ -51,6 +52,12 @@ function formatDateTime(iso: string) {
     timeStyle: "short",
   }).format(new Date(iso));
 }
+
+const urgencyLabelMap: Record<Urgency, string> = {
+  NORMAL: "ปกติ",
+  HIGH: "สูง",
+  CRITICAL: "เร่งด่วน",
+};
 
 export default function Page() {
   return (
@@ -317,7 +324,7 @@ function MyRequestsContent() {
 
                 <div className="mt-3 flex items-center justify-between">
                   <p className="text-sm text-slate-600">
-                    ความเร่งด่วน: {item.urgency}
+                    ความเร่งด่วน: {urgencyLabelMap[item.urgency]}
                   </p>
                   <Link
                     href={`/my-requests/${item.id}`}

@@ -157,7 +157,8 @@ export function isDuplicateVehicleRequest(
     }
 
     return (
-      normalizeText(detail.vehiclePlate) === normalizeText(normalizedDto.vehiclePlate) &&
+      normalizeText(detail.vehiclePlate) ===
+        normalizeText(normalizedDto.vehiclePlate) &&
       detail.issueCategoryId === normalizedDto.issueCategoryId &&
       normalizeText(detail.symptom) === normalizeText(normalizedDto.symptom) &&
       normalizeOptionalText(detail.issueCategoryOther) ===
@@ -190,10 +191,10 @@ export function isDuplicateMessengerRequest(
       normalizeText(detail.itemDescription) ===
         normalizeText(normalizedDto.itemDescription) &&
       detail.outsideBkkMetro === normalizedDto.outsideBkkMetro &&
-      (detail.deliveryService ?? null) === (normalizedDto.deliveryService ?? null) &&
+      (detail.deliveryService ?? null) ===
+        (normalizedDto.deliveryService ?? null) &&
       normalizeOptionalText(detail.deliveryServiceOther) ===
         normalizeOptionalText(normalizedDto.deliveryServiceOther) &&
-      equalsAddress(normalizedDto.sender, detail.senderAddress) &&
       equalsAddress(normalizedDto.receiver, detail.receiverAddress)
     );
   });
@@ -205,7 +206,9 @@ export function isDuplicateDocumentRequest(
   const normalizedDto = {
     ...dto,
     urgency:
-      dto.deliveryMethod === DeliveryMethod.POSTAL ? Urgency.NORMAL : dto.urgency,
+      dto.deliveryMethod === DeliveryMethod.POSTAL
+        ? Urgency.NORMAL
+        : dto.urgency,
   };
 
   return recentRequests.some((candidate) => {
@@ -224,7 +227,8 @@ export function isDuplicateDocumentRequest(
       normalizeDateTime(detail.neededDate) ===
         normalizeDateTime(normalizedDto.neededDate) &&
       detail.deliveryMethod === normalizedDto.deliveryMethod &&
-      normalizeOptionalText(detail.note) === normalizeOptionalText(normalizedDto.note);
+      normalizeOptionalText(detail.note) ===
+        normalizeOptionalText(normalizedDto.note);
 
     if (!sameCore) {
       return false;
