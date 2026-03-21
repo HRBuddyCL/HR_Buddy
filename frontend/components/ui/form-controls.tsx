@@ -30,7 +30,9 @@ function FieldWrapper({
       </label>
       {children}
       {helpText ? <p className="text-xs text-slate-500">{helpText}</p> : null}
-      {error ? <p className="text-xs font-medium text-rose-700">{error}</p> : null}
+      {error ? (
+        <p className="text-xs font-medium text-rose-700">{error}</p>
+      ) : null}
     </div>
   );
 }
@@ -45,10 +47,16 @@ export function TextField({
   ...props
 }: BaseFieldProps & InputHTMLAttributes<HTMLInputElement>) {
   return (
-    <FieldWrapper id={id} label={label} required={required} helpText={helpText} error={error}>
+    <FieldWrapper
+      id={id}
+      label={label}
+      required={required}
+      helpText={helpText}
+      error={error}
+    >
       <input
         id={id}
-        className={`w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200 ${className}`}
+        className={`w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 ${className}`}
         {...props}
       />
     </FieldWrapper>
@@ -66,10 +74,16 @@ export function SelectField({
   ...props
 }: BaseFieldProps & SelectHTMLAttributes<HTMLSelectElement>) {
   return (
-    <FieldWrapper id={id} label={label} required={required} helpText={helpText} error={error}>
+    <FieldWrapper
+      id={id}
+      label={label}
+      required={required}
+      helpText={helpText}
+      error={error}
+    >
       <select
         id={id}
-        className={`w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200 ${className}`}
+        className={`w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 ${className}`}
         {...props}
       >
         {children}
@@ -88,10 +102,16 @@ export function TextareaField({
   ...props
 }: BaseFieldProps & TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return (
-    <FieldWrapper id={id} label={label} required={required} helpText={helpText} error={error}>
+    <FieldWrapper
+      id={id}
+      label={label}
+      required={required}
+      helpText={helpText}
+      error={error}
+    >
       <textarea
         id={id}
-        className={`w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200 ${className}`}
+        className={`w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 ${className}`}
         {...props}
       />
     </FieldWrapper>

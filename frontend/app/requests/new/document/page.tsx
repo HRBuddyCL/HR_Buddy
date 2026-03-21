@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ApiError } from "@/lib/api/client";
 import {
@@ -18,7 +19,6 @@ import {
   type Urgency,
 } from "@/lib/api/requests";
 import {
-  Button,
   SelectField,
   TextField,
   TextareaField,
@@ -29,37 +29,47 @@ const urgencyOptions: Array<{
   label: string;
   description: string;
   color: string;
-  activeBg?: string;
-  activeBorder?: string;
-  icon?: string;
+  activeBg: string;
+  activeBorder: string;
+  icon: string;
+  iconBg: string;
 }> = [
   {
     value: "NORMAL",
     label: "ปกติ",
-    description: "ตอบกลับภายในประมาณ 72 ชั่วโมง",
+    description: "เอกสารคาดว่าจะแล้วเสร็จภายในประมาณ 1 สัปดาห์",
     color: "text-blue-600",
-    icon: "🔵",
+    activeBg: "bg-blue-600 text-white",
+    activeBorder: "border-blue-600",
+    icon: "🗂️",
+    iconBg: "bg-blue-100 text-blue-700",
   },
   {
     value: "HIGH",
     label: "สูง",
-    description: "ควรตอบกลับภายใน 24 ชั่วโมง",
+    description: "เอกสารคาดว่าจะแล้วเสร็จภายในประมาณ 3-4 วัน",
     color: "text-orange-600",
-    icon: "🟠",
+    activeBg: "bg-orange-600 text-white",
+    activeBorder: "border-orange-600",
+    icon: "⏱️",
+    iconBg: "bg-orange-100 text-orange-700",
   },
   {
     value: "CRITICAL",
     label: "เร่งด่วน",
-    description: "ต้องดำเนินการทันที (ภายใน 8 ชั่วโมง)",
+    description: "เอกสารคาดว่าจะแล้วเสร็จภายในประมาณ 1-2 วัน",
     color: "text-red-600",
-    icon: "🔴",
+    activeBg: "bg-red-600 text-white",
+    activeBorder: "border-red-600",
+    icon: "🚨",
+    iconBg: "bg-red-100 text-red-700",
   },
 ];
 
 const deliveryMethodOptions: Array<{ value: DeliveryMethod; label: string }> = [
-  { value: "DIGITAL", label: "Digital" },
-  { value: "POSTAL", label: "Postal" },
-  { value: "PICKUP", label: "Pickup" },
+  { value: "DIGITAL", label: "ดิจิทัล" },
+  { value: "POSTAL", label: "ไปรษณีย์" },
+  { value: "PICKUP", label: "รับด้วยตนเอง" },
 ];
 
 type AddressState = Omit<AddressPayload, "soi" | "road" | "extra"> & {
@@ -82,7 +92,6 @@ type FormState = {
   siteNameRaw: string;
   documentDescription: string;
   purpose: string;
-  neededDate: string;
   deliveryMethod: DeliveryMethod;
   note: string;
 };
@@ -109,7 +118,6 @@ const initialFormState: FormState = {
   siteNameRaw: "",
   documentDescription: "",
   purpose: "",
-  neededDate: "",
   deliveryMethod: "DIGITAL",
   note: "",
 };
@@ -119,8 +127,23 @@ const emptyGeoState: AddressGeoState = {
   subdistricts: [],
 };
 
+function extractPhoneDigits(value: string) {
+  return value.replace(/\D/g, "").slice(0, 10);
+}
+
+function formatPhoneDisplay(value: string) {
+  const digits = extractPhoneDigits(value);
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+  return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6, 10)}`;
+}
+
 function isValidPhone(value: string) {
   return /^\+?\d{9,15}$/.test(value.trim());
+}
+
+function isValidRequesterPhone(value: string) {
+  return extractPhoneDigits(value).length === 10;
 }
 
 function normalizeAddress(address: AddressState): AddressPayload {
@@ -140,34 +163,56 @@ function normalizeAddress(address: AddressState): AddressPayload {
 
 function validateAddress(address: AddressState) {
   if (!address.name.trim()) {
-    return "Receiver name is required";
+    return "กรุณากรอกชื่อผู้รับ";
   }
 
   if (!isValidPhone(address.phone)) {
-    return "Receiver phone must be 9-15 digits and may start with +";
+    return "เบอร์โทรผู้รับต้องเป็นตัวเลข 9-15 หลัก และอาจขึ้นต้นด้วย + ได้";
   }
 
   if (!address.province.trim()) {
-    return "Receiver province is required";
+    return "กรุณาเลือกจังหวัดผู้รับ";
   }
 
   if (!address.district.trim()) {
-    return "Receiver district is required";
+    return "กรุณาเลือกเขต/อำเภอผู้รับ";
   }
 
   if (!address.subdistrict.trim()) {
-    return "Receiver subdistrict is required";
+    return "กรุณาเลือกแขวง/ตำบลผู้รับ";
   }
 
   if (!address.postalCode.trim()) {
-    return "Receiver postal code is required";
+    return "กรุณากรอกรหัสไปรษณีย์ผู้รับ";
   }
 
   if (!address.houseNo.trim()) {
-    return "Receiver house number is required";
+    return "กรุณากรอกบ้านเลขที่ผู้รับ";
   }
 
   return null;
+}
+
+function Panel({
+  stepNumber,
+  title,
+  children,
+}: {
+  stepNumber: number;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white">
+      <div className="flex items-center gap-3 border-b border-slate-100 px-5 py-3.5 sm:px-6">
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#0e2d4c] text-[11px] font-bold text-white">
+          {stepNumber}
+        </span>
+        <h2 className="text-sm font-bold text-[#0e2d4c]">{title}</h2>
+      </div>
+      <div className="px-5 py-5 sm:px-6">{children}</div>
+    </div>
+  );
 }
 
 export default function Page() {
@@ -226,7 +271,7 @@ export default function Page() {
         if (error instanceof ApiError) {
           setErrorMessage(error.message);
         } else {
-          setErrorMessage("Failed to load reference data");
+          setErrorMessage("ไม่สามารถโหลดข้อมูลอ้างอิงได้");
         }
       } finally {
         if (active) {
@@ -284,7 +329,7 @@ export default function Page() {
         if (error instanceof ApiError) {
           setErrorMessage(error.message);
         } else {
-          setErrorMessage("Failed to load districts");
+          setErrorMessage("ไม่สามารถโหลดเขต/อำเภอได้");
         }
       }
     }
@@ -328,7 +373,7 @@ export default function Page() {
         if (error instanceof ApiError) {
           setErrorMessage(error.message);
         } else {
-          setErrorMessage("Failed to load subdistricts");
+          setErrorMessage("ไม่สามารถโหลดแขวง/ตำบลได้");
         }
       }
     }
@@ -377,7 +422,7 @@ export default function Page() {
         if (error instanceof ApiError) {
           setErrorMessage(error.message);
         } else {
-          setErrorMessage("Failed to load postal code");
+          setErrorMessage("ไม่สามารถโหลดรหัสไปรษณีย์ได้");
         }
       }
     }
@@ -400,41 +445,37 @@ export default function Page() {
     setAddress((prev) => ({ ...prev, [key]: value }));
   };
 
+  const handleRequesterPhoneChange = (value: string) => {
+    onChange("phone", formatPhoneDisplay(value));
+  };
+
   const validateBeforeSubmit = () => {
     if (!form.employeeName.trim()) {
-      return "Employee name is required";
+      return "กรุณากรอกชื่อพนักงาน";
     }
 
     if (!form.departmentId) {
-      return "Department is required";
+      return "กรุณาเลือกแผนก";
     }
 
     if (isOtherDepartment && !form.departmentOther.trim()) {
-      return "Please fill the other department name";
+      return "กรุณาระบุชื่อแผนกอื่น";
     }
 
-    if (!isValidPhone(form.phone)) {
-      return "Phone must be 9-15 digits and may start with +";
+    if (!isValidRequesterPhone(form.phone)) {
+      return "หมายเลขโทรศัพท์ต้องมีตัวเลข 10 หลัก";
     }
 
     if (!form.siteNameRaw.trim()) {
-      return "Site / Unit name is required";
+      return "กรุณากรอกชื่อไซต์/หน่วยงาน";
     }
 
     if (!form.documentDescription.trim()) {
-      return "Document description is required";
+      return "กรุณากรอกรายละเอียดเอกสาร";
     }
 
     if (!form.purpose.trim()) {
-      return "Purpose is required";
-    }
-
-    if (!form.neededDate.trim()) {
-      return "Needed date is required";
-    }
-
-    if (Number.isNaN(new Date(form.neededDate).getTime())) {
-      return "Needed date is invalid";
+      return "กรุณากรอกวัตถุประสงค์";
     }
 
     if (isPostal) {
@@ -464,12 +505,11 @@ export default function Page() {
     const payload: CreateDocumentRequestPayload = {
       employeeName: form.employeeName.trim(),
       departmentId: form.departmentId,
-      phone: form.phone.trim(),
+      phone: extractPhoneDigits(form.phone),
       urgency: isPostal ? "NORMAL" : form.urgency,
       siteNameRaw: form.siteNameRaw.trim(),
       documentDescription: form.documentDescription.trim(),
       purpose: form.purpose.trim(),
-      neededDate: new Date(form.neededDate).toISOString(),
       deliveryMethod: form.deliveryMethod,
       ...(form.note.trim() ? { note: form.note.trim() } : {}),
     };
@@ -491,7 +531,7 @@ export default function Page() {
       if (error instanceof ApiError) {
         setErrorMessage(error.message);
       } else {
-        setErrorMessage("Failed to submit document request");
+        setErrorMessage("ไม่สามารถส่งคำขอเอกสารได้");
       }
     } finally {
       setSubmitting(false);
@@ -499,233 +539,299 @@ export default function Page() {
   };
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-6 px-6 py-10 md:px-10">
-      <header className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <p className="text-sm font-semibold uppercase tracking-wide text-slate-600">
-          Phase 2 - Employee Core
-        </p>
-        <h1 className="mt-2 text-3xl font-semibold text-slate-900">
-          Document Request
-        </h1>
-        <p className="mt-3 text-slate-700">
-          Request official documents with a clear delivery method. Postal flow
-          is fully wired with geo dependent dropdown.
-        </p>
-      </header>
+    <main className="min-h-screen bg-slate-50">
+      <div className="border-b border-slate-200 bg-white">
+        <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+          <nav className="mb-4 flex items-center gap-1.5 text-sm text-slate-400">
+            <Link href="/" className="transition hover:text-slate-700">
+              หน้าแรก
+            </Link>
+            <svg
+              className="h-4 w-4 shrink-0"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 5l7 7-7 7"
+              />
+            </svg>
+            <span className="text-slate-600">คำขอเอกสาร</span>
+          </nav>
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="flex items-center gap-4">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-[#0e2d4c]">
+              <span className="text-2xl">📄</span>
+            </div>
+            <div>
+              <h1 className="text-xl font-bold text-[#0e2d4c] sm:text-2xl">
+                แบบฟอร์มคำขอเอกสาร
+              </h1>
+              <p className="text-sm text-slate-500">
+                กรอกข้อมูลให้ครบถ้วนและเลือกวิธีรับเอกสารให้ชัดเจน
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6 lg:px-8">
         {loadingReferences ? (
-          <p className="text-sm text-slate-600">
-            Loading departments and geo data...
-          </p>
+          <div className="space-y-4">
+            {[1, 2, 3].map((index) => (
+              <div
+                key={index}
+                className="h-36 animate-pulse rounded-2xl border border-slate-200 bg-white"
+              />
+            ))}
+          </div>
         ) : (
-          <form className="space-y-6" onSubmit={handleSubmit}>
-            <div className="grid gap-4 md:grid-cols-2">
-              <TextField
-                id="employeeName"
-                label="Employee Name"
-                required
-                value={form.employeeName}
-                onChange={(event) =>
-                  onChange("employeeName", event.target.value)
-                }
-                placeholder="Thanaruk T."
-                maxLength={120}
-              />
-
-              <TextField
-                id="phone"
-                label="Phone"
-                required
-                value={form.phone}
-                onChange={(event) => onChange("phone", event.target.value)}
-                placeholder="+66812345678"
-                maxLength={20}
-              />
-
-              <SelectField
-                id="departmentId"
-                label="Department"
-                required
-                value={form.departmentId}
-                onChange={(event) =>
-                  onChange("departmentId", event.target.value)
-                }
-              >
-                <option value="">Select department</option>
-                {departments.map((department) => (
-                  <option key={department.id} value={department.id}>
-                    {department.name}
-                  </option>
-                ))}
-              </SelectField>
-
-              {isOtherDepartment ? (
-                <TextField
-                  id="departmentOther"
-                  label="Other Department"
-                  required
-                  value={form.departmentOther}
-                  onChange={(event) =>
-                    onChange("departmentOther", event.target.value)
-                  }
-                  placeholder="Please specify department name"
-                  maxLength={120}
-                />
-              ) : null}
-
-              {!isPostal ? (
-                <div>
-                  <SelectField
-                    id="urgency"
-                    label="ระดับความเร่งด่วน"
+          <form className="space-y-4" onSubmit={handleSubmit}>
+            <Panel stepNumber={1} title="ข้อมูลผู้แจ้ง">
+              <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-3">
+                <div className="sm:col-span-1">
+                  <TextField
+                    id="employeeName"
+                    label="ชื่อ-นามสกุล"
                     required
-                    value={form.urgency}
+                    value={form.employeeName}
                     onChange={(event) =>
-                      onChange("urgency", event.target.value as Urgency)
+                      onChange("employeeName", event.target.value)
+                    }
+                    placeholder="สมชาย ใจดี"
+                    maxLength={120}
+                  />
+                </div>
+
+                <div className="sm:col-span-1">
+                  <SelectField
+                    id="departmentId"
+                    label="แผนก"
+                    required
+                    value={form.departmentId}
+                    onChange={(event) =>
+                      onChange("departmentId", event.target.value)
                     }
                   >
-                    {urgencyOptions.map((item) => (
-                      <option key={item.value} value={item.value}>
-                        {item.icon ? `${item.icon} ${item.label}` : item.label}
+                    <option value="">เลือกแผนก</option>
+                    {departments.map((department) => (
+                      <option key={department.id} value={department.id}>
+                        {department.name}
                       </option>
                     ))}
                   </SelectField>
-                  {selectedUrgencyOption ? (
-                    <p
-                      className={`mt-2 text-sm font-medium ${selectedUrgencyOption.color}`}
-                    >
-                      {selectedUrgencyOption.label} —{" "}
-                      {selectedUrgencyOption.description}
-                    </p>
-                  ) : null}
                 </div>
-              ) : null}
 
-              <TextField
-                id="siteNameRaw"
-                label="Site / Unit Name"
-                required
-                value={form.siteNameRaw}
-                onChange={(event) =>
-                  onChange("siteNameRaw", event.target.value)
-                }
-                placeholder="CL-HQ / Site ABC"
-                maxLength={200}
-              />
-
-              <TextField
-                id="neededDate"
-                label="Needed Date"
-                required
-                type="date"
-                value={form.neededDate}
-                onChange={(event) => onChange("neededDate", event.target.value)}
-              />
-            </div>
-
-            <TextareaField
-              id="documentDescription"
-              label="Document Description"
-              required
-              value={form.documentDescription}
-              onChange={(event) =>
-                onChange("documentDescription", event.target.value)
-              }
-              placeholder="Describe the document request"
-              rows={4}
-              maxLength={2000}
-            />
-
-            <TextareaField
-              id="purpose"
-              label="Purpose"
-              required
-              value={form.purpose}
-              onChange={(event) => onChange("purpose", event.target.value)}
-              placeholder="Why this document is needed"
-              rows={3}
-              maxLength={500}
-            />
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <SelectField
-                id="deliveryMethod"
-                label="Delivery Method"
-                required
-                value={form.deliveryMethod}
-                onChange={(event) => {
-                  const nextDeliveryMethod = event.target
-                    .value as DeliveryMethod;
-                  onChange("deliveryMethod", nextDeliveryMethod);
-                  if (
-                    nextDeliveryMethod === "POSTAL" &&
-                    form.urgency !== "NORMAL"
-                  ) {
-                    onChange("urgency", "NORMAL");
-                  }
-                }}
-              >
-                {deliveryMethodOptions.map((item) => (
-                  <option key={item.value} value={item.value}>
-                    {item.label}
-                  </option>
-                ))}
-              </SelectField>
-            </div>
-
-            <TextareaField
-              id="note"
-              label="Note"
-              value={form.note}
-              onChange={(event) => onChange("note", event.target.value)}
-              placeholder="Optional note"
-              rows={3}
-              maxLength={2000}
-            />
-
-            {isPostal ? (
-              <div className="rounded-xl border border-slate-200 p-4">
-                <h2 className="text-lg font-semibold text-slate-900">
-                  Postal Delivery Address
-                </h2>
-                <p className="mt-1 text-sm text-slate-600">
-                  Required when delivery method is Postal.
-                </p>
-
-                <div className="mt-4 grid gap-4 md:grid-cols-2">
+                <div className="sm:col-span-1">
                   <TextField
-                    id="addressName"
-                    label="Receiver Name"
+                    id="phone"
+                    label="เบอร์โทรศัพท์"
                     required
-                    value={address.name}
+                    value={form.phone}
                     onChange={(event) =>
-                      onAddressChange("name", event.target.value)
+                      handleRequesterPhoneChange(event.target.value)
                     }
-                    maxLength={120}
+                    placeholder="012-345-6789"
+                    inputMode="numeric"
+                    maxLength={12}
                   />
+                </div>
 
+                {isOtherDepartment ? (
+                  <div className="sm:col-span-3">
+                    <TextField
+                      id="departmentOther"
+                      label="ระบุชื่อแผนก"
+                      required
+                      value={form.departmentOther}
+                      onChange={(event) =>
+                        onChange("departmentOther", event.target.value)
+                      }
+                      placeholder="ชื่อแผนก"
+                      maxLength={120}
+                    />
+                  </div>
+                ) : null}
+              </div>
+            </Panel>
+
+            <Panel stepNumber={2} title="รายละเอียดเอกสาร">
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <TextField
-                    id="addressPhone"
-                    label="Receiver Phone"
+                    id="siteNameRaw"
+                    label="ชื่อไซต์ / หน่วยงาน"
                     required
-                    value={address.phone}
+                    value={form.siteNameRaw}
                     onChange={(event) =>
-                      onAddressChange("phone", event.target.value)
+                      onChange("siteNameRaw", event.target.value)
                     }
-                    maxLength={20}
+                    placeholder="HO / Site A / Site B / ฯลฯ"
+                    maxLength={200}
                   />
 
                   <SelectField
+                    id="deliveryMethod"
+                    label="วิธีรับเอกสาร"
+                    required
+                    value={form.deliveryMethod}
+                    onChange={(event) => {
+                      const nextDeliveryMethod = event.target
+                        .value as DeliveryMethod;
+                      onChange("deliveryMethod", nextDeliveryMethod);
+                      if (
+                        nextDeliveryMethod === "POSTAL" &&
+                        form.urgency !== "NORMAL"
+                      ) {
+                        onChange("urgency", "NORMAL");
+                      }
+                    }}
+                  >
+                    {deliveryMethodOptions.map((item) => (
+                      <option key={item.value} value={item.value}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </SelectField>
+                </div>
+
+                {!isPostal ? (
+                  <div>
+                    <p className="mb-2 text-[13px] font-semibold text-slate-700">
+                      ระดับความเร่งด่วน{" "}
+                      <span className="ml-0.5 text-[#b62026]">*</span>
+                    </p>
+                    <div className="grid grid-cols-3 gap-3">
+                      {urgencyOptions.map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => onChange("urgency", option.value)}
+                          className={`w-full flex flex-col items-center gap-2 rounded-xl border-2 px-4 py-4 text-sm font-semibold transition-all duration-150 ${
+                            form.urgency === option.value
+                              ? `${option.activeBg} ${option.activeBorder} shadow-sm`
+                              : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                          }`}
+                        >
+                          <span
+                            className={`flex h-10 w-10 items-center justify-center rounded-full text-xl ${
+                              form.urgency === option.value
+                                ? "bg-white/20"
+                                : option.iconBg
+                            }`}
+                            aria-hidden
+                          >
+                            {option.icon}
+                          </span>
+                          <span className="whitespace-nowrap text-center text-sm font-bold">
+                            {option.label}
+                          </span>
+                          <span
+                            className={`text-center text-[11px] leading-4 ${
+                              form.urgency === option.value
+                                ? "text-white/90"
+                                : "text-slate-500"
+                            }`}
+                          >
+                            {option.value === "NORMAL"
+                              ? "ประมาณ 1 สัปดาห์"
+                              : option.value === "HIGH"
+                                ? "ประมาณ 3-4 วัน"
+                                : "ประมาณ 1-2 วัน"}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                    {selectedUrgencyOption ? (
+                      <p
+                        className={`mt-2 text-sm font-medium ${selectedUrgencyOption.color}`}
+                      >
+                        {selectedUrgencyOption.description}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                <TextareaField
+                  id="documentDescription"
+                  label="รายละเอียดเอกสาร"
+                  required
+                  value={form.documentDescription}
+                  onChange={(event) =>
+                    onChange("documentDescription", event.target.value)
+                  }
+                  placeholder="อธิบายรายละเอียดเอกสารที่ต้องการ"
+                  rows={4}
+                  maxLength={2000}
+                />
+
+                <TextareaField
+                  id="purpose"
+                  label="วัตถุประสงค์"
+                  required
+                  value={form.purpose}
+                  onChange={(event) => onChange("purpose", event.target.value)}
+                  placeholder="ระบุวัตถุประสงค์ในการใช้งานเอกสาร"
+                  rows={3}
+                  maxLength={500}
+                />
+
+                <TextareaField
+                  id="note"
+                  label="หมายเหตุ"
+                  value={form.note}
+                  onChange={(event) => onChange("note", event.target.value)}
+                  placeholder="หมายเหตุเพิ่มเติม (ถ้ามี)"
+                  rows={3}
+                  maxLength={2000}
+                />
+              </div>
+            </Panel>
+
+            {isPostal ? (
+              <Panel stepNumber={3} title="ข้อมูลที่อยู่จัดส่ง">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
+                  <div className="sm:col-span-2">
+                    <TextField
+                      id="addressName"
+                      label="ชื่อ-นามสกุล"
+                      required
+                      value={address.name}
+                      onChange={(event) =>
+                        onAddressChange("name", event.target.value)
+                      }
+                      placeholder="สมหญิง ใจดี"
+                      maxLength={120}
+                    />
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <TextField
+                      id="addressPhone"
+                      label="เบอร์โทรศัพท์"
+                      required
+                      value={address.phone}
+                      onChange={(event) =>
+                        onAddressChange("phone", event.target.value)
+                      }
+                      placeholder="012-345-6789"
+                      maxLength={20}
+                    />
+                  </div>
+
+                  <SelectField
                     id="addressProvince"
-                    label="Province"
+                    label="จังหวัด"
                     required
                     value={address.province}
                     onChange={(event) =>
                       onAddressChange("province", event.target.value)
                     }
                   >
-                    <option value="">Select province</option>
+                    <option value="">เลือกจังหวัด</option>
                     {provinces.map((province) => (
                       <option key={province} value={province}>
                         {province}
@@ -735,7 +841,7 @@ export default function Page() {
 
                   <SelectField
                     id="addressDistrict"
-                    label="District"
+                    label="เขต/อำเภอ"
                     required
                     value={address.district}
                     onChange={(event) =>
@@ -743,7 +849,7 @@ export default function Page() {
                     }
                     disabled={!address.province}
                   >
-                    <option value="">Select district</option>
+                    <option value="">เลือกเขต/อำเภอ</option>
                     {addressGeo.districts.map((district) => (
                       <option key={district} value={district}>
                         {district}
@@ -753,7 +859,7 @@ export default function Page() {
 
                   <SelectField
                     id="addressSubdistrict"
-                    label="Subdistrict"
+                    label="แขวง/ตำบล"
                     required
                     value={address.subdistrict}
                     onChange={(event) =>
@@ -761,7 +867,7 @@ export default function Page() {
                     }
                     disabled={!address.district}
                   >
-                    <option value="">Select subdistrict</option>
+                    <option value="">เลือกแขวง/ตำบล</option>
                     {addressGeo.subdistricts.map((subdistrict) => (
                       <option key={subdistrict} value={subdistrict}>
                         {subdistrict}
@@ -771,8 +877,10 @@ export default function Page() {
 
                   <TextField
                     id="addressPostalCode"
-                    label="Postal Code"
+                    label="รหัสไปรษณีย์"
                     required
+                    readOnly
+                    disabled={!address.subdistrict}
                     value={address.postalCode}
                     onChange={(event) =>
                       onAddressChange("postalCode", event.target.value)
@@ -780,34 +888,39 @@ export default function Page() {
                     maxLength={10}
                   />
 
+                  <div className="sm:col-span-2">
+                    <TextField
+                      id="addressHouseNo"
+                      label="บ้านเลขที่"
+                      required
+                      value={address.houseNo}
+                      onChange={(event) =>
+                        onAddressChange("houseNo", event.target.value)
+                      }
+                      placeholder="99/123"
+                      maxLength={120}
+                    />
+                  </div>
+
                   <TextField
-                    id="addressHouseNo"
-                    label="House No."
-                    required
-                    value={address.houseNo}
+                    id="addressRoad"
+                    label="ถนน"
+                    value={address.road ?? ""}
                     onChange={(event) =>
-                      onAddressChange("houseNo", event.target.value)
+                      onAddressChange("road", event.target.value)
                     }
+                    placeholder="สุขุมวิท"
                     maxLength={120}
                   />
 
                   <TextField
                     id="addressSoi"
-                    label="Soi"
+                    label="ซอย"
                     value={address.soi ?? ""}
                     onChange={(event) =>
                       onAddressChange("soi", event.target.value)
                     }
-                    maxLength={120}
-                  />
-
-                  <TextField
-                    id="addressRoad"
-                    label="Road"
-                    value={address.road ?? ""}
-                    onChange={(event) =>
-                      onAddressChange("road", event.target.value)
-                    }
+                    placeholder="สุขุมวิท 24"
                     maxLength={120}
                   />
                 </div>
@@ -815,40 +928,119 @@ export default function Page() {
                 <div className="mt-4">
                   <TextareaField
                     id="addressExtra"
-                    label="Extra"
+                    label="รายละเอียดเพิ่มเติม"
                     value={address.extra ?? ""}
                     onChange={(event) =>
                       onAddressChange("extra", event.target.value)
                     }
+                    placeholder="ส่งที่นิติบุคคลชั้น 1 ฝากพัสดุ"
                     rows={2}
                     maxLength={200}
                   />
                 </div>
-              </div>
+              </Panel>
             ) : null}
 
             {errorMessage ? (
-              <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">
-                {errorMessage}
+              <div className="flex items-start gap-3 rounded-xl border border-[#b62026]/20 bg-red-50 px-4 py-3.5">
+                <svg
+                  className="mt-px h-4 w-4 shrink-0 text-[#b62026]"
+                  fill="currentColor"
+                  viewBox="0 0 20 20"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+                <div>
+                  <p className="text-sm font-bold text-[#b62026]">
+                    เกิดข้อผิดพลาด
+                  </p>
+                  <p className="mt-0.5 text-xs text-[#b62026]/80">
+                    {errorMessage}
+                  </p>
+                </div>
               </div>
             ) : null}
 
-            <div className="flex flex-wrap items-center gap-3">
-              <Button type="submit" disabled={submitting || loadingReferences}>
-                {submitting ? "Submitting..." : "Submit Request"}
-              </Button>
-              <Button
-                type="button"
-                className="bg-white text-slate-700 ring-1 ring-slate-300 hover:bg-slate-100"
-                onClick={handleReset}
-                disabled={submitting}
-              >
-                Reset
-              </Button>
+            <div className="rounded-2xl border border-slate-200 bg-white">
+              <div className="flex items-center gap-2 border-b border-amber-100 bg-amber-50/60 px-5 py-2.5">
+                <svg
+                  className="h-3.5 w-3.5 shrink-0 text-amber-600"
+                  fill="currentColor"
+                  viewBox="0 0 20 20"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+                <p className="text-xs font-medium text-amber-800">
+                  กรุณาตรวจสอบข้อมูลก่อนส่งคำขอ
+                </p>
+              </div>
+
+              <div className="flex flex-col-reverse gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex w-full flex-col-reverse items-stretch gap-3 sm:flex-row sm:items-center sm:w-auto">
+                  <Link
+                    href="/"
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 sm:w-auto"
+                  >
+                    <svg
+                      className="h-4 w-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M15 19l-7-7 7-7"
+                      />
+                    </svg>
+                    กลับสู่หน้าหลัก
+                  </Link>
+
+                  <button
+                    type="button"
+                    onClick={handleReset}
+                    disabled={submitting}
+                    aria-label="รีเซ็ตแบบฟอร์ม"
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50 shadow-sm"
+                  >
+                    <svg
+                      className="h-4 w-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                      />
+                    </svg>
+                    รีเซ็ตแบบฟอร์ม
+                  </button>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={submitting || loadingReferences}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#0e2d4c] px-10 py-3 text-sm font-bold text-white shadow-lg transition hover:bg-[#1a4a7a] disabled:opacity-60 sm:w-auto"
+                >
+                  {submitting ? "กำลังส่งคำขอ..." : "ส่งคำขอเอกสาร"}
+                </button>
+              </div>
             </div>
           </form>
         )}
-      </section>
+      </div>
     </main>
   );
 }

@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { ApiError } from "@/lib/api/client";
 import {
   getGeoDistricts,
@@ -30,11 +32,14 @@ import {
   validateAttachmentCandidate,
 } from "@/lib/attachments/attachment-policy";
 import {
-  Button,
   SelectField,
   TextField,
   TextareaField,
 } from "@/components/ui/form-controls";
+import { ImagePreviewModal } from "@/components/ui/image-preview-modal";
+import { VideoPreviewModal } from "@/components/ui/video-preview-modal";
+import { DocumentPreviewModal } from "@/components/ui/document-preview-modal";
+import { getDocumentTypeLabel } from "@/lib/attachments/document-type-label";
 
 const itemTypeOptions: Array<{ value: ItemType; label: string }> = [
   { value: "DOCUMENT", label: "เอกสาร" },
@@ -63,6 +68,14 @@ type AttachmentCandidate = {
   file: File;
   fileKind: FileKind;
   mimeType: string;
+};
+
+type AttachmentPreview = {
+  key: string;
+  file: File;
+  fileKind: FileKind;
+  mimeType: string;
+  previewUrl: string;
 };
 
 type FormState = {
@@ -135,7 +148,7 @@ const emptyGeoState: AddressGeoState = {
 function normalizeAddress(address: AddressState): AddressPayload {
   return {
     name: address.name.trim(),
-    phone: address.phone.trim(),
+    phone: extractPhoneDigits(address.phone),
     province: address.province.trim(),
     district: address.district.trim(),
     subdistrict: address.subdistrict.trim(),
@@ -147,8 +160,19 @@ function normalizeAddress(address: AddressState): AddressPayload {
   };
 }
 
+function extractPhoneDigits(value: string) {
+  return value.replace(/\D/g, "").slice(0, 10);
+}
+
+function formatPhoneDisplay(value: string) {
+  const digits = extractPhoneDigits(value);
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+  return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6, 10)}`;
+}
+
 function isValidPhone(value: string) {
-  return /^\+?\d{9,15}$/.test(value.trim());
+  return extractPhoneDigits(value).length === 10;
 }
 
 function validateAddress(
@@ -163,7 +187,7 @@ function validateAddress(
   }
 
   if (requireContact && !isValidPhone(address.phone)) {
-    return `เบอร์โทรผู้${sectionName} ต้องเป็นตัวเลข 9-15 หลัก และอาจขึ้นต้นด้วย + ได้`;
+    return `หมายเลขโทรศัพท์ผู้${sectionName} ต้องมีตัวเลข 10 หลัก`;
   }
 
   if (!address.province.trim()) {
@@ -200,6 +224,38 @@ function isOutsideBkkMetroByProvince(province: string) {
 
 function fileKey(file: File) {
   return `${file.name}-${file.size}-${file.lastModified}`;
+}
+
+function toThailandStartOfDayIso(dateValue: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+    return null;
+  }
+
+  const date = new Date(`${dateValue}T00:00:00+07:00`);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return date.toISOString();
+}
+
+function formatThaiBuddhistDate(dateValue: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+    return "";
+  }
+
+  const [year, month, day] = dateValue.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return new Intl.DateTimeFormat("th-TH-u-ca-buddhist", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    timeZone: "Asia/Bangkok",
+  }).format(date);
 }
 
 function prepareAttachmentCandidates(files: File[]) {
@@ -240,8 +296,31 @@ function prepareAttachmentCandidates(files: File[]) {
   return { ok: true as const, candidates };
 }
 
+function Panel({
+  stepNumber,
+  title,
+  children,
+}: {
+  stepNumber: number;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white">
+      <div className="flex items-center gap-3 border-b border-slate-100 px-5 py-3.5 sm:px-6">
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#0e2d4c] text-[11px] font-bold text-white">
+          {stepNumber}
+        </span>
+        <h2 className="text-sm font-bold text-[#0e2d4c]">{title}</h2>
+      </div>
+      <div className="px-5 py-5 sm:px-6">{children}</div>
+    </div>
+  );
+}
+
 export default function Page() {
   const router = useRouter();
+  const pickupDateInputRef = useRef<HTMLInputElement | null>(null);
 
   const [departments, setDepartments] = useState<ReferenceListItem[]>([]);
   const [provinces, setProvinces] = useState<string[]>([]);
@@ -259,6 +338,14 @@ export default function Page() {
   const [loadingReferences, setLoadingReferences] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [videoPreview, setVideoPreview] = useState<AttachmentPreview | null>(
+    null,
+  );
+  const [imagePreview, setImagePreview] = useState<AttachmentPreview | null>(
+    null,
+  );
+  const [documentPreview, setDocumentPreview] =
+    useState<AttachmentPreview | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -312,6 +399,29 @@ export default function Page() {
     value: AddressState[K],
   ) => {
     setReceiver((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleRequesterPhoneChange = (value: string) => {
+    onChange("phone", formatPhoneDisplay(value));
+  };
+
+  const handleReceiverPhoneChange = (value: string) => {
+    updateReceiverAddress("phone", formatPhoneDisplay(value));
+  };
+
+  const openPickupDatePicker = () => {
+    const input = pickupDateInputRef.current;
+    if (!input) {
+      return;
+    }
+
+    if (typeof input.showPicker === "function") {
+      input.showPicker();
+      return;
+    }
+
+    input.focus();
+    input.click();
   };
 
   useEffect(() => {
@@ -463,6 +573,38 @@ export default function Page() {
     () => requiresDeliveryService && form.deliveryService === "OTHER",
     [requiresDeliveryService, form.deliveryService],
   );
+  const pickupDateDisplay = useMemo(
+    () => formatThaiBuddhistDate(form.pickupDate),
+    [form.pickupDate],
+  );
+
+  const attachmentPreviews = useMemo<AttachmentPreview[]>(() => {
+    return attachmentFiles
+      .map((file) => {
+        const mimeType = resolveUploadMimeType(file);
+        if (!mimeType) return null;
+
+        const inferredFileKind = inferFileKindFromMimeType(mimeType);
+        if (!inferredFileKind) return null;
+
+        return {
+          key: fileKey(file),
+          file,
+          fileKind: inferredFileKind,
+          mimeType,
+          previewUrl: URL.createObjectURL(file),
+        } satisfies AttachmentPreview;
+      })
+      .filter((item): item is AttachmentPreview => item !== null);
+  }, [attachmentFiles]);
+
+  useEffect(() => {
+    return () => {
+      for (const preview of attachmentPreviews) {
+        URL.revokeObjectURL(preview.previewUrl);
+      }
+    };
+  }, [attachmentPreviews]);
 
   const validateBeforeSubmit = () => {
     if (!form.employeeName.trim()) {
@@ -477,15 +619,15 @@ export default function Page() {
     }
 
     if (!isValidPhone(form.phone)) {
-      return "เบอร์โทรต้องเป็นตัวเลข 9-15 หลัก และอาจขึ้นต้นด้วย + ได้";
+      return "หมายเลขโทรศัพท์ต้องมีตัวเลข 10 หลัก";
     }
 
     if (!form.pickupDate) {
-      return "กรุณาเลือกวันที่รับงาน";
+      return "กรุณาเลือกวันที่จัดส่ง";
     }
 
-    if (Number.isNaN(new Date(`${form.pickupDate}T00:00:00`).getTime())) {
-      return "วันที่รับงานไม่ถูกต้อง";
+    if (!toThailandStartOfDayIso(form.pickupDate)) {
+      return "วันที่จัดส่งไม่ถูกต้อง";
     }
 
     if (!form.itemDescription.trim()) {
@@ -521,6 +663,9 @@ export default function Page() {
     setAttachmentFiles([]);
     setAttachmentNotice(null);
     setErrorMessage(null);
+    setVideoPreview(null);
+    setImagePreview(null);
+    setDocumentPreview(null);
   };
 
   const handleAttachmentPick = (files: File[]) => {
@@ -572,6 +717,32 @@ export default function Page() {
     setAttachmentFiles((prev) =>
       prev.filter((file) => fileKey(file) !== targetKey),
     );
+    setVideoPreview((prev) => (prev?.key === targetKey ? null : prev));
+    setImagePreview((prev) => (prev?.key === targetKey ? null : prev));
+    setDocumentPreview((prev) => (prev?.key === targetKey ? null : prev));
+  };
+
+  const handleOpenDocumentPreview = (preview: AttachmentPreview) => {
+    setDocumentPreview(preview);
+  };
+
+  const handleDownloadDocumentFile = (preview: AttachmentPreview) => {
+    const link = document.createElement("a");
+    link.href = preview.previewUrl;
+    link.download = preview.file.name;
+    link.rel = "noopener";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleDocumentAction = (preview: AttachmentPreview) => {
+    if (preview.mimeType.toLowerCase() === "application/pdf") {
+      handleOpenDocumentPreview(preview);
+      return;
+    }
+
+    handleDownloadDocumentFile(preview);
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -591,11 +762,17 @@ export default function Page() {
       return;
     }
 
+    const pickupDatetime = toThailandStartOfDayIso(form.pickupDate);
+    if (!pickupDatetime) {
+      setErrorMessage("วันที่จัดส่งไม่ถูกต้อง");
+      return;
+    }
+
     const payload: CreateMessengerRequestPayload = {
       employeeName: form.employeeName.trim(),
       departmentId: form.departmentId,
-      phone: form.phone.trim(),
-      pickupDatetime: new Date(`${form.pickupDate}T00:00:00`).toISOString(),
+      phone: extractPhoneDigits(form.phone),
+      pickupDatetime,
       itemType: form.itemType,
       itemDescription: form.additionalNote.trim()
         ? `${form.itemDescription.trim()}\n\nหมายเหตุเพิ่มเติม: ${form.additionalNote.trim()}`
@@ -655,207 +832,474 @@ export default function Page() {
   };
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-6 px-6 py-10 md:px-10">
-      <header className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h1 className="mt-2 text-3xl font-semibold text-slate-900">
-          แบบฟอร์มคำขอใช้บริการ Messenger
-        </h1>
-        <p className="mt-3 text-slate-700">
-          สร้างคำขอเมสเซนเจอร์ พร้อมข้อมูลผู้ส่งและผู้รับ โดยหน้านี้เชื่อมต่อ
-          API หน่วยงาน, ข้อมูลพื้นที่ และการสร้างคำขอเรียบร้อยแล้ว
-        </p>
-      </header>
-
-      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        {loadingReferences ? (
-          <p className="text-sm text-slate-600">
-            กำลังโหลดข้อมูลหน่วยงานและพื้นที่...
-          </p>
-        ) : (
-          <form className="space-y-6" onSubmit={handleSubmit}>
-            <div className="grid gap-4 md:grid-cols-2">
-              <TextField
-                id="employeeName"
-                label="ชื่อพนักงาน"
-                required
-                value={form.employeeName}
-                onChange={(event) =>
-                  onChange("employeeName", event.target.value)
-                }
-                placeholder="Thanaruk T."
-                maxLength={120}
+    <main className="min-h-screen bg-slate-50">
+      <div className="border-b border-slate-200 bg-white">
+        <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+          <nav className="mb-4 flex items-center gap-1.5 text-sm text-slate-400">
+            <Link href="/" className="transition hover:text-slate-700">
+              หน้าแรก
+            </Link>
+            <svg
+              className="h-4 w-4 shrink-0"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 5l7 7-7 7"
               />
+            </svg>
+            <span className="text-slate-600">คำขอเมสเซนเจอร์</span>
+          </nav>
 
-              <TextField
-                id="phone"
-                label="เบอร์โทร"
-                required
-                value={form.phone}
-                onChange={(event) => onChange("phone", event.target.value)}
-                placeholder="+66812345678"
-                maxLength={20}
-              />
-
-              <SelectField
-                id="departmentId"
-                label="หน่วยงาน"
-                required
-                value={form.departmentId}
-                onChange={(event) =>
-                  onChange("departmentId", event.target.value)
-                }
-              >
-                <option value="">เลือกหน่วยงาน</option>
-                {departments.map((department) => (
-                  <option key={department.id} value={department.id}>
-                    {department.name}
-                  </option>
-                ))}
-              </SelectField>
-
-              {isOtherDepartment ? (
-                <TextField
-                  id="departmentOther"
-                  label="หน่วยงานอื่น"
-                  required
-                  value={form.departmentOther}
-                  onChange={(event) =>
-                    onChange("departmentOther", event.target.value)
-                  }
-                  placeholder="โปรดระบุชื่อหน่วยงาน"
-                  maxLength={120}
-                />
-              ) : null}
-              <TextField
-                id="pickupDate"
-                label="วันที่รับงาน"
-                required
-                type="date"
-                value={form.pickupDate}
-                onChange={(event) => onChange("pickupDate", event.target.value)}
-              />
-
-              <SelectField
-                id="itemType"
-                label="ประเภทสิ่งของ"
-                required
-                value={form.itemType}
-                onChange={(event) =>
-                  onChange("itemType", event.target.value as ItemType)
-                }
-              >
-                {itemTypeOptions.map((item) => (
-                  <option key={item.value} value={item.value}>
-                    {item.label}
-                  </option>
-                ))}
-              </SelectField>
+          <div className="flex items-center gap-4">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-[#0e2d4c]">
+              <span className="text-2xl">📬</span>
             </div>
-
-            <TextareaField
-              id="itemDescription"
-              label="รายละเอียดสิ่งของ"
-              required
-              value={form.itemDescription}
-              onChange={(event) =>
-                onChange("itemDescription", event.target.value)
-              }
-              placeholder="อธิบายสิ่งของที่ต้องจัดส่ง"
-              rows={4}
-              maxLength={2000}
-            />
-
-            <TextareaField
-              id="additionalNote"
-              label="หมายเหตุเพิ่มเติม"
-              value={form.additionalNote}
-              onChange={(event) =>
-                onChange("additionalNote", event.target.value)
-              }
-              placeholder="รายละเอียดเพิ่มเติม (ถ้ามี)"
-              rows={3}
-              maxLength={500}
-            />
-
-            <div className="rounded-xl border border-slate-200 p-4">
-              <h2 className="text-lg font-semibold text-slate-900">ไฟล์แนบ</h2>
-              <p className="mt-1 text-sm text-slate-600">
-                รองรับไฟล์รูปภาพ วิดีโอ และเอกสาร สูงสุด {MAX_ATTACHMENTS} ไฟล์
+            <div>
+              <h1 className="text-xl font-bold text-[#0e2d4c] sm:text-2xl">
+                แบบฟอร์มคำขอใช้บริการเมสเซนเจอร์
+              </h1>
+              <p className="text-sm text-slate-500">
+                กรอกข้อมูลให้ครบถ้วนและแนบไฟล์ประกอบการจัดส่ง
               </p>
+            </div>
+          </div>
+        </div>
+      </div>
 
-              <div className="mt-4">
-                <input
-                  id="attachments"
-                  type="file"
-                  multiple
-                  accept={attachmentAccept}
-                  className="block w-full text-sm text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-900 file:px-3 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-slate-700"
-                  onChange={(event) => {
-                    const selected = Array.from(event.target.files ?? []);
-                    handleAttachmentPick(selected);
-                    event.currentTarget.value = "";
-                  }}
+      <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6 lg:px-8">
+        {loadingReferences ? (
+          <div className="space-y-4">
+            {[1, 2, 3].map((index) => (
+              <div
+                key={index}
+                className="h-36 animate-pulse rounded-2xl border border-slate-200 bg-white"
+              />
+            ))}
+          </div>
+        ) : (
+          <form className="space-y-4" onSubmit={handleSubmit}>
+            <Panel stepNumber={1} title="ข้อมูลผู้แจ้ง">
+              <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-3">
+                <div className="sm:col-span-1">
+                  <TextField
+                    id="employeeName"
+                    label="ชื่อ-นามสกุล"
+                    required
+                    value={form.employeeName}
+                    onChange={(event) =>
+                      onChange("employeeName", event.target.value)
+                    }
+                    placeholder="สมชาย ใจดี"
+                    maxLength={120}
+                  />
+                </div>
+
+                <div className="sm:col-span-1">
+                  <SelectField
+                    id="departmentId"
+                    label="แผนก"
+                    required
+                    value={form.departmentId}
+                    onChange={(event) =>
+                      onChange("departmentId", event.target.value)
+                    }
+                  >
+                    <option value="">เลือกแผนก</option>
+                    {departments.map((department) => (
+                      <option key={department.id} value={department.id}>
+                        {department.name}
+                      </option>
+                    ))}
+                  </SelectField>
+                </div>
+
+                <div className="sm:col-span-1">
+                  <TextField
+                    id="phone"
+                    label="เบอร์โทรศัพท์"
+                    required
+                    value={form.phone}
+                    onChange={(event) =>
+                      handleRequesterPhoneChange(event.target.value)
+                    }
+                    placeholder="012-345-6789"
+                    inputMode="numeric"
+                    maxLength={12}
+                  />
+                </div>
+
+                {isOtherDepartment ? (
+                  <div className="sm:col-span-3">
+                    <TextField
+                      id="departmentOther"
+                      label="ระบุชื่อแผนก"
+                      required
+                      value={form.departmentOther}
+                      onChange={(event) =>
+                        onChange("departmentOther", event.target.value)
+                      }
+                      placeholder="ชื่อแผนก"
+                      maxLength={120}
+                    />
+                  </div>
+                ) : null}
+              </div>
+            </Panel>
+
+            <Panel stepNumber={2} title="รายละเอียดสิ่งของ">
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label
+                      htmlFor="pickupDateDisplay"
+                      className="mb-1.5 block text-sm font-medium text-slate-700"
+                    >
+                      วันที่จัดส่ง{" "}
+                      <span className="ml-0.5 text-[#b62026]">*</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        id="pickupDateDisplay"
+                        type="text"
+                        readOnly
+                        value={pickupDateDisplay}
+                        placeholder="วัน/เดือน/ปี พ.ศ."
+                        onClick={openPickupDatePicker}
+                        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 pr-11 text-sm text-slate-800 shadow-sm outline-none transition focus:border-[#0e2d4c] focus:ring-2 focus:ring-[#0e2d4c]/10"
+                      />
+                      <button
+                        type="button"
+                        onClick={openPickupDatePicker}
+                        className="absolute inset-y-0 right-1 flex items-center rounded-lg px-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                        aria-label="เลือกวันที่จัดส่ง"
+                      >
+                        <svg
+                          className="h-4 w-4"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                          />
+                        </svg>
+                      </button>
+                      <input
+                        ref={pickupDateInputRef}
+                        id="pickupDate"
+                        type="date"
+                        value={form.pickupDate}
+                        onChange={(event) =>
+                          onChange("pickupDate", event.target.value)
+                        }
+                        tabIndex={-1}
+                        aria-hidden="true"
+                        className="pointer-events-none absolute inset-0 opacity-0"
+                      />
+                    </div>
+                  </div>
+
+                  <SelectField
+                    id="itemType"
+                    label="ประเภทสิ่งของ"
+                    required
+                    value={form.itemType}
+                    onChange={(event) =>
+                      onChange("itemType", event.target.value as ItemType)
+                    }
+                  >
+                    {itemTypeOptions.map((item) => (
+                      <option key={item.value} value={item.value}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </SelectField>
+                </div>
+
+                <TextareaField
+                  id="itemDescription"
+                  label="รายละเอียดสิ่งของ"
+                  required
+                  value={form.itemDescription}
+                  onChange={(event) =>
+                    onChange("itemDescription", event.target.value)
+                  }
+                  placeholder="อธิบายสิ่งของที่ต้องจัดส่ง"
+                  rows={4}
+                  maxLength={2000}
+                />
+
+                <TextareaField
+                  id="additionalNote"
+                  label="หมายเหตุเพิ่มเติม"
+                  value={form.additionalNote}
+                  onChange={(event) =>
+                    onChange("additionalNote", event.target.value)
+                  }
+                  placeholder="รายละเอียดเพิ่มเติม (ถ้ามี)"
+                  rows={3}
+                  maxLength={500}
                 />
               </div>
+            </Panel>
 
-              {attachmentNotice ? (
-                <p className="mt-3 text-sm text-amber-700">
-                  {attachmentNotice}
-                </p>
-              ) : null}
+            <Panel stepNumber={3} title="ไฟล์แนบ">
+              <div className="space-y-4">
+                <label
+                  htmlFor="attachments"
+                  className="flex cursor-pointer flex-col items-center gap-2.5 rounded-xl border-2 border-dashed border-slate-300 bg-white px-6 py-7 text-center transition-colors duration-150 hover:border-[#0e2d4c]/30 hover:bg-slate-50/60"
+                >
+                  <svg
+                    className="h-8 w-8 text-slate-400"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1.5}
+                      d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                    />
+                  </svg>
+                  <div>
+                    <p className="text-sm font-semibold text-[#0e2d4c]">
+                      แตะเพื่อเลือกไฟล์
+                    </p>
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      รูปภาพ · วิดีโอ · เอกสาร &nbsp;|&nbsp; สูงสุด{" "}
+                      {MAX_ATTACHMENTS} ไฟล์ · ไม่เกิน 100 MB/ไฟล์
+                    </p>
+                  </div>
+                  <input
+                    id="attachments"
+                    type="file"
+                    multiple
+                    accept={attachmentAccept}
+                    className="sr-only"
+                    onChange={(event) => {
+                      const selected = Array.from(event.target.files ?? []);
+                      event.currentTarget.value = "";
+                      handleAttachmentPick(selected);
+                    }}
+                  />
+                </label>
 
-              {attachmentFiles.length > 0 ? (
-                <ul className="mt-4 space-y-2">
-                  {attachmentFiles.map((file) => {
-                    const key = fileKey(file);
-                    return (
+                {attachmentNotice ? (
+                  <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-medium text-amber-800">
+                    <svg
+                      className="mt-px h-3.5 w-3.5 shrink-0 text-amber-500"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    {attachmentNotice}
+                  </div>
+                ) : null}
+
+                {attachmentPreviews.length > 0 ? (
+                  <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                    {attachmentPreviews.map((preview) => (
                       <li
-                        key={key}
-                        className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                        key={preview.key}
+                        className="flex min-h-[11rem] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"
                       >
-                        <span className="truncate pr-3 text-slate-700">
-                          {file.name}
-                        </span>
-                        <button
-                          type="button"
-                          className="text-rose-600 hover:text-rose-700"
-                          onClick={() => handleRemoveAttachment(key)}
-                        >
-                          ลบ
-                        </button>
+                        <div className="flex items-center gap-2 border-b border-slate-100 bg-slate-50 px-3 py-2">
+                          <span
+                            className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                              preview.fileKind === "IMAGE"
+                                ? "bg-blue-100 text-blue-700"
+                                : preview.fileKind === "VIDEO"
+                                  ? "bg-purple-100 text-purple-700"
+                                  : "bg-slate-200 text-slate-600"
+                            }`}
+                          >
+                            {preview.file.name
+                              .split(".")
+                              .pop()
+                              ?.toUpperCase() ?? preview.fileKind}
+                          </span>
+                          <p
+                            className="min-w-0 flex-1 truncate text-[11px] font-medium text-slate-700"
+                            title={preview.file.name}
+                          >
+                            {preview.file.name}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveAttachment(preview.key)}
+                            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-50 text-red-600 shadow-sm transition-shadow duration-150 hover:bg-red-600 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-red-300"
+                            aria-label={`ลบ ${preview.file.name}`}
+                            title={`ลบ ${preview.file.name}`}
+                          >
+                            <svg
+                              className="h-5 w-5"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={3}
+                                d="M6 18L18 6M6 6l12 12"
+                              />
+                            </svg>
+                          </button>
+                        </div>
+
+                        <div className="p-2.5">
+                          {preview.fileKind === "IMAGE" ? (
+                            <button
+                              type="button"
+                              onClick={() => setImagePreview(preview)}
+                              aria-label={`ดูภาพ ${preview.file.name}`}
+                              className="group relative block h-32 w-full overflow-hidden rounded-lg border border-slate-100 bg-slate-100"
+                            >
+                              <Image
+                                src={preview.previewUrl}
+                                alt={preview.file.name}
+                                fill
+                                className="object-cover transition duration-200 group-hover:scale-105"
+                              />
+                              <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition group-hover:bg-black/20">
+                                <span className="rounded-full bg-white/90 px-2.5 py-1 text-[10px] font-semibold text-slate-800 opacity-0 transition group-hover:opacity-100">
+                                  ขยาย
+                                </span>
+                              </div>
+                            </button>
+                          ) : null}
+
+                          {preview.fileKind === "VIDEO" ? (
+                            <button
+                              type="button"
+                              onClick={() => setVideoPreview(preview)}
+                              aria-label="เล่นวิดีโอ"
+                              className="group relative block h-32 w-full overflow-hidden rounded-lg border border-slate-100 bg-black"
+                            >
+                              <video
+                                className="h-full w-full object-cover opacity-60"
+                                muted
+                                playsInline
+                                preload="metadata"
+                              >
+                                <source
+                                  src={preview.previewUrl}
+                                  type={preview.mimeType}
+                                />
+                              </video>
+                              <div className="absolute inset-0 flex items-center justify-center">
+                                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/90 shadow transition-transform group-hover:scale-110">
+                                  <svg
+                                    viewBox="0 0 24 24"
+                                    className="h-4 w-4 translate-x-0.5 fill-[#0e2d4c]"
+                                  >
+                                    <path d="M8 5v14l11-7z" />
+                                  </svg>
+                                </span>
+                              </div>
+                            </button>
+                          ) : null}
+
+                          {preview.fileKind === "DOCUMENT" ? (
+                            <button
+                              type="button"
+                              onClick={() => handleDocumentAction(preview)}
+                              className="flex w-full items-center gap-2.5 rounded-lg border border-slate-100 bg-slate-50 p-2.5 text-left transition hover:border-[#0e2d4c]/20 hover:bg-[#0e2d4c]/5"
+                            >
+                              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#0e2d4c]/10 text-[#0e2d4c]">
+                                <svg
+                                  viewBox="0 0 24 24"
+                                  className="h-4 w-4 fill-current"
+                                >
+                                  <path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7z" />
+                                  <path
+                                    d="M14 2v5h5"
+                                    className="fill-white/60"
+                                  />
+                                </svg>
+                              </span>
+                              <div className="min-w-0 flex-1">
+                                <p
+                                  className="truncate text-[11px] font-semibold leading-tight text-slate-800"
+                                  title={preview.file.name}
+                                >
+                                  {preview.file.name}
+                                </p>
+                                <p className="mt-0.5 text-[10px] uppercase tracking-wide text-slate-400">
+                                  {getDocumentTypeLabel(
+                                    preview.mimeType,
+                                    preview.file.name,
+                                  )}
+                                </p>
+                              </div>
+                              <span className="shrink-0 rounded-md bg-[#0e2d4c] px-2 py-0.5 text-[10px] font-bold text-white">
+                                {preview.mimeType.toLowerCase() ===
+                                "application/pdf"
+                                  ? "ดู"
+                                  : "ดาวน์โหลด"}
+                              </span>
+                            </button>
+                          ) : null}
+                        </div>
+
+                        <div className="border-t border-slate-100 px-3 py-1.5 text-center text-[10px] text-slate-400">
+                          {Math.max(
+                            preview.file.size / 1024 / 1024,
+                            0.01,
+                          ).toFixed(2)}{" "}
+                          MB
+                        </div>
                       </li>
-                    );
-                  })}
-                </ul>
-              ) : null}
-            </div>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+            </Panel>
 
-            <div className="rounded-xl border border-slate-200 p-4">
-              <h2 className="text-lg font-semibold text-slate-900">
-                จุดส่งของ
-              </h2>
-              <div className="mt-4 grid gap-4 md:grid-cols-2">
-                <TextField
-                  id="receiverName"
-                  label="ชื่อผู้รับ"
-                  required
-                  value={receiver.name}
-                  onChange={(event) =>
-                    updateReceiverAddress("name", event.target.value)
-                  }
-                  maxLength={120}
-                />
+            <Panel stepNumber={4} title="ข้อมูลผู้รับ">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
+                <div className="sm:col-span-2">
+                  <TextField
+                    id="receiverName"
+                    label="ชื่อ-นามสกุล"
+                    required
+                    value={receiver.name}
+                    onChange={(event) =>
+                      updateReceiverAddress("name", event.target.value)
+                    }
+                    placeholder="สมหญิง ใจดี"
+                    maxLength={120}
+                  />
+                </div>
 
-                <TextField
-                  id="receiverPhone"
-                  label="เบอร์โทรผู้รับ"
-                  required
-                  value={receiver.phone}
-                  onChange={(event) =>
-                    updateReceiverAddress("phone", event.target.value)
-                  }
-                  maxLength={20}
-                />
+                <div className="sm:col-span-2">
+                  <TextField
+                    id="receiverPhone"
+                    label="เบอร์โทรศัพท์"
+                    required
+                    value={receiver.phone}
+                    onChange={(event) =>
+                      handleReceiverPhoneChange(event.target.value)
+                    }
+                    placeholder="012-345-6789"
+                    inputMode="numeric"
+                    maxLength={12}
+                  />
+                </div>
 
                 <SelectField
                   id="receiverProvince"
@@ -915,18 +1359,33 @@ export default function Page() {
                   label="รหัสไปรษณีย์"
                   required
                   value={receiver.postalCode}
+                  disabled={!receiver.subdistrict}
                   readOnly
                   maxLength={10}
                 />
 
+                <div className="sm:col-span-2">
+                  <TextField
+                    id="receiverHouseNo"
+                    label="บ้านเลขที่"
+                    required
+                    value={receiver.houseNo}
+                    onChange={(event) =>
+                      updateReceiverAddress("houseNo", event.target.value)
+                    }
+                    placeholder="99/123"
+                    maxLength={120}
+                  />
+                </div>
+
                 <TextField
-                  id="receiverHouseNo"
-                  label="บ้านเลขที่"
-                  required
-                  value={receiver.houseNo}
+                  id="receiverRoad"
+                  label="ถนน"
+                  value={receiver.road ?? ""}
                   onChange={(event) =>
-                    updateReceiverAddress("houseNo", event.target.value)
+                    updateReceiverAddress("road", event.target.value)
                   }
+                  placeholder="สุขุมวิท"
                   maxLength={120}
                 />
 
@@ -937,16 +1396,7 @@ export default function Page() {
                   onChange={(event) =>
                     updateReceiverAddress("soi", event.target.value)
                   }
-                  maxLength={120}
-                />
-
-                <TextField
-                  id="receiverRoad"
-                  label="ถนน"
-                  value={receiver.road ?? ""}
-                  onChange={(event) =>
-                    updateReceiverAddress("road", event.target.value)
-                  }
+                  placeholder="สุขุมวิท 24"
                   maxLength={120}
                 />
               </div>
@@ -959,21 +1409,15 @@ export default function Page() {
                   onChange={(event) =>
                     updateReceiverAddress("extra", event.target.value)
                   }
+                  placeholder="ส่งที่นิติบุคคลชั้น 1 ฝากพัสดุ"
                   rows={2}
                   maxLength={200}
                 />
               </div>
-            </div>
+            </Panel>
 
-            <div className="rounded-xl border border-slate-200 p-4">
-              <h2 className="text-lg font-semibold text-slate-900">
-                ขอบเขตการจัดส่ง
-              </h2>
-              <p className="mt-1 text-sm text-slate-600">
-                ระบบจะคำนวณขอบเขตจากจังหวัดของผู้รับอัตโนมัติ
-              </p>
-
-              <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <Panel stepNumber={5} title="ขอบเขตการจัดส่ง">
+              <div className="mt grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <TextField
                   id="outsideBkkMetro"
                   label="นอกเขตกรุงเทพและปริมณฑล"
@@ -1018,30 +1462,142 @@ export default function Page() {
                   />
                 </div>
               ) : null}
-            </div>
+            </Panel>
 
             {errorMessage ? (
-              <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">
-                {errorMessage}
+              <div className="flex items-start gap-3 rounded-xl border border-[#b62026]/20 bg-red-50 px-4 py-3.5">
+                <svg
+                  className="mt-px h-4 w-4 shrink-0 text-[#b62026]"
+                  fill="currentColor"
+                  viewBox="0 0 20 20"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+                <div>
+                  <p className="text-sm font-bold text-[#b62026]">
+                    เกิดข้อผิดพลาด
+                  </p>
+                  <p className="mt-0.5 text-xs text-[#b62026]/80">
+                    {errorMessage}
+                  </p>
+                </div>
               </div>
             ) : null}
 
-            <div className="flex flex-wrap items-center gap-3">
-              <Button type="submit" disabled={submitting || loadingReferences}>
-                {submitting ? "กำลังส่ง..." : "ส่งคำขอ"}
-              </Button>
-              <Button
-                type="button"
-                className="bg-white text-slate-700 ring-1 ring-slate-300 hover:bg-slate-100"
-                onClick={handleReset}
-                disabled={submitting}
-              >
-                ล้างข้อมูล
-              </Button>
+            <div className="rounded-2xl border border-slate-200 bg-white">
+              <div className="flex items-center gap-2 border-b border-amber-100 bg-amber-50/60 px-5 py-2.5">
+                <svg
+                  className="h-3.5 w-3.5 shrink-0 text-amber-600"
+                  fill="currentColor"
+                  viewBox="0 0 20 20"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+                <p className="text-xs font-medium text-amber-800">
+                  กรุณาตรวจสอบข้อมูลก่อนส่งคำขอ
+                </p>
+              </div>
+
+              <div className="flex flex-col-reverse gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex w-full flex-col-reverse items-stretch gap-3 sm:flex-row sm:items-center sm:w-auto">
+                  <Link
+                    href="/"
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 sm:w-auto"
+                  >
+                    <svg
+                      className="h-4 w-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M15 19l-7-7 7-7"
+                      />
+                    </svg>
+                    กลับสู่หน้าหลัก
+                  </Link>
+
+                  <button
+                    type="button"
+                    onClick={handleReset}
+                    disabled={submitting}
+                    aria-label="รีเซ็ตแบบฟอร์ม"
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50 shadow-sm"
+                  >
+                    <svg
+                      className="h-4 w-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                      />
+                    </svg>
+                    รีเซ็ตแบบฟอร์ม
+                  </button>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={submitting || loadingReferences}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#0e2d4c] px-10 py-3 text-sm font-bold text-white shadow-lg transition hover:bg-[#1a4a7a] disabled:opacity-60 sm:w-auto"
+                >
+                  {submitting ? "กำลังส่งคำขอ..." : "ส่งคำขอเมสเซนเจอร์"}
+                </button>
+              </div>
             </div>
           </form>
         )}
-      </section>
+      </div>
+
+      <ImagePreviewModal
+        open={Boolean(imagePreview)}
+        title={
+          imagePreview
+            ? `ตัวอย่างภาพ: ${imagePreview.file.name}`
+            : "ตัวอย่างภาพ"
+        }
+        src={imagePreview?.previewUrl ?? ""}
+        onClose={() => setImagePreview(null)}
+      />
+
+      <DocumentPreviewModal
+        open={Boolean(documentPreview)}
+        title={
+          documentPreview
+            ? `ตัวอย่างเอกสาร: ${documentPreview.file.name}`
+            : "ตัวอย่างเอกสาร"
+        }
+        src={documentPreview?.previewUrl ?? ""}
+        mimeType={documentPreview?.mimeType}
+        onClose={() => setDocumentPreview(null)}
+      />
+
+      <VideoPreviewModal
+        open={Boolean(videoPreview)}
+        title={
+          videoPreview
+            ? `ตัวอย่างวิดีโอ: ${videoPreview.file.name}`
+            : "ตัวอย่างวิดีโอ"
+        }
+        src={videoPreview?.previewUrl ?? ""}
+        onClose={() => setVideoPreview(null)}
+      />
     </main>
   );
 }

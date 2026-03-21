@@ -28,7 +28,7 @@ const requestTypes: RequestType[] = [
   },
   {
     path: "/requests/new/messenger",
-    title: "คำขอใช้บริการ Messenger",
+    title: "คำขอใช้บริการเมสเซนเจอร์",
     description: "ขอใช้บริการส่งเอกสารหรือพัสดุภายในบริษัท",
     icon: "📬",
     color: "from-[#0e2d4c] to-[#1a4a7a]",

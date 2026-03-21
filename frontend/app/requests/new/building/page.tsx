@@ -49,6 +49,8 @@ const urgencyOptions: Array<{
   activeBg: string;
   activeBorder: string;
   icon: string;
+  iconBg: string;
+  hint: string;
 }> = [
   {
     value: "NORMAL",
@@ -57,7 +59,9 @@ const urgencyOptions: Array<{
     color: "text-blue-600",
     activeBg: "bg-blue-600 text-white",
     activeBorder: "border-blue-600",
-    icon: "🔵",
+    icon: "🧰",
+    iconBg: "bg-blue-100 text-blue-700",
+    hint: "ดำเนินการตามคิว",
   },
   {
     value: "HIGH",
@@ -66,7 +70,9 @@ const urgencyOptions: Array<{
     color: "text-orange-600",
     activeBg: "bg-orange-600 text-white",
     activeBorder: "border-orange-600",
-    icon: "🟠",
+    icon: "⚡",
+    iconBg: "bg-orange-100 text-orange-700",
+    hint: "ควรเร่งดำเนินการ",
   },
   {
     value: "CRITICAL",
@@ -75,7 +81,9 @@ const urgencyOptions: Array<{
     color: "text-red-600",
     activeBg: "bg-red-600 text-white",
     activeBorder: "border-red-600",
-    icon: "🔴",
+    icon: "🚨",
+    iconBg: "bg-red-100 text-red-700",
+    hint: "ดำเนินการทันที",
   },
 ];
 const buildingOptions: Array<{
@@ -817,7 +825,7 @@ export default function Page() {
                         key={opt.value}
                         type="button"
                         onClick={() => onChange("urgency", opt.value)}
-                        className={`w-full flex flex-col items-center gap-3 rounded-xl border-2 px-4 py-4 text-sm font-semibold transition-all duration-150 ${
+                        className={`w-full flex flex-col items-center gap-2 rounded-xl border-2 px-4 py-4 text-sm font-semibold transition-all duration-150 ${
                           form.urgency === opt.value
                             ? `${opt.activeBg} ${opt.activeBorder} shadow-sm`
                             : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
@@ -827,14 +835,23 @@ export default function Page() {
                           className={`flex h-10 w-10 items-center justify-center rounded-full text-xl ${
                             form.urgency === opt.value
                               ? "bg-white/20"
-                              : "bg-slate-100"
+                              : opt.iconBg
                           }`}
                           aria-hidden
                         >
                           {opt.icon}
                         </span>
-                        <span className="whitespace-nowrap text-center">
+                        <span className="whitespace-nowrap text-center text-sm font-bold">
                           {opt.label}
+                        </span>
+                        <span
+                          className={`text-center text-[11px] leading-4 ${
+                            form.urgency === opt.value
+                              ? "text-white/90"
+                              : "text-slate-500"
+                          }`}
+                        >
+                          {opt.hint}
                         </span>
                       </button>
                     ))}
@@ -1158,8 +1175,8 @@ export default function Page() {
                               <span className="shrink-0 rounded-md bg-[#0e2d4c] px-2 py-0.5 text-[10px] font-bold text-white">
                                 {preview.mimeType.toLowerCase() ===
                                 "application/pdf"
-                                  ? "Open"
-                                  : "Download"}
+                                  ? "ดู"
+                                  : "ดาวน์โหลด"}
                               </span>
                             </button>
                           )}

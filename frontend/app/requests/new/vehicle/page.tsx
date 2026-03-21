@@ -554,7 +554,7 @@ export default function Page() {
 
           <div className="flex items-center gap-4">
             <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-[#0e2d4c]">
-              <span className="text-2xl">🚐</span>
+              <span className="text-2xl">🚗</span>
             </div>
             <div>
               <h1 className="text-xl font-bold text-[#0e2d4c] sm:text-2xl">
@@ -928,8 +928,8 @@ export default function Page() {
                               <span className="shrink-0 rounded-md bg-[#0e2d4c] px-2 py-0.5 text-[10px] font-bold text-white">
                                 {preview.mimeType.toLowerCase() ===
                                 "application/pdf"
-                                  ? "Open"
-                                  : "Download"}
+                                  ? "ดู"
+                                  : "ดาวน์โหลด"}
                               </span>
                             </button>
                           ) : null}
