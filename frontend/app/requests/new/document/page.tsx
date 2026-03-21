@@ -23,6 +23,9 @@ import {
   TextField,
   TextareaField,
 } from "@/components/ui/form-controls";
+import ConfirmModal from "@/components/ui/confirm-modal";
+import { FieldError } from "@/components/ui/field-error";
+import { ErrorToast } from "@/components/ui/error-toast";
 
 const urgencyOptions: Array<{
   value: Urgency;
@@ -139,7 +142,7 @@ function formatPhoneDisplay(value: string) {
 }
 
 function isValidPhone(value: string) {
-  return /^\+?\d{9,15}$/.test(value.trim());
+  return extractPhoneDigits(value).length === 10;
 }
 
 function isValidRequesterPhone(value: string) {
@@ -149,7 +152,7 @@ function isValidRequesterPhone(value: string) {
 function normalizeAddress(address: AddressState): AddressPayload {
   return {
     name: address.name.trim(),
-    phone: address.phone.trim(),
+    phone: extractPhoneDigits(address.phone),
     province: address.province.trim(),
     district: address.district.trim(),
     subdistrict: address.subdistrict.trim(),
@@ -159,38 +162,6 @@ function normalizeAddress(address: AddressState): AddressPayload {
     ...(address.road.trim() ? { road: address.road.trim() } : {}),
     ...(address.extra.trim() ? { extra: address.extra.trim() } : {}),
   };
-}
-
-function validateAddress(address: AddressState) {
-  if (!address.name.trim()) {
-    return "กรุณากรอกชื่อผู้รับ";
-  }
-
-  if (!isValidPhone(address.phone)) {
-    return "เบอร์โทรผู้รับต้องเป็นตัวเลข 9-15 หลัก และอาจขึ้นต้นด้วย + ได้";
-  }
-
-  if (!address.province.trim()) {
-    return "กรุณาเลือกจังหวัดผู้รับ";
-  }
-
-  if (!address.district.trim()) {
-    return "กรุณาเลือกเขต/อำเภอผู้รับ";
-  }
-
-  if (!address.subdistrict.trim()) {
-    return "กรุณาเลือกแขวง/ตำบลผู้รับ";
-  }
-
-  if (!address.postalCode.trim()) {
-    return "กรุณากรอกรหัสไปรษณีย์ผู้รับ";
-  }
-
-  if (!address.houseNo.trim()) {
-    return "กรุณากรอกบ้านเลขที่ผู้รับ";
-  }
-
-  return null;
 }
 
 function Panel({
@@ -230,6 +201,9 @@ export default function Page() {
   const [loadingReferences, setLoadingReferences] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [showConfirmReset, setShowConfirmReset] = useState(false);
+  const [showConfirmSubmit, setShowConfirmSubmit] = useState(false);
 
   const isPostal = useMemo(
     () => form.deliveryMethod === "POSTAL",
@@ -436,6 +410,13 @@ export default function Page() {
 
   const onChange = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
+    if (fieldErrors[key]) {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+    }
   };
 
   const onAddressChange = <K extends keyof AddressState>(
@@ -443,64 +424,146 @@ export default function Page() {
     value: AddressState[K],
   ) => {
     setAddress((prev) => ({ ...prev, [key]: value }));
+
+    const addressFieldErrorMap: Partial<Record<keyof AddressState, string>> = {
+      name: "addressName",
+      phone: "addressPhone",
+      province: "addressProvince",
+      district: "addressDistrict",
+      subdistrict: "addressSubdistrict",
+      postalCode: "addressPostalCode",
+      houseNo: "addressHouseNo",
+    };
+
+    const mappedField = addressFieldErrorMap[key];
+    if (mappedField && fieldErrors[mappedField]) {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next[mappedField];
+        return next;
+      });
+    }
   };
 
   const handleRequesterPhoneChange = (value: string) => {
     onChange("phone", formatPhoneDisplay(value));
+    if (fieldErrors.phone) {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next.phone;
+        return next;
+      });
+    }
+  };
+
+  const handleAddressPhoneChange = (value: string) => {
+    onAddressChange("phone", formatPhoneDisplay(value));
+    if (fieldErrors.addressPhone) {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next.addressPhone;
+        return next;
+      });
+    }
+  };
+
+  const clearPostalAddressErrors = () => {
+    setFieldErrors((prev) => {
+      const next = { ...prev };
+      const postalErrorKeys = [
+        "addressName",
+        "addressPhone",
+        "addressProvince",
+        "addressDistrict",
+        "addressSubdistrict",
+        "addressPostalCode",
+        "addressHouseNo",
+      ];
+
+      let changed = false;
+      for (const key of postalErrorKeys) {
+        if (next[key]) {
+          delete next[key];
+          changed = true;
+        }
+      }
+
+      return changed ? next : prev;
+    });
   };
 
   const validateBeforeSubmit = () => {
+    const errors: Record<string, string> = {};
+
     if (!form.employeeName.trim()) {
-      return "กรุณากรอกชื่อพนักงาน";
+      errors.employeeName = "กรุณากรอกชื่อ-นามสกุล";
     }
 
     if (!form.departmentId) {
-      return "กรุณาเลือกแผนก";
+      errors.departmentId = "กรุณาเลือกแผนก";
     }
 
     if (isOtherDepartment && !form.departmentOther.trim()) {
-      return "กรุณาระบุชื่อแผนกอื่น";
+      errors.departmentOther = "กรุณาระบุชื่อแผนกอื่น";
     }
 
     if (!isValidRequesterPhone(form.phone)) {
-      return "หมายเลขโทรศัพท์ต้องมีตัวเลข 10 หลัก";
+      errors.phone = "หมายเลขโทรศัพท์ต้องมีตัวเลข 10 หลัก";
     }
 
     if (!form.siteNameRaw.trim()) {
-      return "กรุณากรอกชื่อไซต์/หน่วยงาน";
+      errors.siteNameRaw = "กรุณากรอกชื่อไซต์/หน่วยงาน";
     }
 
     if (!form.documentDescription.trim()) {
-      return "กรุณากรอกรายละเอียดเอกสาร";
+      errors.documentDescription = "กรุณากรอกรายละเอียดเอกสาร";
     }
 
     if (!form.purpose.trim()) {
-      return "กรุณากรอกวัตถุประสงค์";
+      errors.purpose = "กรุณากรอกวัตถุประสงค์";
     }
 
     if (isPostal) {
-      return validateAddress(address);
+      if (!address.name.trim()) {
+        errors.addressName = "กรุณากรอกชื่อผู้รับ";
+      }
+
+      if (!isValidPhone(address.phone)) {
+        errors.addressPhone = "หมายเลขโทรศัพท์ผู้รับ ต้องมีตัวเลข 10 หลัก";
+      }
+
+      if (!address.province.trim()) {
+        errors.addressProvince = "กรุณาเลือกจังหวัดผู้รับ";
+      }
+
+      if (address.province.trim() && !address.district.trim()) {
+        errors.addressDistrict = "กรุณาเลือกเขต/อำเภอผู้รับ";
+      } else if (address.district.trim() && !address.subdistrict.trim()) {
+        errors.addressSubdistrict = "กรุณาเลือกแขวง/ตำบลผู้รับ";
+      }
+
+      if (!address.houseNo.trim()) {
+        errors.addressHouseNo = "กรุณากรอกบ้านเลขที่ผู้รับ";
+      }
     }
 
-    return null;
+    setFieldErrors(errors);
+    return Object.keys(errors).length === 0;
   };
 
-  const handleReset = () => {
+  const doReset = () => {
+    setShowConfirmReset(false);
     setForm(initialFormState);
     setAddress(createInitialAddressState());
     setAddressGeo(emptyGeoState);
     setErrorMessage(null);
+    setFieldErrors({});
   };
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const performSubmit = async () => {
+    setShowConfirmSubmit(false);
+    setSubmitting(true);
     setErrorMessage(null);
-
-    const validationError = validateBeforeSubmit();
-    if (validationError) {
-      setErrorMessage(validationError);
-      return;
-    }
 
     const payload: CreateDocumentRequestPayload = {
       employeeName: form.employeeName.trim(),
@@ -522,11 +585,12 @@ export default function Page() {
       payload.deliveryAddress = normalizeAddress(address);
     }
 
-    setSubmitting(true);
-
     try {
       const result = await createDocumentRequest(payload);
-      router.push(`/requests/success/${encodeURIComponent(result.requestNo)}`);
+      document.cookie = `hrb_success_request_no=${encodeURIComponent(result.requestNo)}; Path=/; Max-Age=600; SameSite=Lax`;
+      document.cookie =
+        "hrb_success_attachments=; Path=/; Max-Age=0; SameSite=Lax";
+      router.push("/requests/success");
     } catch (error) {
       if (error instanceof ApiError) {
         setErrorMessage(error.message);
@@ -538,8 +602,25 @@ export default function Page() {
     }
   };
 
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setErrorMessage(null);
+
+    const validationError = validateBeforeSubmit();
+    if (!validationError) {
+      return;
+    }
+
+    setShowConfirmSubmit(true);
+  };
+
   return (
     <main className="min-h-screen bg-slate-50">
+      <ErrorToast
+        message={errorMessage}
+        onClose={() => setErrorMessage(null)}
+      />
+
       <div className="border-b border-slate-200 bg-white">
         <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
           <nav className="mb-4 flex items-center gap-1.5 text-sm text-slate-400">
@@ -604,6 +685,7 @@ export default function Page() {
                     placeholder="สมชาย ใจดี"
                     maxLength={120}
                   />
+                  <FieldError message={fieldErrors.employeeName} />
                 </div>
 
                 <div className="sm:col-span-1">
@@ -623,6 +705,7 @@ export default function Page() {
                       </option>
                     ))}
                   </SelectField>
+                  <FieldError message={fieldErrors.departmentId} />
                 </div>
 
                 <div className="sm:col-span-1">
@@ -638,6 +721,7 @@ export default function Page() {
                     inputMode="numeric"
                     maxLength={12}
                   />
+                  <FieldError message={fieldErrors.phone} />
                 </div>
 
                 {isOtherDepartment ? (
@@ -653,6 +737,7 @@ export default function Page() {
                       placeholder="ชื่อแผนก"
                       maxLength={120}
                     />
+                    <FieldError message={fieldErrors.departmentOther} />
                   </div>
                 ) : null}
               </div>
@@ -661,17 +746,20 @@ export default function Page() {
             <Panel stepNumber={2} title="รายละเอียดเอกสาร">
               <div className="space-y-4">
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <TextField
-                    id="siteNameRaw"
-                    label="ชื่อไซต์ / หน่วยงาน"
-                    required
-                    value={form.siteNameRaw}
-                    onChange={(event) =>
-                      onChange("siteNameRaw", event.target.value)
-                    }
-                    placeholder="HO / Site A / Site B / ฯลฯ"
-                    maxLength={200}
-                  />
+                  <div>
+                    <TextField
+                      id="siteNameRaw"
+                      label="ชื่อไซต์ / หน่วยงาน"
+                      required
+                      value={form.siteNameRaw}
+                      onChange={(event) =>
+                        onChange("siteNameRaw", event.target.value)
+                      }
+                      placeholder="HO / Site A / Site B / ฯลฯ"
+                      maxLength={200}
+                    />
+                    <FieldError message={fieldErrors.siteNameRaw} />
+                  </div>
 
                   <SelectField
                     id="deliveryMethod"
@@ -681,6 +769,11 @@ export default function Page() {
                     onChange={(event) => {
                       const nextDeliveryMethod = event.target
                         .value as DeliveryMethod;
+
+                      if (form.deliveryMethod === "POSTAL") {
+                        clearPostalAddressErrors();
+                      }
+
                       onChange("deliveryMethod", nextDeliveryMethod);
                       if (
                         nextDeliveryMethod === "POSTAL" &&
@@ -755,29 +848,37 @@ export default function Page() {
                   </div>
                 ) : null}
 
-                <TextareaField
-                  id="documentDescription"
-                  label="รายละเอียดเอกสาร"
-                  required
-                  value={form.documentDescription}
-                  onChange={(event) =>
-                    onChange("documentDescription", event.target.value)
-                  }
-                  placeholder="อธิบายรายละเอียดเอกสารที่ต้องการ"
-                  rows={4}
-                  maxLength={2000}
-                />
+                <div>
+                  <TextareaField
+                    id="documentDescription"
+                    label="รายละเอียดเอกสาร"
+                    required
+                    value={form.documentDescription}
+                    onChange={(event) =>
+                      onChange("documentDescription", event.target.value)
+                    }
+                    placeholder="อธิบายรายละเอียดเอกสารที่ต้องการ"
+                    rows={4}
+                    maxLength={2000}
+                  />
+                  <FieldError message={fieldErrors.documentDescription} />
+                </div>
 
-                <TextareaField
-                  id="purpose"
-                  label="วัตถุประสงค์"
-                  required
-                  value={form.purpose}
-                  onChange={(event) => onChange("purpose", event.target.value)}
-                  placeholder="ระบุวัตถุประสงค์ในการใช้งานเอกสาร"
-                  rows={3}
-                  maxLength={500}
-                />
+                <div>
+                  <TextareaField
+                    id="purpose"
+                    label="วัตถุประสงค์"
+                    required
+                    value={form.purpose}
+                    onChange={(event) =>
+                      onChange("purpose", event.target.value)
+                    }
+                    placeholder="ระบุวัตถุประสงค์ในการใช้งานเอกสาร"
+                    rows={3}
+                    maxLength={500}
+                  />
+                  <FieldError message={fieldErrors.purpose} />
+                </div>
 
                 <TextareaField
                   id="note"
@@ -806,6 +907,7 @@ export default function Page() {
                       placeholder="สมหญิง ใจดี"
                       maxLength={120}
                     />
+                    <FieldError message={fieldErrors.addressName} />
                   </div>
 
                   <div className="sm:col-span-2">
@@ -815,78 +917,92 @@ export default function Page() {
                       required
                       value={address.phone}
                       onChange={(event) =>
-                        onAddressChange("phone", event.target.value)
+                        handleAddressPhoneChange(event.target.value)
                       }
                       placeholder="012-345-6789"
-                      maxLength={20}
+                      inputMode="numeric"
+                      maxLength={12}
                     />
+                    <FieldError message={fieldErrors.addressPhone} />
                   </div>
 
-                  <SelectField
-                    id="addressProvince"
-                    label="จังหวัด"
-                    required
-                    value={address.province}
-                    onChange={(event) =>
-                      onAddressChange("province", event.target.value)
-                    }
-                  >
-                    <option value="">เลือกจังหวัด</option>
-                    {provinces.map((province) => (
-                      <option key={province} value={province}>
-                        {province}
-                      </option>
-                    ))}
-                  </SelectField>
+                  <div>
+                    <SelectField
+                      id="addressProvince"
+                      label="จังหวัด"
+                      required
+                      value={address.province}
+                      onChange={(event) =>
+                        onAddressChange("province", event.target.value)
+                      }
+                    >
+                      <option value="">เลือกจังหวัด</option>
+                      {provinces.map((province) => (
+                        <option key={province} value={province}>
+                          {province}
+                        </option>
+                      ))}
+                    </SelectField>
+                    <FieldError message={fieldErrors.addressProvince} />
+                  </div>
 
-                  <SelectField
-                    id="addressDistrict"
-                    label="เขต/อำเภอ"
-                    required
-                    value={address.district}
-                    onChange={(event) =>
-                      onAddressChange("district", event.target.value)
-                    }
-                    disabled={!address.province}
-                  >
-                    <option value="">เลือกเขต/อำเภอ</option>
-                    {addressGeo.districts.map((district) => (
-                      <option key={district} value={district}>
-                        {district}
-                      </option>
-                    ))}
-                  </SelectField>
+                  <div>
+                    <SelectField
+                      id="addressDistrict"
+                      label="เขต/อำเภอ"
+                      required
+                      value={address.district}
+                      onChange={(event) =>
+                        onAddressChange("district", event.target.value)
+                      }
+                      disabled={!address.province}
+                    >
+                      <option value="">เลือกเขต/อำเภอ</option>
+                      {addressGeo.districts.map((district) => (
+                        <option key={district} value={district}>
+                          {district}
+                        </option>
+                      ))}
+                    </SelectField>
+                    <FieldError message={fieldErrors.addressDistrict} />
+                  </div>
 
-                  <SelectField
-                    id="addressSubdistrict"
-                    label="แขวง/ตำบล"
-                    required
-                    value={address.subdistrict}
-                    onChange={(event) =>
-                      onAddressChange("subdistrict", event.target.value)
-                    }
-                    disabled={!address.district}
-                  >
-                    <option value="">เลือกแขวง/ตำบล</option>
-                    {addressGeo.subdistricts.map((subdistrict) => (
-                      <option key={subdistrict} value={subdistrict}>
-                        {subdistrict}
-                      </option>
-                    ))}
-                  </SelectField>
+                  <div>
+                    <SelectField
+                      id="addressSubdistrict"
+                      label="แขวง/ตำบล"
+                      required
+                      value={address.subdistrict}
+                      onChange={(event) =>
+                        onAddressChange("subdistrict", event.target.value)
+                      }
+                      disabled={!address.district}
+                    >
+                      <option value="">เลือกแขวง/ตำบล</option>
+                      {addressGeo.subdistricts.map((subdistrict) => (
+                        <option key={subdistrict} value={subdistrict}>
+                          {subdistrict}
+                        </option>
+                      ))}
+                    </SelectField>
+                    <FieldError message={fieldErrors.addressSubdistrict} />
+                  </div>
 
-                  <TextField
-                    id="addressPostalCode"
-                    label="รหัสไปรษณีย์"
-                    required
-                    readOnly
-                    disabled={!address.subdistrict}
-                    value={address.postalCode}
-                    onChange={(event) =>
-                      onAddressChange("postalCode", event.target.value)
-                    }
-                    maxLength={10}
-                  />
+                  <div>
+                    <TextField
+                      id="addressPostalCode"
+                      label="รหัสไปรษณีย์"
+                      required
+                      readOnly
+                      disabled={!address.subdistrict}
+                      value={address.postalCode}
+                      onChange={(event) =>
+                        onAddressChange("postalCode", event.target.value)
+                      }
+                      maxLength={10}
+                    />
+                    <FieldError message={fieldErrors.addressPostalCode} />
+                  </div>
 
                   <div className="sm:col-span-2">
                     <TextField
@@ -900,6 +1016,7 @@ export default function Page() {
                       placeholder="99/123"
                       maxLength={120}
                     />
+                    <FieldError message={fieldErrors.addressHouseNo} />
                   </div>
 
                   <TextField
@@ -941,30 +1058,6 @@ export default function Page() {
               </Panel>
             ) : null}
 
-            {errorMessage ? (
-              <div className="flex items-start gap-3 rounded-xl border border-[#b62026]/20 bg-red-50 px-4 py-3.5">
-                <svg
-                  className="mt-px h-4 w-4 shrink-0 text-[#b62026]"
-                  fill="currentColor"
-                  viewBox="0 0 20 20"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-                <div>
-                  <p className="text-sm font-bold text-[#b62026]">
-                    เกิดข้อผิดพลาด
-                  </p>
-                  <p className="mt-0.5 text-xs text-[#b62026]/80">
-                    {errorMessage}
-                  </p>
-                </div>
-              </div>
-            ) : null}
-
             <div className="rounded-2xl border border-slate-200 bg-white">
               <div className="flex items-center gap-2 border-b border-amber-100 bg-amber-50/60 px-5 py-2.5">
                 <svg
@@ -985,62 +1078,126 @@ export default function Page() {
 
               <div className="flex flex-col-reverse gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex w-full flex-col-reverse items-stretch gap-3 sm:flex-row sm:items-center sm:w-auto">
-                  <Link
-                    href="/"
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 sm:w-auto"
-                  >
-                    <svg
-                      className="h-4 w-4"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
+                  <div className="flex items-center gap-2 sm:order-1">
+                    <Link
+                      href="/"
+                      className="w-full sm:w-auto inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
                     >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M15 19l-7-7 7-7"
-                      />
-                    </svg>
-                    กลับสู่หน้าหลัก
-                  </Link>
+                      <svg
+                        className="h-4 w-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M15 19l-7-7 7-7"
+                        />
+                      </svg>
+                      กลับสู่หน้าหลัก
+                    </Link>
 
-                  <button
-                    type="button"
-                    onClick={handleReset}
-                    disabled={submitting}
-                    aria-label="รีเซ็ตแบบฟอร์ม"
-                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50 shadow-sm"
-                  >
-                    <svg
-                      className="h-4 w-4"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmReset(true)}
+                      disabled={submitting}
+                      aria-label="รีเซ็ตแบบฟอร์ม"
+                      className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50 shadow-sm"
                     >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                      />
-                    </svg>
-                    รีเซ็ตแบบฟอร์ม
-                  </button>
+                      <svg
+                        className="h-4 w-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                        />
+                      </svg>
+                      รีเซ็ตแบบฟอร์ม
+                    </button>
+                  </div>
                 </div>
 
-                <button
-                  type="submit"
-                  disabled={submitting || loadingReferences}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#0e2d4c] px-10 py-3 text-sm font-bold text-white shadow-lg transition hover:bg-[#1a4a7a] disabled:opacity-60 sm:w-auto"
-                >
-                  {submitting ? "กำลังส่งคำขอ..." : "ส่งคำขอเอกสาร"}
-                </button>
+                <div className="sm:order-2">
+                  <button
+                    type="submit"
+                    disabled={submitting || loadingReferences}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#0e2d4c] px-10 py-3 text-sm font-bold text-white transition hover:bg-[#1a4a7a] disabled:opacity-60 sm:w-auto shadow-lg"
+                  >
+                    {submitting ? (
+                      <>
+                        <svg
+                          className="h-4 w-4 animate-spin"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                        >
+                          <circle
+                            className="opacity-25"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            strokeWidth="4"
+                          />
+                          <path
+                            className="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                          />
+                        </svg>
+                        กำลังส่งคำขอ...
+                      </>
+                    ) : (
+                      <>
+                        <svg
+                          className="h-4 w-4"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+                          />
+                        </svg>
+                        ส่งคำขอเอกสาร
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
           </form>
         )}
       </div>
+
+      <ConfirmModal
+        open={showConfirmReset}
+        title="รีเซ็ตฟอร์ม"
+        description="ต้องการรีเซ็ตฟอร์ม? ข้อมูลที่กรอกจะถูกลบทั้งหมด"
+        confirmLabel="รีเซ็ต"
+        cancelLabel="ยกเลิก"
+        onConfirm={doReset}
+        onClose={() => setShowConfirmReset(false)}
+      />
+
+      <ConfirmModal
+        open={showConfirmSubmit}
+        title="ยืนยันการส่งคำขอ"
+        description="ยืนยันการส่งคำขอ? คุณจะไม่สามารถแก้ไขคำขอได้หลังจากส่ง"
+        confirmLabel="ส่งคำขอ"
+        cancelLabel="ยกเลิก"
+        onConfirm={performSubmit}
+        onClose={() => setShowConfirmSubmit(false)}
+      />
     </main>
   );
 }

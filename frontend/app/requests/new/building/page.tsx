@@ -36,6 +36,8 @@ import { ImagePreviewModal } from "@/components/ui/image-preview-modal";
 import { DocumentPreviewModal } from "@/components/ui/document-preview-modal";
 import { getDocumentTypeLabel } from "@/lib/attachments/document-type-label";
 import ConfirmModal from "@/components/ui/confirm-modal";
+import { FieldError } from "@/components/ui/field-error";
+import { ErrorToast } from "@/components/ui/error-toast";
 import Link from "next/link";
 import Image from "next/image";
 
@@ -230,26 +232,6 @@ function Divider({ label }: { label: string }) {
 }
 
 /* ─── Field helpers ─── */
-
-function FieldError({ message }: { message?: string }) {
-  if (!message) return null;
-  return (
-    <p className="mt-1.5 flex items-center gap-1.5 text-xs font-medium text-[#b62026]">
-      <svg
-        className="h-3.5 w-3.5 shrink-0"
-        fill="currentColor"
-        viewBox="0 0 20 20"
-      >
-        <path
-          fillRule="evenodd"
-          d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
-          clipRule="evenodd"
-        />
-      </svg>
-      {message}
-    </p>
-  );
-}
 
 function RequiredMark() {
   return <span className="ml-0.5 text-[#b62026]">*</span>;
@@ -457,7 +439,8 @@ export default function Page() {
       errors.problemCategoryOther = "กรุณากรอกประเภทปัญหาอื่น";
     if (!form.description.trim()) errors.description = "กรุณากรอกคำอธิบายปัญหา";
     if (attachmentFiles.length === 0)
-      errors.attachments = "ไฟล์แนบเป็นข้อมูลที่จำเป็น";
+      errors.attachments =
+        "ไฟล์แนบเป็นข้อมูลที่จำเป็น ควรแนบรูปภาพหรือวิดีโอแสดงปัญหาอย่างน้อย 1 ไฟล์";
     if (attachmentFiles.length > MAX_ATTACHMENTS)
       errors.attachments = `สูงสุด ${MAX_ATTACHMENTS} ไฟล์ต่อคำขอ`;
     const av = prepareAttachmentCandidates(attachmentFiles);
@@ -520,14 +503,16 @@ export default function Page() {
         await uploadFileToPresignedUrl(ticket, candidate.file);
         await completeMyAttachmentUpload(createResult.id, ticket.uploadToken);
       }
-      router.push(
-        `/requests/success/${encodeURIComponent(createResult.requestNo)}`,
-      );
+      document.cookie = `hrb_success_request_no=${encodeURIComponent(createResult.requestNo)}; Path=/; Max-Age=600; SameSite=Lax`;
+      document.cookie =
+        "hrb_success_attachments=; Path=/; Max-Age=0; SameSite=Lax";
+      router.push("/requests/success");
     } catch (error) {
       if (createdRequestNo) {
-        router.push(
-          `/requests/success/${encodeURIComponent(createdRequestNo)}?attachments=partial`,
-        );
+        document.cookie = `hrb_success_request_no=${encodeURIComponent(createdRequestNo)}; Path=/; Max-Age=600; SameSite=Lax`;
+        document.cookie =
+          "hrb_success_attachments=partial; Path=/; Max-Age=600; SameSite=Lax";
+        router.push("/requests/success");
         return;
       }
       setErrorMessage(
@@ -625,6 +610,11 @@ export default function Page() {
   ══════════════════════════════════════════════════════ */
   return (
     <main className="min-h-screen bg-slate-50">
+      <ErrorToast
+        message={errorMessage}
+        onClose={() => setErrorMessage(null)}
+      />
+
       {/* ── Page Header ── */}
       <div className="border-b border-slate-200 bg-white">
         <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
@@ -935,9 +925,6 @@ export default function Page() {
                   />
                   <div className="mt-1 flex items-center justify-between">
                     <FieldError message={fieldErrors.description} />
-                    <span className="ml-auto text-[11px] text-slate-400">
-                      {form.description.length}/2000
-                    </span>
                   </div>
                 </div>
 
@@ -1196,31 +1183,6 @@ export default function Page() {
                 )}
               </div>
             </Panel>
-
-            {/* ══ Error Banner ══ */}
-            {errorMessage && (
-              <div className="flex items-start gap-3 rounded-xl border border-[#b62026]/20 bg-red-50 px-4 py-3.5">
-                <svg
-                  className="mt-px h-4 w-4 shrink-0 text-[#b62026]"
-                  fill="currentColor"
-                  viewBox="0 0 20 20"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-                <div>
-                  <p className="text-sm font-bold text-[#b62026]">
-                    เกิดข้อผิดพลาด
-                  </p>
-                  <p className="mt-0.5 text-xs text-[#b62026]/80">
-                    {errorMessage}
-                  </p>
-                </div>
-              </div>
-            )}
 
             {/* ══ Action Bar ══ */}
             <div className="rounded-2xl border border-slate-200 bg-white">

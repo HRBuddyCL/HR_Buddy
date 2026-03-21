@@ -30,6 +30,8 @@ import { ImagePreviewModal } from "@/components/ui/image-preview-modal";
 import { VideoPreviewModal } from "@/components/ui/video-preview-modal";
 import { DocumentPreviewModal } from "@/components/ui/document-preview-modal";
 import ConfirmModal from "@/components/ui/confirm-modal";
+import { FieldError } from "@/components/ui/field-error";
+import { ErrorToast } from "@/components/ui/error-toast";
 import Link from "next/link";
 import {
   SelectField,
@@ -228,6 +230,7 @@ export default function Page() {
     useState<AttachmentPreview | null>(null);
   const [showConfirmReset, setShowConfirmReset] = useState(false);
   const [showConfirmSubmit, setShowConfirmSubmit] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     let active = true;
@@ -313,67 +316,83 @@ export default function Page() {
 
   const onChange = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
+    if (fieldErrors[key]) {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+    }
   };
 
   const handlePhoneChange = (value: string) => {
     onChange("phone", formatPhoneDisplay(value));
+    if (fieldErrors.phone) {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next.phone;
+        return next;
+      });
+    }
   };
 
   const validateBeforeSubmit = () => {
+    const errors: Record<string, string> = {};
+
     if (!form.employeeName.trim()) {
-      return "กรุณากรอกชื่อ-นามสกุล";
+      errors.employeeName = "กรุณากรอกชื่อ-นามสกุล";
     }
 
     if (!form.departmentId) {
-      return "กรุณาเลือกแผนก";
+      errors.departmentId = "กรุณาเลือกแผนก";
     }
 
     if (isOtherDepartment && !form.departmentOther.trim()) {
-      return "กรุณากรอกชื่อแผนกอื่น";
+      errors.departmentOther = "กรุณากรอกชื่อแผนกอื่น";
     }
 
     if (extractPhoneDigits(form.phone).length !== 10) {
-      return "หมายเลขโทรศัพท์ต้องมีตัวเลข 10 หลัก";
+      errors.phone = "หมายเลขโทรศัพท์ต้องมีตัวเลข 10 หลัก";
     }
 
     if (!form.vehiclePlate.trim()) {
-      return "กรุณากรอกรหัสหรือป้ายทะเบียนรถ";
+      errors.vehiclePlate = "กรุณากรอกรหัสหรือป้ายทะเบียนรถ";
     }
 
     if (!form.issueCategoryId) {
-      return "กรุณาเลือกประเภทปัญหาของรถ";
+      errors.issueCategoryId = "กรุณาเลือกประเภทปัญหาของรถ";
     }
 
     if (isOtherCategory && !form.issueCategoryOther.trim()) {
-      return "กรุณากรอกประเภทปัญหาอื่นของรถ";
+      errors.issueCategoryOther = "กรุณากรอกประเภทปัญหาอื่นของรถ";
     }
 
     if (!form.symptom.trim()) {
-      return "กรุณาอธิบายอาการ/ปัญหา";
+      errors.symptom = "กรุณาอธิบายอาการ/ปัญหา";
     }
 
     if (attachmentFiles.length === 0) {
-      return "กรุณาแนบไฟล์อย่างน้อย 1 ไฟล์";
+      errors.attachments =
+        "ไฟล์แนบเป็นข้อมูลที่จำเป็น ควรแนบรูปภาพหรือวิดีโอแสดงปัญหาอย่างน้อย 1 ไฟล์";
     }
 
     if (attachmentFiles.length > MAX_ATTACHMENTS) {
-      return `รองรับสูงสุด ${MAX_ATTACHMENTS} ไฟล์เท่านั้น`;
+      errors.attachments = `รองรับสูงสุด ${MAX_ATTACHMENTS} ไฟล์เท่านั้น`;
     }
 
     const candidates = prepareAttachmentCandidates(attachmentFiles);
     if (!candidates.ok) {
-      return candidates.message;
+      errors.attachments = candidates.message;
     }
 
-    return null;
+    setFieldErrors(errors);
+    return Object.keys(errors).length === 0;
   };
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setErrorMessage(null);
-    const validationError = validateBeforeSubmit();
-    if (validationError) {
-      setErrorMessage(validationError);
+    if (!validateBeforeSubmit()) {
       return;
     }
     setShowConfirmSubmit(true);
@@ -386,7 +405,7 @@ export default function Page() {
 
     const candidates = prepareAttachmentCandidates(attachmentFiles);
     if (!candidates.ok) {
-      setErrorMessage(candidates.message);
+      setFieldErrors((prev) => ({ ...prev, attachments: candidates.message }));
       setSubmitting(false);
       return;
     }
@@ -430,12 +449,16 @@ export default function Page() {
         await completeMyAttachmentUpload(created.id, ticket.uploadToken);
       }
 
-      router.push(`/requests/success/${encodeURIComponent(created.requestNo)}`);
+      document.cookie = `hrb_success_request_no=${encodeURIComponent(created.requestNo)}; Path=/; Max-Age=600; SameSite=Lax`;
+      document.cookie =
+        "hrb_success_attachments=; Path=/; Max-Age=0; SameSite=Lax";
+      router.push("/requests/success");
     } catch (error) {
       if (createdRequestNo) {
-        router.push(
-          `/requests/success/${encodeURIComponent(createdRequestNo)}?attachments=partial`,
-        );
+        document.cookie = `hrb_success_request_no=${encodeURIComponent(createdRequestNo)}; Path=/; Max-Age=600; SameSite=Lax`;
+        document.cookie =
+          "hrb_success_attachments=partial; Path=/; Max-Age=600; SameSite=Lax";
+        router.push("/requests/success");
         return;
       }
 
@@ -492,6 +515,13 @@ export default function Page() {
 
     setAttachmentFiles(merged);
     setAttachmentNotice(warnings.length > 0 ? warnings.join(" | ") : null);
+    if (fieldErrors.attachments && merged.length > 0) {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next.attachments;
+        return next;
+      });
+    }
   };
 
   const handleRemoveAttachment = (keyToRemove: string) => {
@@ -526,10 +556,16 @@ export default function Page() {
     setVideoPreview(null);
     setImagePreview(null);
     setDocumentPreview(null);
+    setFieldErrors({});
   };
 
   return (
     <main className="min-h-screen bg-slate-50">
+      <ErrorToast
+        message={errorMessage}
+        onClose={() => setErrorMessage(null)}
+      />
+
       <div className="border-b border-slate-200 bg-white">
         <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
           <nav className="mb-4 flex items-center gap-1.5 text-sm text-slate-400">
@@ -594,6 +630,7 @@ export default function Page() {
                     placeholder="สมชาย ใจดี"
                     maxLength={120}
                   />
+                  <FieldError message={fieldErrors.employeeName} />
                 </div>
 
                 <div className="sm:col-span-1">
@@ -613,6 +650,7 @@ export default function Page() {
                       </option>
                     ))}
                   </SelectField>
+                  <FieldError message={fieldErrors.departmentId} />
                 </div>
 
                 <div className="sm:col-span-1">
@@ -626,6 +664,7 @@ export default function Page() {
                     inputMode="numeric"
                     maxLength={12}
                   />
+                  <FieldError message={fieldErrors.phone} />
                 </div>
 
                 {isOtherDepartment ? (
@@ -641,6 +680,7 @@ export default function Page() {
                       placeholder="กรุณาระบุชื่อแผนก"
                       maxLength={120}
                     />
+                    <FieldError message={fieldErrors.departmentOther} />
                   </div>
                 ) : null}
               </div>
@@ -649,48 +689,57 @@ export default function Page() {
             <Panel stepNumber={2} title="ข้อมูลรถและประเภทปัญหา">
               <div className="space-y-5">
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <TextField
-                    id="vehiclePlate"
-                    label="ป้ายทะเบียน/รหัสรถ"
-                    required
-                    value={form.vehiclePlate}
-                    onChange={(event) =>
-                      onChange("vehiclePlate", event.target.value)
-                    }
-                    placeholder="กก-1234"
-                    maxLength={20}
-                  />
+                  <div>
+                    <TextField
+                      id="vehiclePlate"
+                      label="ป้ายทะเบียน/รหัสรถ"
+                      required
+                      value={form.vehiclePlate}
+                      onChange={(event) =>
+                        onChange("vehiclePlate", event.target.value)
+                      }
+                      placeholder="กก-1234"
+                      maxLength={20}
+                    />
+                    <FieldError message={fieldErrors.vehiclePlate} />
+                  </div>
 
-                  <SelectField
-                    id="issueCategoryId"
-                    label="ประเภทปัญหาของรถ"
-                    required
-                    value={form.issueCategoryId}
-                    onChange={(event) =>
-                      onChange("issueCategoryId", event.target.value)
-                    }
-                  >
-                    <option value="">เลือกประเภทปัญหา</option>
-                    {vehicleIssueCategories.map((category) => (
-                      <option key={category.id} value={category.id}>
-                        {category.name}
-                      </option>
-                    ))}
-                  </SelectField>
+                  <div>
+                    <SelectField
+                      id="issueCategoryId"
+                      label="ประเภทปัญหาของรถ"
+                      required
+                      value={form.issueCategoryId}
+                      onChange={(event) =>
+                        onChange("issueCategoryId", event.target.value)
+                      }
+                    >
+                      <option value="">เลือกประเภทปัญหา</option>
+                      {vehicleIssueCategories.map((category) => (
+                        <option key={category.id} value={category.id}>
+                          {category.name}
+                        </option>
+                      ))}
+                    </SelectField>
+                    <FieldError message={fieldErrors.issueCategoryId} />
+                  </div>
                 </div>
 
                 {isOtherCategory ? (
-                  <TextField
-                    id="issueCategoryOther"
-                    label="ระบุประเภทปัญหาอื่น"
-                    required
-                    value={form.issueCategoryOther}
-                    onChange={(event) =>
-                      onChange("issueCategoryOther", event.target.value)
-                    }
-                    placeholder="กรุณาระบุประเภทปัญหา"
-                    maxLength={120}
-                  />
+                  <div>
+                    <TextField
+                      id="issueCategoryOther"
+                      label="ระบุประเภทปัญหาอื่น"
+                      required
+                      value={form.issueCategoryOther}
+                      onChange={(event) =>
+                        onChange("issueCategoryOther", event.target.value)
+                      }
+                      placeholder="กรุณาระบุประเภทปัญหา"
+                      maxLength={120}
+                    />
+                    <FieldError message={fieldErrors.issueCategoryOther} />
+                  </div>
                 ) : null}
 
                 <Divider label="" />
@@ -708,9 +757,7 @@ export default function Page() {
                     rows={4}
                     maxLength={2000}
                   />
-                  <p className="mt-1 text-right text-[11px] text-slate-400">
-                    {form.symptom.length}/2000
-                  </p>
+                  <FieldError message={fieldErrors.symptom} />
                 </div>
 
                 <div>
@@ -733,7 +780,11 @@ export default function Page() {
               <div className="space-y-4">
                 <label
                   htmlFor="attachments"
-                  className="flex cursor-pointer flex-col items-center gap-2.5 rounded-xl border-2 border-dashed border-slate-300 bg-white px-6 py-7 text-center transition-colors duration-150 hover:border-[#0e2d4c]/30 hover:bg-slate-50/60"
+                  className={`flex cursor-pointer flex-col items-center gap-2.5 rounded-xl border-2 border-dashed px-6 py-7 text-center transition-colors duration-150 ${
+                    fieldErrors.attachments
+                      ? "border-[#b62026]/40 bg-red-50/40"
+                      : "border-slate-300 bg-white hover:border-[#0e2d4c]/30 hover:bg-slate-50/60"
+                  }`}
                 >
                   <svg
                     className="h-8 w-8 text-slate-400"
@@ -771,6 +822,8 @@ export default function Page() {
                     }}
                   />
                 </label>
+
+                <FieldError message={fieldErrors.attachments} />
 
                 {attachmentNotice ? (
                   <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-medium text-amber-800">
@@ -948,30 +1001,6 @@ export default function Page() {
                 ) : null}
               </div>
             </Panel>
-
-            {errorMessage && (
-              <div className="flex items-start gap-3 rounded-xl border border-[#b62026]/20 bg-red-50 px-4 py-3.5">
-                <svg
-                  className="mt-px h-4 w-4 shrink-0 text-[#b62026]"
-                  fill="currentColor"
-                  viewBox="0 0 20 20"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-                <div>
-                  <p className="text-sm font-bold text-[#b62026]">
-                    เกิดข้อผิดพลาด
-                  </p>
-                  <p className="mt-0.5 text-xs text-[#b62026]/80">
-                    {errorMessage}
-                  </p>
-                </div>
-              </div>
-            )}
 
             <div className="rounded-2xl border border-slate-200 bg-white">
               <div className="flex items-center gap-2 border-b border-amber-100 bg-amber-50/60 px-5 py-2.5">

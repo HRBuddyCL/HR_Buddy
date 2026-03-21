@@ -39,6 +39,9 @@ import {
 import { ImagePreviewModal } from "@/components/ui/image-preview-modal";
 import { VideoPreviewModal } from "@/components/ui/video-preview-modal";
 import { DocumentPreviewModal } from "@/components/ui/document-preview-modal";
+import ConfirmModal from "@/components/ui/confirm-modal";
+import { FieldError } from "@/components/ui/field-error";
+import { ErrorToast } from "@/components/ui/error-toast";
 import { getDocumentTypeLabel } from "@/lib/attachments/document-type-label";
 
 const itemTypeOptions: Array<{ value: ItemType; label: string }> = [
@@ -175,44 +178,6 @@ function isValidPhone(value: string) {
   return extractPhoneDigits(value).length === 10;
 }
 
-function validateAddress(
-  sectionName: string,
-  address: AddressState,
-  options?: { requireContact: boolean },
-) {
-  const requireContact = options?.requireContact ?? true;
-
-  if (requireContact && !address.name.trim()) {
-    return `กรุณากรอกชื่อผู้${sectionName}`;
-  }
-
-  if (requireContact && !isValidPhone(address.phone)) {
-    return `หมายเลขโทรศัพท์ผู้${sectionName} ต้องมีตัวเลข 10 หลัก`;
-  }
-
-  if (!address.province.trim()) {
-    return `กรุณาเลือกจังหวัดผู้${sectionName}`;
-  }
-
-  if (!address.district.trim()) {
-    return `กรุณาเลือกเขต/อำเภอผู้${sectionName}`;
-  }
-
-  if (!address.subdistrict.trim()) {
-    return `กรุณาเลือกแขวง/ตำบลผู้${sectionName}`;
-  }
-
-  if (!address.postalCode.trim()) {
-    return `กรุณากรอกรหัสไปรษณีย์ผู้${sectionName}`;
-  }
-
-  if (!address.houseNo.trim()) {
-    return `กรุณากรอกบ้านเลขที่ผู้${sectionName}`;
-  }
-
-  return null;
-}
-
 function isOutsideBkkMetroByProvince(province: string) {
   const normalized = province.trim();
   if (!normalized) {
@@ -256,6 +221,25 @@ function formatThaiBuddhistDate(dateValue: string) {
     year: "numeric",
     timeZone: "Asia/Bangkok",
   }).format(date);
+}
+
+function getThailandTodayDateValue() {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Bangkok",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const day = parts.find((part) => part.type === "day")?.value;
+
+  if (!year || !month || !day) {
+    return "";
+  }
+
+  return `${year}-${month}-${day}`;
 }
 
 function prepareAttachmentCandidates(files: File[]) {
@@ -346,6 +330,9 @@ export default function Page() {
   );
   const [documentPreview, setDocumentPreview] =
     useState<AttachmentPreview | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [showConfirmReset, setShowConfirmReset] = useState(false);
+  const [showConfirmSubmit, setShowConfirmSubmit] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -392,6 +379,13 @@ export default function Page() {
 
   const onChange = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
+    if (fieldErrors[key]) {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+    }
   };
 
   const updateReceiverAddress = <K extends keyof AddressState>(
@@ -399,14 +393,47 @@ export default function Page() {
     value: AddressState[K],
   ) => {
     setReceiver((prev) => ({ ...prev, [key]: value }));
+
+    const receiverFieldErrorMap: Partial<Record<keyof AddressState, string>> = {
+      name: "receiverName",
+      phone: "receiverPhone",
+      province: "receiverProvince",
+      district: "receiverDistrict",
+      subdistrict: "receiverSubdistrict",
+      postalCode: "receiverPostalCode",
+      houseNo: "receiverHouseNo",
+    };
+
+    const mappedField = receiverFieldErrorMap[key];
+    if (mappedField && fieldErrors[mappedField]) {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next[mappedField];
+        return next;
+      });
+    }
   };
 
   const handleRequesterPhoneChange = (value: string) => {
     onChange("phone", formatPhoneDisplay(value));
+    if (fieldErrors.phone) {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next.phone;
+        return next;
+      });
+    }
   };
 
   const handleReceiverPhoneChange = (value: string) => {
     updateReceiverAddress("phone", formatPhoneDisplay(value));
+    if (fieldErrors.receiverPhone) {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next.receiverPhone;
+        return next;
+      });
+    }
   };
 
   const openPickupDatePicker = () => {
@@ -577,6 +604,7 @@ export default function Page() {
     () => formatThaiBuddhistDate(form.pickupDate),
     [form.pickupDate],
   );
+  const minPickupDate = useMemo(() => getThailandTodayDateValue(), []);
 
   const attachmentPreviews = useMemo<AttachmentPreview[]>(() => {
     return attachmentFiles
@@ -607,56 +635,82 @@ export default function Page() {
   }, [attachmentPreviews]);
 
   const validateBeforeSubmit = () => {
+    const errors: Record<string, string> = {};
+
     if (!form.employeeName.trim()) {
-      return "กรุณากรอกชื่อพนักงาน";
+      errors.employeeName = "กรุณากรอกชื่อ-นามสกุล";
     }
 
     if (!form.departmentId) {
-      return "กรุณาเลือกหน่วยงาน";
+      errors.departmentId = "กรุณาเลือกแผนก";
     }
     if (isOtherDepartment && !form.departmentOther.trim()) {
-      return "กรุณาระบุชื่อหน่วยงานอื่น";
+      errors.departmentOther = "กรุณาระบุชื่อหน่วยงานอื่น";
     }
 
     if (!isValidPhone(form.phone)) {
-      return "หมายเลขโทรศัพท์ต้องมีตัวเลข 10 หลัก";
+      errors.phone = "หมายเลขโทรศัพท์ต้องมีตัวเลข 10 หลัก";
     }
 
     if (!form.pickupDate) {
-      return "กรุณาเลือกวันที่จัดส่ง";
+      errors.pickupDate = "กรุณาเลือกวันที่จัดส่ง";
     }
 
     if (!toThailandStartOfDayIso(form.pickupDate)) {
-      return "วันที่จัดส่งไม่ถูกต้อง";
+      errors.pickupDate = "วันที่จัดส่งไม่ถูกต้อง";
+    }
+
+    if (minPickupDate && form.pickupDate < minPickupDate) {
+      errors.pickupDate = "วันที่จัดส่งต้องเป็นวันปัจจุบันหรืออนาคตเท่านั้น";
     }
 
     if (!form.itemDescription.trim()) {
-      return "กรุณากรอกรายละเอียดสิ่งของ";
+      errors.itemDescription = "กรุณากรอกรายละเอียดสิ่งของ";
     }
 
     if (attachmentFiles.length > MAX_ATTACHMENTS) {
-      return `รองรับสูงสุด ${MAX_ATTACHMENTS} ไฟล์เท่านั้น`;
+      errors.attachments = `รองรับสูงสุด ${MAX_ATTACHMENTS} ไฟล์เท่านั้น`;
     }
 
     const attachmentCandidatesResult =
       prepareAttachmentCandidates(attachmentFiles);
     if (!attachmentCandidatesResult.ok) {
-      return attachmentCandidatesResult.message;
+      errors.attachments = attachmentCandidatesResult.message;
     }
 
     if (requiresDeliveryServiceOther && !form.deliveryServiceOther.trim()) {
-      return "กรุณาระบุบริการจัดส่งอื่น";
+      errors.deliveryServiceOther = "กรุณาระบุบริการจัดส่งอื่น";
     }
 
-    const receiverError = validateAddress("รับ", receiver);
-    if (receiverError) {
-      return receiverError;
+    if (!receiver.name.trim()) {
+      errors.receiverName = "กรุณากรอกชื่อผู้รับ";
     }
 
-    return null;
+    if (!isValidPhone(receiver.phone)) {
+      errors.receiverPhone = "หมายเลขโทรศัพท์ต้องมีตัวเลข 10 หลัก";
+    }
+
+    if (!receiver.province.trim()) {
+      errors.receiverProvince = "กรุณาเลือกจังหวัดผู้รับ";
+    }
+
+    if (receiver.province.trim() && !receiver.district.trim()) {
+      errors.receiverDistrict = "กรุณาเลือกเขต/อำเภอผู้รับ";
+    } else if (receiver.district.trim() && !receiver.subdistrict.trim()) {
+      errors.receiverSubdistrict = "กรุณาเลือกแขวง/ตำบลผู้รับ";
+    }
+
+    if (!receiver.houseNo.trim()) {
+      errors.receiverHouseNo = "กรุณากรอกบ้านเลขที่ผู้รับ";
+    }
+
+    setFieldErrors(errors);
+
+    return Object.keys(errors).length === 0;
   };
 
-  const handleReset = () => {
+  const doReset = () => {
+    setShowConfirmReset(false);
     setForm(initialFormState);
     setReceiver(createInitialAddressState());
     setReceiverGeo(emptyGeoState);
@@ -666,6 +720,7 @@ export default function Page() {
     setVideoPreview(null);
     setImagePreview(null);
     setDocumentPreview(null);
+    setFieldErrors({});
   };
 
   const handleAttachmentPick = (files: File[]) => {
@@ -711,6 +766,13 @@ export default function Page() {
 
     setAttachmentFiles(merged);
     setAttachmentNotice(warnings.length > 0 ? warnings.join(" | ") : null);
+    if (fieldErrors.attachments && merged.length > 0) {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next.attachments;
+        return next;
+      });
+    }
   };
 
   const handleRemoveAttachment = (targetKey: string) => {
@@ -745,26 +807,37 @@ export default function Page() {
     handleDownloadDocumentFile(preview);
   };
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setErrorMessage(null);
-
-    const validationError = validateBeforeSubmit();
-    if (validationError) {
-      setErrorMessage(validationError);
+  const setSuccessCookies = (
+    nextRequestNo: string,
+    hasPartialAttachments = false,
+  ) => {
+    document.cookie = `hrb_success_request_no=${encodeURIComponent(nextRequestNo)}; Path=/; Max-Age=600; SameSite=Lax`;
+    if (hasPartialAttachments) {
+      document.cookie =
+        "hrb_success_attachments=partial; Path=/; Max-Age=600; SameSite=Lax";
       return;
     }
+    document.cookie =
+      "hrb_success_attachments=; Path=/; Max-Age=0; SameSite=Lax";
+  };
+
+  const performSubmit = async () => {
+    setShowConfirmSubmit(false);
+    setSubmitting(true);
+    setErrorMessage(null);
 
     const attachmentCandidatesResult =
       prepareAttachmentCandidates(attachmentFiles);
     if (!attachmentCandidatesResult.ok) {
       setErrorMessage(attachmentCandidatesResult.message);
+      setSubmitting(false);
       return;
     }
 
     const pickupDatetime = toThailandStartOfDayIso(form.pickupDate);
     if (!pickupDatetime) {
       setErrorMessage("วันที่จัดส่งไม่ถูกต้อง");
+      setSubmitting(false);
       return;
     }
 
@@ -793,7 +866,6 @@ export default function Page() {
       }
     }
 
-    setSubmitting(true);
     let createdRequestNo: string | null = null;
 
     try {
@@ -812,12 +884,12 @@ export default function Page() {
         await completeMyAttachmentUpload(result.id, ticket.uploadToken);
       }
 
-      router.push(`/requests/success/${encodeURIComponent(result.requestNo)}`);
+      setSuccessCookies(result.requestNo);
+      router.push("/requests/success");
     } catch (error) {
       if (createdRequestNo) {
-        router.push(
-          `/requests/success/${encodeURIComponent(createdRequestNo)}?attachments=partial`,
-        );
+        setSuccessCookies(createdRequestNo, true);
+        router.push("/requests/success");
         return;
       }
 
@@ -831,8 +903,25 @@ export default function Page() {
     }
   };
 
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setErrorMessage(null);
+
+    const validationError = validateBeforeSubmit();
+    if (!validationError) {
+      return;
+    }
+
+    setShowConfirmSubmit(true);
+  };
+
   return (
     <main className="min-h-screen bg-slate-50">
+      <ErrorToast
+        message={errorMessage}
+        onClose={() => setErrorMessage(null)}
+      />
+
       <div className="border-b border-slate-200 bg-white">
         <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
           <nav className="mb-4 flex items-center gap-1.5 text-sm text-slate-400">
@@ -897,6 +986,7 @@ export default function Page() {
                     placeholder="สมชาย ใจดี"
                     maxLength={120}
                   />
+                  <FieldError message={fieldErrors.employeeName} />
                 </div>
 
                 <div className="sm:col-span-1">
@@ -916,6 +1006,7 @@ export default function Page() {
                       </option>
                     ))}
                   </SelectField>
+                  <FieldError message={fieldErrors.departmentId} />
                 </div>
 
                 <div className="sm:col-span-1">
@@ -931,6 +1022,7 @@ export default function Page() {
                     inputMode="numeric"
                     maxLength={12}
                   />
+                  <FieldError message={fieldErrors.phone} />
                 </div>
 
                 {isOtherDepartment ? (
@@ -946,6 +1038,7 @@ export default function Page() {
                       placeholder="ชื่อแผนก"
                       maxLength={120}
                     />
+                    <FieldError message={fieldErrors.departmentOther} />
                   </div>
                 ) : null}
               </div>
@@ -996,6 +1089,7 @@ export default function Page() {
                         ref={pickupDateInputRef}
                         id="pickupDate"
                         type="date"
+                        min={minPickupDate}
                         value={form.pickupDate}
                         onChange={(event) =>
                           onChange("pickupDate", event.target.value)
@@ -1005,6 +1099,7 @@ export default function Page() {
                         className="pointer-events-none absolute inset-0 opacity-0"
                       />
                     </div>
+                    <FieldError message={fieldErrors.pickupDate} />
                   </div>
 
                   <SelectField
@@ -1024,18 +1119,21 @@ export default function Page() {
                   </SelectField>
                 </div>
 
-                <TextareaField
-                  id="itemDescription"
-                  label="รายละเอียดสิ่งของ"
-                  required
-                  value={form.itemDescription}
-                  onChange={(event) =>
-                    onChange("itemDescription", event.target.value)
-                  }
-                  placeholder="อธิบายสิ่งของที่ต้องจัดส่ง"
-                  rows={4}
-                  maxLength={2000}
-                />
+                <div>
+                  <TextareaField
+                    id="itemDescription"
+                    label="รายละเอียดสิ่งของ"
+                    required
+                    value={form.itemDescription}
+                    onChange={(event) =>
+                      onChange("itemDescription", event.target.value)
+                    }
+                    placeholder="อธิบายสิ่งของที่ต้องจัดส่ง"
+                    rows={4}
+                    maxLength={2000}
+                  />
+                  <FieldError message={fieldErrors.itemDescription} />
+                </div>
 
                 <TextareaField
                   id="additionalNote"
@@ -1109,6 +1207,8 @@ export default function Page() {
                     {attachmentNotice}
                   </div>
                 ) : null}
+
+                <FieldError message={fieldErrors.attachments} />
 
                 {attachmentPreviews.length > 0 ? (
                   <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
@@ -1284,6 +1384,7 @@ export default function Page() {
                     placeholder="สมหญิง ใจดี"
                     maxLength={120}
                   />
+                  <FieldError message={fieldErrors.receiverName} />
                 </div>
 
                 <div className="sm:col-span-2">
@@ -1299,70 +1400,83 @@ export default function Page() {
                     inputMode="numeric"
                     maxLength={12}
                   />
+                  <FieldError message={fieldErrors.receiverPhone} />
                 </div>
 
-                <SelectField
-                  id="receiverProvince"
-                  label="จังหวัด"
-                  required
-                  value={receiver.province}
-                  onChange={(event) =>
-                    updateReceiverAddress("province", event.target.value)
-                  }
-                >
-                  <option value="">เลือกจังหวัด</option>
-                  {provinces.map((province) => (
-                    <option key={province} value={province}>
-                      {province}
-                    </option>
-                  ))}
-                </SelectField>
+                <div>
+                  <SelectField
+                    id="receiverProvince"
+                    label="จังหวัด"
+                    required
+                    value={receiver.province}
+                    onChange={(event) =>
+                      updateReceiverAddress("province", event.target.value)
+                    }
+                  >
+                    <option value="">เลือกจังหวัด</option>
+                    {provinces.map((province) => (
+                      <option key={province} value={province}>
+                        {province}
+                      </option>
+                    ))}
+                  </SelectField>
+                  <FieldError message={fieldErrors.receiverProvince} />
+                </div>
 
-                <SelectField
-                  id="receiverDistrict"
-                  label="เขต/อำเภอ"
-                  required
-                  value={receiver.district}
-                  onChange={(event) =>
-                    updateReceiverAddress("district", event.target.value)
-                  }
-                  disabled={!receiver.province}
-                >
-                  <option value="">เลือกเขต/อำเภอ</option>
-                  {receiverGeo.districts.map((district) => (
-                    <option key={district} value={district}>
-                      {district}
-                    </option>
-                  ))}
-                </SelectField>
+                <div>
+                  <SelectField
+                    id="receiverDistrict"
+                    label="เขต/อำเภอ"
+                    required
+                    value={receiver.district}
+                    onChange={(event) =>
+                      updateReceiverAddress("district", event.target.value)
+                    }
+                    disabled={!receiver.province}
+                  >
+                    <option value="">เลือกเขต/อำเภอ</option>
+                    {receiverGeo.districts.map((district) => (
+                      <option key={district} value={district}>
+                        {district}
+                      </option>
+                    ))}
+                  </SelectField>
+                  <FieldError message={fieldErrors.receiverDistrict} />
+                </div>
 
-                <SelectField
-                  id="receiverSubdistrict"
-                  label="แขวง/ตำบล"
-                  required
-                  value={receiver.subdistrict}
-                  onChange={(event) =>
-                    updateReceiverAddress("subdistrict", event.target.value)
-                  }
-                  disabled={!receiver.district}
-                >
-                  <option value="">เลือกแขวง/ตำบล</option>
-                  {receiverGeo.subdistricts.map((subdistrict) => (
-                    <option key={subdistrict} value={subdistrict}>
-                      {subdistrict}
-                    </option>
-                  ))}
-                </SelectField>
+                <div>
+                  <SelectField
+                    id="receiverSubdistrict"
+                    label="แขวง/ตำบล"
+                    required
+                    value={receiver.subdistrict}
+                    onChange={(event) =>
+                      updateReceiverAddress("subdistrict", event.target.value)
+                    }
+                    disabled={!receiver.district}
+                  >
+                    <option value="">เลือกแขวง/ตำบล</option>
+                    {receiverGeo.subdistricts.map((subdistrict) => (
+                      <option key={subdistrict} value={subdistrict}>
+                        {subdistrict}
+                      </option>
+                    ))}
+                  </SelectField>
+                  <FieldError message={fieldErrors.receiverSubdistrict} />
+                </div>
 
-                <TextField
-                  id="receiverPostalCode"
-                  label="รหัสไปรษณีย์"
-                  required
-                  value={receiver.postalCode}
-                  disabled={!receiver.subdistrict}
-                  readOnly
-                  maxLength={10}
-                />
+                <div>
+                  <TextField
+                    id="receiverPostalCode"
+                    label="รหัสไปรษณีย์"
+                    required
+                    value={receiver.postalCode}
+                    disabled={!receiver.subdistrict}
+                    readOnly
+                    maxLength={10}
+                  />
+                  <FieldError message={fieldErrors.receiverPostalCode} />
+                </div>
 
                 <div className="sm:col-span-2">
                   <TextField
@@ -1376,6 +1490,7 @@ export default function Page() {
                     placeholder="99/123"
                     maxLength={120}
                   />
+                  <FieldError message={fieldErrors.receiverHouseNo} />
                 </div>
 
                 <TextField
@@ -1460,33 +1575,10 @@ export default function Page() {
                     placeholder="โปรดระบุบริการจัดส่ง"
                     maxLength={120}
                   />
+                  <FieldError message={fieldErrors.deliveryServiceOther} />
                 </div>
               ) : null}
             </Panel>
-
-            {errorMessage ? (
-              <div className="flex items-start gap-3 rounded-xl border border-[#b62026]/20 bg-red-50 px-4 py-3.5">
-                <svg
-                  className="mt-px h-4 w-4 shrink-0 text-[#b62026]"
-                  fill="currentColor"
-                  viewBox="0 0 20 20"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-                <div>
-                  <p className="text-sm font-bold text-[#b62026]">
-                    เกิดข้อผิดพลาด
-                  </p>
-                  <p className="mt-0.5 text-xs text-[#b62026]/80">
-                    {errorMessage}
-                  </p>
-                </div>
-              </div>
-            ) : null}
 
             <div className="rounded-2xl border border-slate-200 bg-white">
               <div className="flex items-center gap-2 border-b border-amber-100 bg-amber-50/60 px-5 py-2.5">
@@ -1508,62 +1600,126 @@ export default function Page() {
 
               <div className="flex flex-col-reverse gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex w-full flex-col-reverse items-stretch gap-3 sm:flex-row sm:items-center sm:w-auto">
-                  <Link
-                    href="/"
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 sm:w-auto"
-                  >
-                    <svg
-                      className="h-4 w-4"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
+                  <div className="flex items-center gap-2 sm:order-1">
+                    <Link
+                      href="/"
+                      className="w-full sm:w-auto inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
                     >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M15 19l-7-7 7-7"
-                      />
-                    </svg>
-                    กลับสู่หน้าหลัก
-                  </Link>
+                      <svg
+                        className="h-4 w-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M15 19l-7-7 7-7"
+                        />
+                      </svg>
+                      กลับสู่หน้าหลัก
+                    </Link>
 
-                  <button
-                    type="button"
-                    onClick={handleReset}
-                    disabled={submitting}
-                    aria-label="รีเซ็ตแบบฟอร์ม"
-                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50 shadow-sm"
-                  >
-                    <svg
-                      className="h-4 w-4"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmReset(true)}
+                      disabled={submitting}
+                      aria-label="รีเซ็ตแบบฟอร์ม"
+                      className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50 shadow-sm"
                     >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                      />
-                    </svg>
-                    รีเซ็ตแบบฟอร์ม
-                  </button>
+                      <svg
+                        className="h-4 w-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                        />
+                      </svg>
+                      รีเซ็ตแบบฟอร์ม
+                    </button>
+                  </div>
                 </div>
 
-                <button
-                  type="submit"
-                  disabled={submitting || loadingReferences}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#0e2d4c] px-10 py-3 text-sm font-bold text-white shadow-lg transition hover:bg-[#1a4a7a] disabled:opacity-60 sm:w-auto"
-                >
-                  {submitting ? "กำลังส่งคำขอ..." : "ส่งคำขอเมสเซนเจอร์"}
-                </button>
+                <div className="sm:order-2">
+                  <button
+                    type="submit"
+                    disabled={submitting || loadingReferences}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#0e2d4c] px-10 py-3 text-sm font-bold text-white transition hover:bg-[#1a4a7a] disabled:opacity-60 sm:w-auto shadow-lg"
+                  >
+                    {submitting ? (
+                      <>
+                        <svg
+                          className="h-4 w-4 animate-spin"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                        >
+                          <circle
+                            className="opacity-25"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            strokeWidth="4"
+                          />
+                          <path
+                            className="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                          />
+                        </svg>
+                        กำลังส่งคำขอ...
+                      </>
+                    ) : (
+                      <>
+                        <svg
+                          className="h-4 w-4"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+                          />
+                        </svg>
+                        ส่งคำขอเมสเซนเจอร์
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
           </form>
         )}
       </div>
+
+      <ConfirmModal
+        open={showConfirmReset}
+        title="รีเซ็ตฟอร์ม"
+        description="ต้องการรีเซ็ตฟอร์ม? ข้อมูลที่กรอกจะถูกลบทั้งหมด"
+        confirmLabel="รีเซ็ต"
+        cancelLabel="ยกเลิก"
+        onConfirm={doReset}
+        onClose={() => setShowConfirmReset(false)}
+      />
+
+      <ConfirmModal
+        open={showConfirmSubmit}
+        title="ยืนยันการส่งคำขอ"
+        description="ยืนยันการส่งคำขอ? คุณจะไม่สามารถแก้ไขคำขอได้หลังจากส่ง"
+        confirmLabel="ส่งคำขอ"
+        cancelLabel="ยกเลิก"
+        onConfirm={performSubmit}
+        onClose={() => setShowConfirmSubmit(false)}
+      />
 
       <ImagePreviewModal
         open={Boolean(imagePreview)}
