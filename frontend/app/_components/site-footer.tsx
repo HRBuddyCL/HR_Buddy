@@ -10,7 +10,7 @@ export function SiteFooter() {
   }
 
   return (
-    <footer className="relative mt-10 overflow-hidden border-t border-[#0e2d4c]/10 bg-gradient-to-b from-white via-[#f8fafc] to-[#edf3ff] py-7 text-center backdrop-blur-sm">
+    <footer className="relative mt-0 overflow-hidden border-t border-[#0e2d4c]/10 bg-white py-7 text-center">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-[#fed54f] to-transparent" />
 
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
