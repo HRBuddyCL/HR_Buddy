@@ -3,14 +3,15 @@ import { DeliveryMethod } from '@prisma/client';
 import { CreateDocumentRequestDto } from '../dto/create-document-request.dto';
 
 export function assertDocumentCreateRule(dto: CreateDocumentRequestDto) {
-  // neededDate ต้องเป็นอนาคตหรืออย่างน้อยวันนี้ (กันกรอกย้อนหลังมั่ว)
-  const needed = new Date(dto.neededDate).getTime();
-  if (Number.isNaN(needed)) {
-    throw new BadRequestException({
-      code: 'INVALID_NEEDED_DATE',
-      message: 'neededDate is invalid',
-      field: 'neededDate',
-    });
+  if (dto.neededDate) {
+    const needed = new Date(dto.neededDate).getTime();
+    if (Number.isNaN(needed)) {
+      throw new BadRequestException({
+        code: 'INVALID_NEEDED_DATE',
+        message: 'neededDate is invalid',
+        field: 'neededDate',
+      });
+    }
   }
 
   // POSTAL ต้องมี address

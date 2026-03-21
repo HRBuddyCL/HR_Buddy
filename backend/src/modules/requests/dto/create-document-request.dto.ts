@@ -94,8 +94,9 @@ export class CreateDocumentRequestDto {
   @MaxLength(500)
   purpose!: string;
 
+  @IsOptional()
   @IsDateString()
-  neededDate!: string;
+  neededDate?: string;
 
   @IsEnum(DeliveryMethod)
   deliveryMethod!: DeliveryMethod;

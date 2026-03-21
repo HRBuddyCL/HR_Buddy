@@ -224,13 +224,16 @@ export function isDuplicateDocumentRequest(
       normalizeText(detail.documentDescription) ===
         normalizeText(normalizedDto.documentDescription) &&
       normalizeText(detail.purpose) === normalizeText(normalizedDto.purpose) &&
-      normalizeDateTime(detail.neededDate) ===
-        normalizeDateTime(normalizedDto.neededDate) &&
       detail.deliveryMethod === normalizedDto.deliveryMethod &&
       normalizeOptionalText(detail.note) ===
         normalizeOptionalText(normalizedDto.note);
 
-    if (!sameCore) {
+    const sameNeededDate = normalizedDto.neededDate
+      ? normalizeDateTime(detail.neededDate) ===
+        normalizeDateTime(normalizedDto.neededDate)
+      : true;
+
+    if (!sameCore || !sameNeededDate) {
       return false;
     }
 

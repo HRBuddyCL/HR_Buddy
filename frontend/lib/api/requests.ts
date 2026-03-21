@@ -70,7 +70,7 @@ export type CreateDocumentRequestPayload = {
   siteNameRaw: string;
   documentDescription: string;
   purpose: string;
-  neededDate: string;
+  neededDate?: string;
   deliveryMethod: DeliveryMethod;
   note?: string;
   deliveryAddress?: AddressPayload;

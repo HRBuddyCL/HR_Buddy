@@ -338,6 +338,9 @@ export class RequestsService {
     assertDocumentCreateRule(dto);
 
     const siteNameNormalized = normalizeSiteName(dto.siteNameRaw);
+    const effectiveNeededDate = dto.neededDate
+      ? new Date(dto.neededDate)
+      : new Date();
     const normalizedUrgency: Urgency =
       dto.deliveryMethod === 'POSTAL' ? Urgency.NORMAL : dto.urgency;
 
@@ -380,7 +383,7 @@ export class RequestsService {
 
             documentDescription: dto.documentDescription,
             purpose: dto.purpose,
-            neededDate: new Date(dto.neededDate),
+            neededDate: effectiveNeededDate,
 
             deliveryMethod: dto.deliveryMethod,
             note: dto.note ?? null,
