@@ -157,7 +157,14 @@ function MyRequestsContent() {
 
   const handleLogout = () => {
     clearAuthToken("employee");
-    window.location.href = "/auth/otp";
+    void fetch("/api/auth/employee/logout", {
+      method: "POST",
+      cache: "no-store",
+      credentials: "same-origin",
+      keepalive: true,
+    }).finally(() => {
+      window.location.href = "/auth/otp";
+    });
   };
 
   return (

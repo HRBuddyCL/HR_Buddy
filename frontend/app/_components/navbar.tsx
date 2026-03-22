@@ -1,15 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useSessionExpiresAt } from "@/lib/auth/session-expiry";
 import { useAuthToken } from "@/lib/auth/use-auth-token";
 
 const navItems = [
   {
     href: "/",
-    label: "หน้าแรก",
+    label: "หน้าหลัก",
     iconPath:
       "M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0h6",
   },
@@ -30,7 +31,53 @@ export function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const pathname = usePathname();
   const adminToken = useAuthToken("admin");
+  const employeeSessionExpiresAt = useSessionExpiresAt("employee");
   const isAdminSignedIn = Boolean(adminToken);
+  const [nowTs, setNowTs] = useState(() => Date.now());
+
+  const employeeSessionExpiresAtMs = useMemo(() => {
+    if (!employeeSessionExpiresAt) {
+      return null;
+    }
+
+    const expiresAt = new Date(employeeSessionExpiresAt).getTime();
+    return Number.isFinite(expiresAt) ? expiresAt : null;
+  }, [employeeSessionExpiresAt]);
+
+  useEffect(() => {
+    if (!employeeSessionExpiresAtMs) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setNowTs(Date.now());
+    }, 1000);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [employeeSessionExpiresAtMs]);
+
+  const remainingSeconds = useMemo(() => {
+    if (!employeeSessionExpiresAtMs) {
+      return null;
+    }
+
+    const msLeft = employeeSessionExpiresAtMs - nowTs;
+    return Math.max(0, Math.ceil(msLeft / 1000));
+  }, [employeeSessionExpiresAtMs, nowTs]);
+
+  const sessionTimeLabel = useMemo(() => {
+    if (remainingSeconds === null) {
+      return null;
+    }
+
+    const minutes = Math.floor(remainingSeconds / 60)
+      .toString()
+      .padStart(2, "0");
+    const seconds = (remainingSeconds % 60).toString().padStart(2, "0");
+    return `${minutes}:${seconds}`;
+  }, [remainingSeconds]);
 
   if (pathname === "/admin" || pathname.startsWith("/admin/")) {
     return null;
@@ -74,6 +121,15 @@ export function Navbar() {
             </Link>
 
             <div className="hidden items-center gap-1.5 md:flex">
+              {sessionTimeLabel && (
+                <div className="mr-2 inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">
+                  <span>เซสชันจะหมดอายุใน</span>
+                  <span className="font-mono text-sm font-bold tracking-wide text-amber-900">
+                    {sessionTimeLabel}
+                  </span>
+                </div>
+              )}
+
               {navItems.map((item) => {
                 const isActive = isActivePath(pathname, item.href);
                 return (
@@ -185,6 +241,15 @@ export function Navbar() {
         className={`overflow-hidden transition-all duration-300 ease-in-out md:hidden ${mobileMenuOpen ? "max-h-[420px] opacity-100" : "pointer-events-none max-h-0 opacity-0"}`}
       >
         <div className="border-b border-[#0e2d4c]/10 bg-white/98 px-4 pb-6 pt-3 shadow-xl backdrop-blur-xl">
+          {sessionTimeLabel && (
+            <div className="mb-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">
+              <span>เซสชันจะหมดอายุใน</span>
+              <span className="font-mono text-sm font-bold tracking-wide text-amber-900">
+                {sessionTimeLabel}
+              </span>
+            </div>
+          )}
+
           <div className="space-y-1 rounded-2xl border border-[#0e2d4c]/8 bg-[#f8f9fc] p-2">
             {navItems.map((item) => {
               const isActive = isActivePath(pathname, item.href);

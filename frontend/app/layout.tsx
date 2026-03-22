@@ -30,9 +30,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="th">
-      <body className={`${contentFont.variable} ${headlineFont.variable} antialiased pt-20`}>
+      <body
+        className={`${contentFont.variable} ${headlineFont.variable} flex min-h-screen flex-col antialiased pt-20`}
+      >
         <Navbar />
-        {children}
+        <div className="flex flex-1 flex-col">{children}</div>
         <SiteFooter />
       </body>
     </html>
