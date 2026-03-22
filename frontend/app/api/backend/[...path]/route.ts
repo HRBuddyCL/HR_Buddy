@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { EMPLOYEE_SESSION_COOKIE } from "@/lib/auth/employee-session";
 
 const RAW_UPSTREAM_BASE_URL =
   process.env.BACKEND_API_BASE_URL ??
@@ -36,6 +37,16 @@ function buildUpstreamHeaders(request: NextRequest) {
   headers.delete("content-length");
   headers.set("x-forwarded-host", request.headers.get("host") ?? "");
 
+  if (!headers.has("authorization")) {
+    const employeeSessionToken =
+      request.cookies.get(EMPLOYEE_SESSION_COOKIE)?.value ?? null;
+    if (employeeSessionToken) {
+      headers.set("authorization", `Bearer ${employeeSessionToken}`);
+    }
+  }
+
+  headers.delete("cookie");
+
   return headers;
 }
 
@@ -43,11 +54,15 @@ async function proxyRequest(request: NextRequest, context: RouteContext) {
   const { path = [] } = await context.params;
   const upstreamUrl = buildUpstreamUrl(request, path);
   const method = request.method.toUpperCase();
-  const isRetryableMethod = method === "GET" || method === "HEAD" || method === "OPTIONS";
+  const isRetryableMethod =
+    method === "GET" || method === "HEAD" || method === "OPTIONS";
   const maxAttempts = isRetryableMethod ? 3 : 1;
 
   const headers = buildUpstreamHeaders(request);
-  const body = method === "GET" || method === "HEAD" ? undefined : await request.arrayBuffer();
+  const body =
+    method === "GET" || method === "HEAD"
+      ? undefined
+      : await request.arrayBuffer();
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     try {

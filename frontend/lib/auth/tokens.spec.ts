@@ -11,7 +11,8 @@ describe("auth token storage", () => {
 
   it("stores tokens in session mode", async () => {
     process.env.NEXT_PUBLIC_AUTH_TOKEN_STORAGE = "session";
-    const { setAuthToken, getAuthToken, getTokenStorageKey } = await import("@/lib/auth/tokens");
+    const { setAuthToken, getAuthToken, getTokenStorageKey } =
+      await import("@/lib/auth/tokens");
 
     setAuthToken("admin", "token-123");
 
@@ -23,7 +24,8 @@ describe("auth token storage", () => {
 
   it("supports optional memory mode", async () => {
     process.env.NEXT_PUBLIC_AUTH_TOKEN_STORAGE = "memory";
-    const { setAuthToken, getAuthToken, getTokenStorageKey } = await import("@/lib/auth/tokens");
+    const { setAuthToken, getAuthToken, getTokenStorageKey } =
+      await import("@/lib/auth/tokens");
 
     setAuthToken("employee", "memory-token");
 
@@ -35,18 +37,24 @@ describe("auth token storage", () => {
 
   it("supports optional session persistence mode", async () => {
     process.env.NEXT_PUBLIC_AUTH_TOKEN_STORAGE = "session";
-    const { setAuthToken, getAuthToken, clearAuthToken, getTokenStorageKey } = await import("@/lib/auth/tokens");
+    const { setAuthToken, getAuthToken, clearAuthToken, getTokenStorageKey } =
+      await import("@/lib/auth/tokens");
 
-    setAuthToken("employee", "persisted-token");
-    expect(window.sessionStorage.getItem(getTokenStorageKey("employee"))).toBe("persisted-token");
-    expect(getAuthToken("employee")).toBe("persisted-token");
+    setAuthToken("admin", "persisted-token");
+    expect(window.sessionStorage.getItem(getTokenStorageKey("admin"))).toBe(
+      "persisted-token",
+    );
+    expect(getAuthToken("admin")).toBe("persisted-token");
 
-    clearAuthToken("employee");
-    expect(window.sessionStorage.getItem(getTokenStorageKey("employee"))).toBeNull();
+    clearAuthToken("admin");
+    expect(
+      window.sessionStorage.getItem(getTokenStorageKey("admin")),
+    ).toBeNull();
   });
 
   it("migrates legacy localStorage token to sessionStorage", async () => {
-    const { getAuthToken, getTokenStorageKey } = await import("@/lib/auth/tokens");
+    const { getAuthToken, getTokenStorageKey } =
+      await import("@/lib/auth/tokens");
     const key = getTokenStorageKey("admin");
 
     window.localStorage.setItem(key, "legacy-admin-token");
@@ -57,7 +65,8 @@ describe("auth token storage", () => {
   });
 
   it("emits token changed event on set and clear", async () => {
-    const { setAuthToken, clearAuthToken, getTokenChangedEventName } = await import("@/lib/auth/tokens");
+    const { setAuthToken, clearAuthToken, getTokenChangedEventName } =
+      await import("@/lib/auth/tokens");
 
     const listener = vi.fn();
     window.addEventListener(getTokenChangedEventName(), listener);

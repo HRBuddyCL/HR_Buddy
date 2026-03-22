@@ -11,7 +11,9 @@ const TOKEN_CHANGED_EVENT = "hrbuddy:auth-token-changed";
 type TokenStorageMode = "memory" | "session";
 
 const configuredStorageMode =
-  (process.env.NEXT_PUBLIC_AUTH_TOKEN_STORAGE?.toLowerCase() as TokenStorageMode | undefined) ?? "session";
+  (process.env.NEXT_PUBLIC_AUTH_TOKEN_STORAGE?.toLowerCase() as
+    | TokenStorageMode
+    | undefined) ?? "session";
 
 const tokenCache: Partial<Record<TokenType, string>> = {};
 
@@ -32,6 +34,10 @@ function resolveTokenStorage() {
 }
 
 function readPersistedToken(type: TokenType): string | null {
+  if (type === "employee") {
+    return null;
+  }
+
   const storage = resolveTokenStorage();
   if (!storage) {
     return null;
@@ -90,6 +96,11 @@ export function getAuthToken(type: TokenType): string | null {
 export function setAuthToken(type: TokenType, token: string) {
   tokenCache[type] = token;
 
+  if (type === "employee") {
+    emitTokenChanged(type);
+    return;
+  }
+
   const storage = resolveTokenStorage();
   if (storage) {
     storage.setItem(TOKEN_KEYS[type], token);
@@ -100,6 +111,11 @@ export function setAuthToken(type: TokenType, token: string) {
 
 export function clearAuthToken(type: TokenType) {
   delete tokenCache[type];
+
+  if (type === "employee") {
+    emitTokenChanged(type);
+    return;
+  }
 
   const key = TOKEN_KEYS[type];
 

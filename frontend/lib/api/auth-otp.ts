@@ -1,4 +1,4 @@
-import { apiFetch } from "@/lib/api/client";
+import { ApiError, type ApiErrorBody, apiFetch } from "@/lib/api/client";
 
 export type SendOtpPayload = {
   phone: string;
@@ -17,7 +17,6 @@ export type VerifyOtpPayload = {
 };
 
 export type VerifyOtpResponse = {
-  sessionToken: string;
   expiresAt: string;
 };
 
@@ -29,8 +28,29 @@ export async function sendOtp(payload: SendOtpPayload) {
 }
 
 export async function verifyOtp(payload: VerifyOtpPayload) {
-  return apiFetch<VerifyOtpResponse>("/auth-otp/verify", {
+  const response = await fetch("/api/auth/employee/verify-otp", {
     method: "POST",
-    body: payload,
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+    cache: "no-store",
+    credentials: "same-origin",
   });
+
+  const json = (await response.json().catch(() => null)) as
+    | ApiErrorBody
+    | VerifyOtpResponse
+    | null;
+
+  if (!response.ok) {
+    throw new ApiError(
+      response.status,
+      json as ApiErrorBody | null,
+      `Request failed: ${response.status}`,
+    );
+  }
+
+  return (json ?? ({} as VerifyOtpResponse)) as VerifyOtpResponse;
 }

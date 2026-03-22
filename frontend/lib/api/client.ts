@@ -28,7 +28,11 @@ export class ApiError extends Error {
   status: number;
   body: ApiErrorBody | null;
 
-  constructor(status: number, body: ApiErrorBody | null, fallbackMessage: string) {
+  constructor(
+    status: number,
+    body: ApiErrorBody | null,
+    fallbackMessage: string,
+  ) {
     super(resolveErrorMessage(body, fallbackMessage));
     this.name = "ApiError";
     this.status = status;
@@ -36,7 +40,10 @@ export class ApiError extends Error {
   }
 }
 
-function resolveErrorMessage(body: ApiErrorBody | null, fallbackMessage: string) {
+function resolveErrorMessage(
+  body: ApiErrorBody | null,
+  fallbackMessage: string,
+) {
   const message = body?.message;
 
   if (Array.isArray(message) && message.length > 0) {
@@ -55,7 +62,12 @@ function buildUrl(path: string, query?: ApiFetchOptions["query"]) {
   const target = `${apiBaseUrl}${path}`;
   const url = /^https?:\/\//i.test(apiBaseUrl)
     ? new URL(target)
-    : new URL(target, typeof window !== "undefined" ? window.location.origin : "http://localhost");
+    : new URL(
+        target,
+        typeof window !== "undefined"
+          ? window.location.origin
+          : "http://localhost",
+      );
 
   if (!query) {
     return url.toString();
@@ -86,9 +98,17 @@ async function tryParseJson(response: Response) {
   }
 }
 
-function resolveRetryPolicy(method: string | undefined, retry: ApiFetchOptions["retry"]) {
+function resolveRetryPolicy(
+  method: string | undefined,
+  retry: ApiFetchOptions["retry"],
+) {
   const normalizedMethod = (method ?? "GET").toUpperCase();
-  const defaultAttempts = normalizedMethod === "GET" || normalizedMethod === "HEAD" || normalizedMethod === "OPTIONS" ? 3 : 1;
+  const defaultAttempts =
+    normalizedMethod === "GET" ||
+    normalizedMethod === "HEAD" ||
+    normalizedMethod === "OPTIONS"
+      ? 3
+      : 1;
 
   if (typeof retry === "number") {
     return {
@@ -111,7 +131,10 @@ function sleep(ms: number) {
   });
 }
 
-export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise<T> {
+export async function apiFetch<T>(
+  path: string,
+  options: ApiFetchOptions = {},
+): Promise<T> {
   const { tokenType, query, headers, body, retry, ...rest } = options;
   const retryPolicy = resolveRetryPolicy(rest.method, retry);
 
@@ -125,7 +148,11 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
     finalBody = JSON.stringify(body);
   }
 
-  if (tokenType && !requestHeaders.has("Authorization")) {
+  if (
+    tokenType &&
+    tokenType !== "employee" &&
+    !requestHeaders.has("Authorization")
+  ) {
     const token = getAuthToken(tokenType);
     if (token) {
       requestHeaders.set("Authorization", `Bearer ${token}`);
@@ -145,14 +172,20 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
         return (json ?? ({} as T)) as T;
       }
 
-      const shouldRetry = attempt < retryPolicy.attempts - 1 && retryPolicy.statuses.has(response.status);
+      const shouldRetry =
+        attempt < retryPolicy.attempts - 1 &&
+        retryPolicy.statuses.has(response.status);
       if (shouldRetry) {
         await sleep(retryPolicy.baseDelayMs * (attempt + 1));
         continue;
       }
 
       const json = (await tryParseJson(response)) as ApiErrorBody | null;
-      throw new ApiError(response.status, json, `Request failed: ${response.status}`);
+      throw new ApiError(
+        response.status,
+        json,
+        `Request failed: ${response.status}`,
+      );
     } catch (error) {
       if (error instanceof ApiError) {
         throw error;
