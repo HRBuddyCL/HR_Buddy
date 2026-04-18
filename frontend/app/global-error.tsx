@@ -47,7 +47,7 @@ export default function GlobalErrorPage({
                 href="/"
                 className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-red-800 ring-1 ring-red-300 hover:bg-red-100"
               >
-                กลับสู่หน้าแรก
+                กลับสู่หน้าหลัก
               </Link>
             </div>
           </section>

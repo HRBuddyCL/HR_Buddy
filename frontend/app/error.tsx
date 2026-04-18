@@ -19,16 +19,21 @@ export default function ErrorPage({ error, reset }: ErrorPageProps) {
   return (
     <div className="relative flex w-full flex-1 items-center overflow-hidden bg-[#f8fafc]">
       <div className="pointer-events-none absolute inset-0">
-        <div className="absolute -left-28 top-8 h-56 w-56 rounded-full bg-rose-100/70 blur-3xl" />
-        <div className="absolute -right-24 bottom-8 h-64 w-64 rounded-full bg-[#dbeafe]/70 blur-3xl" />
+        <div className="absolute -left-20 top-0 h-56 w-56 rounded-full bg-rose-100/75 blur-3xl md:-left-24 md:h-72 md:w-72" />
+        <div className="absolute -right-24 bottom-4 h-64 w-64 rounded-full bg-[#dbeafe]/80 blur-3xl md:-right-28 md:h-80 md:w-80" />
+        <div className="absolute left-1/2 top-1/2 h-56 w-56 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#fed54f]/10 blur-3xl md:h-72 md:w-72" />
       </div>
 
-      <main className="relative mx-auto w-full max-w-3xl px-6 py-8 md:py-10">
-        <section className="rounded-3xl border border-rose-200/80 bg-gradient-to-b from-rose-50 to-white p-7 shadow-[0_20px_50px_-28px_rgba(190,24,93,0.4)] md:p-8">
-          <div className="flex items-start gap-4">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-rose-100 text-rose-700 ring-1 ring-rose-200">
+      <main className="relative mx-auto w-full max-w-4xl px-4 py-6 sm:px-6 sm:py-8 md:py-12">
+        <section className="relative overflow-hidden rounded-3xl border border-rose-200/80 bg-gradient-to-b from-rose-50 via-white to-white p-5 shadow-[0_24px_70px_-35px_rgba(190,24,93,0.45)] sm:p-7 md:rounded-[28px] md:p-10">
+          <div className="pointer-events-none absolute -right-6 -top-8 text-[92px] font-black leading-none tracking-tighter text-rose-100/75 sm:-right-8 sm:-top-10 sm:text-[120px] md:-right-10 md:-top-12 md:text-[180px]">
+            ERR
+          </div>
+
+          <div className="relative flex flex-col gap-6 md:flex-row md:items-start">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-rose-100 text-rose-700 ring-1 ring-rose-200 md:h-16 md:w-16">
               <svg
-                className="h-6 w-6"
+                className="h-6 w-6 md:h-7 md:w-7"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -43,28 +48,28 @@ export default function ErrorPage({ error, reset }: ErrorPageProps) {
             </div>
 
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold uppercase tracking-[0.12em] text-rose-700">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-rose-700 sm:text-sm sm:tracking-[0.14em]">
                 เกิดข้อผิดพลาดที่ไม่คาดคิด
               </p>
-              <h1 className="mt-2 text-3xl font-bold leading-tight text-rose-900 md:text-[2.05rem]">
+              <h1 className="mt-2 text-2xl font-bold leading-tight text-rose-900 sm:text-3xl md:text-[2.2rem]">
                 ระบบพบปัญหาระหว่างการทำงาน
               </h1>
-              <p className="mt-3 text-[15px] leading-relaxed text-rose-800/90">
+              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-rose-800/90 sm:text-[15px] md:text-base">
                 หน้านี้เกิดข้อผิดพลาดที่ไม่คาดคิด
                 คุณสามารถลองทำรายการนี้ใหม่อีกครั้ง หรือกลับไปยังหน้าที่ปลอดภัย
               </p>
 
-              <div className="mt-6 flex flex-wrap gap-3">
+              <div className="mt-6 flex flex-col gap-2.5 sm:mt-7 sm:flex-row sm:flex-wrap sm:gap-3">
                 <button
                   type="button"
                   onClick={reset}
-                  className="rounded-xl bg-[#c81e4b] px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-rose-300/60 transition hover:-translate-y-px hover:bg-[#b51842]"
+                  className="w-full rounded-xl bg-[#c81e4b] px-5 py-3 text-sm font-semibold text-white shadow-md shadow-rose-300/60 transition hover:-translate-y-px hover:bg-[#b51842] sm:w-auto sm:py-2.5"
                 >
                   ลองอีกครั้ง
                 </button>
                 <Link
                   href="/"
-                  className="rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-rose-800 ring-1 ring-rose-300 transition hover:bg-rose-100"
+                  className="w-full rounded-xl bg-white px-5 py-3 text-center text-sm font-semibold text-rose-800 ring-1 ring-rose-300 transition hover:bg-rose-100 sm:w-auto sm:py-2.5"
                 >
                   กลับหน้าหลัก
                 </Link>
