@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ApiError } from "@/lib/api/client";
+import { ErrorToast } from "@/components/ui/error-toast";
 import { sendOtp, verifyOtp } from "@/lib/api/auth-otp";
 import {
   getSessionExpiresAt,
@@ -15,6 +16,7 @@ import {
   setEmployeeContact,
 } from "@/lib/auth/employee-contact";
 type Stage = "idle" | "code-sent";
+type OtpToastTitle = "ส่ง OTP ไม่สำเร็จ" | "ยืนยัน OTP ไม่สำเร็จ";
 
 function extractPhoneDigits(value: string) {
   return value.replace(/\D/g, "").slice(0, 10);
@@ -29,6 +31,82 @@ function formatPhoneDisplay(value: string) {
 
 function isValidPhone(value: string) {
   return extractPhoneDigits(value).length === 10;
+}
+
+function normalizePositiveSeconds(value: unknown) {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return null;
+  }
+
+  return Math.max(0, Math.ceil(value));
+}
+
+function deriveOtpTtlSeconds(expiresAtIso: string, fallbackSeconds: number) {
+  const expiresAt = new Date(expiresAtIso).getTime();
+  if (!Number.isFinite(expiresAt)) {
+    return Math.max(0, fallbackSeconds);
+  }
+
+  const derived = Math.ceil((expiresAt - Date.now()) / 1000);
+  return Math.max(0, derived);
+}
+
+function formatOtpTtlLabel(totalSeconds: number) {
+  if (totalSeconds <= 0) {
+    return "ไม่กี่วินาที";
+  }
+
+  if (totalSeconds < 60) {
+    return `${totalSeconds} วินาที`;
+  }
+
+  const minutes = Math.ceil(totalSeconds / 60);
+  return `${minutes} นาที`;
+}
+
+function toThaiOtpErrorMessage(error: ApiError) {
+  const code = error.body?.code;
+
+  switch (code) {
+    case "INVALID_OTP_CODE":
+      return "รหัส OTP ไม่ถูกต้อง กรุณาตรวจสอบและลองใหม่อีกครั้ง";
+    case "OTP_EXPIRED":
+      return "รหัส OTP หมดอายุแล้ว กรุณาขอรหัสใหม่";
+    case "OTP_ATTEMPTS_EXCEEDED":
+      return "คุณกรอกรหัส OTP ผิดเกินจำนวนครั้งที่กำหนด กรุณาขอรหัสใหม่";
+    case "OTP_ALREADY_USED":
+      return "รหัส OTP นี้ถูกใช้งานแล้ว กรุณาขอรหัสใหม่";
+    case "OTP_SESSION_NOT_FOUND":
+      return "ไม่พบรายการ OTP กรุณาขอรหัสใหม่อีกครั้ง";
+    case "OTP_COOLDOWN_ACTIVE": {
+      const retryAfterSeconds =
+        typeof (error.body as { retryAfterSeconds?: unknown } | null)
+          ?.retryAfterSeconds === "number"
+          ? ((error.body as { retryAfterSeconds?: number }).retryAfterSeconds ??
+            0)
+          : 0;
+
+      return retryAfterSeconds > 0
+        ? `กรุณารอ ${retryAfterSeconds} วินาที แล้วลองส่ง OTP อีกครั้ง`
+        : "เพิ่งมีการส่ง OTP ไปแล้ว กรุณารอสักครู่ก่อนลองใหม่";
+    }
+    case "OTP_RATE_LIMITED":
+      return "ขอ OTP บ่อยเกินไป กรุณาลองใหม่ภายหลัง";
+    default:
+      break;
+  }
+
+  const normalized = error.message.toLowerCase();
+
+  if (normalized.includes("invalid otp")) {
+    return "รหัส OTP ไม่ถูกต้อง กรุณาตรวจสอบและลองใหม่อีกครั้ง";
+  }
+
+  if (normalized.includes("expired")) {
+    return "รหัส OTP หมดอายุแล้ว กรุณาขอรหัสใหม่";
+  }
+
+  return "ไม่สามารถดำเนินการ OTP ได้ในขณะนี้ กรุณาลองใหม่อีกครั้ง";
 }
 
 export default function Page() {
@@ -136,9 +214,23 @@ function OtpPageContent() {
   const [submittingSend, setSubmittingSend] = useState(false);
   const [submittingVerify, setSubmittingVerify] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [errorTitle, setErrorTitle] = useState<OtpToastTitle>(
+    "ยืนยัน OTP ไม่สำเร็จ",
+  );
   const [otpHint, setOtpHint] = useState<string | null>(null);
   const [countdown, setCountdown] = useState(0);
+  const [otpTtlSeconds, setOtpTtlSeconds] = useState(300);
   const [isSessionChecked, setIsSessionChecked] = useState(false);
+
+  const showSendOtpError = (message: string) => {
+    setErrorTitle("ส่ง OTP ไม่สำเร็จ");
+    setErrorMessage(message);
+  };
+
+  const showVerifyOtpError = (message: string) => {
+    setErrorTitle("ยืนยัน OTP ไม่สำเร็จ");
+    setErrorMessage(message);
+  };
 
   useEffect(() => {
     const saved = getEmployeeContact();
@@ -187,7 +279,7 @@ function OtpPageContent() {
     setOtpHint(null);
 
     if (!canSend) {
-      setErrorMessage("กรุณากรอกเบอร์โทรศัพท์และอีเมลให้ถูกต้องก่อนขอ OTP");
+      showSendOtpError("กรุณากรอกเบอร์โทรศัพท์และอีเมลให้ถูกต้องก่อนขอ OTP");
       return;
     }
 
@@ -199,17 +291,24 @@ function OtpPageContent() {
         email: email.trim(),
       });
 
+      const resendAfterSeconds =
+        normalizePositiveSeconds(result.resendAfterSeconds) ?? 60;
+      const ttlFromResponse = normalizePositiveSeconds(result.otpTtlSeconds);
+      const effectiveOtpTtlSeconds =
+        ttlFromResponse ?? deriveOtpTtlSeconds(result.expiresAt, 300);
+
       setStage("code-sent");
-      setCountdown(60);
+      setCountdown(resendAfterSeconds);
+      setOtpTtlSeconds(effectiveOtpTtlSeconds);
 
       if (result.devOtp) {
         setOtpHint(`OTP สำหรับทดสอบ: ${result.devOtp}`);
       }
     } catch (error) {
       if (error instanceof ApiError) {
-        setErrorMessage(error.message);
+        showSendOtpError(toThaiOtpErrorMessage(error));
       } else {
-        setErrorMessage("ส่ง OTP ไม่สำเร็จ");
+        showSendOtpError("ส่ง OTP ไม่สำเร็จ");
       }
     } finally {
       setSubmittingSend(false);
@@ -221,7 +320,7 @@ function OtpPageContent() {
     setErrorMessage(null);
 
     if (!canVerify) {
-      setErrorMessage("รหัส OTP ต้องมี 6 หลัก");
+      showVerifyOtpError("รหัส OTP ต้องมี 6 หลัก");
       return;
     }
 
@@ -240,9 +339,9 @@ function OtpPageContent() {
       router.push(nextPath);
     } catch (error) {
       if (error instanceof ApiError) {
-        setErrorMessage(error.message);
+        showVerifyOtpError(toThaiOtpErrorMessage(error));
       } else {
-        setErrorMessage("ยืนยัน OTP ไม่สำเร็จ");
+        showVerifyOtpError("ยืนยัน OTP ไม่สำเร็จ");
       }
     } finally {
       setSubmittingVerify(false);
@@ -256,6 +355,14 @@ function OtpPageContent() {
   return (
     <div className="min-h-screen w-full bg-[#f8fafc]">
       <main className="mx-auto flex min-h-screen w-full max-w-3xl flex-col px-4 pb-16 pt-12 sm:px-6 sm:pt-14">
+        <ErrorToast
+          message={errorMessage}
+          onClose={() => setErrorMessage(null)}
+          title={errorTitle}
+          durationMs={10000}
+          variant="large"
+        />
+
         {/* ── Hero Header ─────────────────────────────────────────────── */}
         <section className="relative mb-7 overflow-hidden rounded-3xl bg-[#0e2d4c] px-5 py-7 text-center shadow-xl shadow-[#0e2d4c]/20 sm:px-8 sm:py-9">
           <div className="pointer-events-none absolute inset-0">
@@ -664,7 +771,7 @@ function OtpPageContent() {
               <p className="text-[12px] leading-relaxed text-amber-900/90">
                 รหัส OTP ถูกส่งไปยังอีเมลแล้ว กรุณาตรวจสอบกล่องจดหมาย
                 (หรือโฟลเดอร์ Spam) และกรอกรหัส <strong>6 หลัก</strong> ด้านล่าง
-                รหัสมีอายุ <strong>5 นาที</strong>
+                รหัสมีอายุ <strong>{formatOtpTtlLabel(otpTtlSeconds)}</strong>
               </p>
             </div>
 
@@ -818,35 +925,6 @@ function OtpPageContent() {
                 ?????????
               </p>
               <p className="text-sm font-bold text-[#0e2d4c]">{otpHint}</p>
-            </div>
-          </div>
-        )}
-
-        {/* ── Error Message ─────────────────────────────────────────────── */}
-        {errorMessage && (
-          <div className="mt-4 flex items-start gap-3 rounded-xl border border-[#b62026]/20 bg-[#b62026]/5 px-4 py-3.5">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#b62026]/10">
-              <svg
-                className="h-4 w-4 text-[#b62026]"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-            </div>
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#b62026]/70">
-                เกิดข้อผิดพลาด
-              </p>
-              <p className="text-sm font-medium text-[#b62026]">
-                {errorMessage}
-              </p>
             </div>
           </div>
         )}
