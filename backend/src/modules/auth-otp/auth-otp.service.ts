@@ -74,6 +74,8 @@ export class AuthOtpService {
 
     return {
       expiresAt: issued.expiresAt,
+      otpTtlSeconds: this.otpTtlMinutes() * 60,
+      resendAfterSeconds: this.otpSendCooldownSeconds(),
       ...(this.shouldExposeDevOtp() ? { devOtp: issued.otpCode } : {}),
     };
   }
@@ -123,6 +125,15 @@ export class AuthOtpService {
           },
           data: { attemptCount: { increment: 1 } },
         });
+
+        // If this failed attempt reaches the max attempts threshold,
+        // require the user to request a brand new OTP immediately.
+        if (otpSession.attemptCount + 1 >= this.maxAttempts()) {
+          throw new BadRequestException({
+            code: 'OTP_ATTEMPTS_EXCEEDED',
+            message: 'Too many OTP attempts',
+          });
+        }
 
         throw new BadRequestException({
           code: 'INVALID_OTP_CODE',

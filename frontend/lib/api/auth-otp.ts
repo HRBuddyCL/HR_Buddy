@@ -7,6 +7,8 @@ export type SendOtpPayload = {
 
 export type SendOtpResponse = {
   expiresAt: string;
+  otpTtlSeconds?: number;
+  resendAfterSeconds?: number;
   devOtp?: string;
 };
 

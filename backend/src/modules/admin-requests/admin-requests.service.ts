@@ -3,7 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, RequestStatus, RequestType } from '@prisma/client';
+import { ActorRole, Prisma, RequestStatus, RequestType } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MessengerService } from '../messenger/messenger.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -398,6 +398,7 @@ export class AdminRequestsService {
           phone: req.phone,
           status: dto.status,
           note: normalizedNote,
+          actorRole: ActorRole.ADMIN,
         },
         tx,
       );

@@ -145,6 +145,7 @@ export class MessengerService {
           phone: link.request.phone,
           status: dto.status,
           note: normalizedNote,
+          actorRole: ActorRole.MESSENGER,
         },
         tx,
       );

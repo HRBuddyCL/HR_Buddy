@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import {
+  ActorRole,
   NotificationEventType,
   Prisma,
   RecipientRole,
@@ -51,12 +52,22 @@ export class NotificationsService {
       phone: string;
       status: RequestStatus;
       note?: string | null;
+      actorRole?: ActorRole;
     },
     tx?: Tx,
   ) {
     const eventType = STATUS_TO_EVENT[params.status];
+    const actorRole = params.actorRole ?? ActorRole.EMPLOYEE;
 
     if (!eventType) {
+      return;
+    }
+
+    // Policy: when an employee cancels their own request, do not notify back.
+    if (
+      params.status === RequestStatus.CANCELED &&
+      actorRole === ActorRole.EMPLOYEE
+    ) {
       return;
     }
 

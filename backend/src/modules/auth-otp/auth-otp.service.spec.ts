@@ -207,6 +207,39 @@ describe('AuthOtpService hardening', () => {
     expect(tx.employeeAccessSession.create).not.toHaveBeenCalled();
   });
 
+  it('rejects OTP verify with attempts exceeded as soon as max is reached', async () => {
+    tx.otpSession.findFirst.mockResolvedValue({
+      id: 'otp-verify-1',
+      phone: '+66811111111',
+      email: 'employee@cl.local',
+      otpCodeHash: hashWithSecret('123456', 'very-strong-dev-secret'),
+      expiresAt: new Date('2026-03-08T10:05:00.000Z'),
+      verifiedAt: null,
+      attemptCount: 4,
+      createdAt: new Date('2026-03-08T10:00:00.000Z'),
+    });
+
+    await expectErrorCode(
+      service.verifyOtp({
+        phone: '+66811111111',
+        email: 'employee@cl.local',
+        otpCode: '000000',
+      }),
+      'OTP_ATTEMPTS_EXCEEDED',
+    );
+
+    expect(tx.otpSession.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: 'otp-verify-1',
+          verifiedAt: null,
+        }),
+        data: { attemptCount: { increment: 1 } },
+      }),
+    );
+    expect(tx.employeeAccessSession.create).not.toHaveBeenCalled();
+  });
+
   it('rejects OTP verify when session was consumed concurrently', async () => {
     tx.otpSession.findFirst.mockResolvedValue({
       id: 'otp-verify-1',
