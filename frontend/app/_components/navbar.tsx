@@ -4,6 +4,11 @@ import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import {
+  getMyNotifications,
+  markMyNotificationRead,
+  type NotificationItem,
+} from "@/lib/api/notifications";
 import { useSessionExpiresAt } from "@/lib/auth/session-expiry";
 import { useAuthToken } from "@/lib/auth/use-auth-token";
 
@@ -27,8 +32,17 @@ function isActivePath(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
+function formatNotificationTime(iso: string) {
+  return new Intl.DateTimeFormat("th-TH", {
+    dateStyle: "short",
+    timeStyle: "short",
+  }).format(new Date(iso));
+}
+
 export function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const pathname = usePathname();
   const adminToken = useAuthToken("admin");
   const employeeSessionExpiresAt = useSessionExpiresAt("employee");
@@ -66,6 +80,87 @@ export function Navbar() {
     const msLeft = employeeSessionExpiresAtMs - nowTs;
     return Math.max(0, Math.ceil(msLeft / 1000));
   }, [employeeSessionExpiresAtMs, nowTs]);
+
+  const isEmployeeSessionActive =
+    remainingSeconds !== null && remainingSeconds > 0;
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadNotifications() {
+      if (!isEmployeeSessionActive) {
+        if (active) {
+          setNotifications([]);
+        }
+        return;
+      }
+
+      try {
+        const result = await getMyNotifications({
+          limit: 5,
+          page: 1,
+        });
+
+        if (!active) {
+          return;
+        }
+
+        setNotifications(result.items);
+      } catch {
+        if (active) {
+          setNotifications([]);
+        }
+      }
+    }
+
+    void loadNotifications();
+
+    if (!isEmployeeSessionActive) {
+      return () => {
+        active = false;
+      };
+    }
+
+    const poller = window.setInterval(() => {
+      void loadNotifications();
+    }, 30000);
+
+    return () => {
+      active = false;
+      window.clearInterval(poller);
+    };
+  }, [isEmployeeSessionActive]);
+
+  const unreadCount = useMemo(
+    () => notifications.filter((item) => !item.isRead).length,
+    [notifications],
+  );
+
+  const handleNotificationClick = async (item: NotificationItem) => {
+    if (item.isRead) {
+      return;
+    }
+
+    setNotifications((prev) =>
+      prev.map((current) =>
+        current.id === item.id
+          ? { ...current, isRead: true, readAt: new Date().toISOString() }
+          : current,
+      ),
+    );
+
+    try {
+      await markMyNotificationRead(item.id);
+    } catch {
+      setNotifications((prev) =>
+        prev.map((current) =>
+          current.id === item.id
+            ? { ...current, isRead: false, readAt: null }
+            : current,
+        ),
+      );
+    }
+  };
 
   const sessionTimeLabel = useMemo(() => {
     if (remainingSeconds === null) {
@@ -130,6 +225,92 @@ export function Navbar() {
                 </div>
               )}
 
+              {isEmployeeSessionActive && (
+                <div className="relative mr-1">
+                  <button
+                    type="button"
+                    onClick={() => setIsNotificationsOpen((prev) => !prev)}
+                    aria-label="เปิดการแจ้งเตือน"
+                    className={`group relative inline-flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl border shadow-sm transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#fed54f] focus-visible:ring-offset-2 ${
+                      isNotificationsOpen
+                        ? "border-[#0e2d4c]/20 bg-[#0e2d4c] text-white shadow-md shadow-[#0e2d4c]/25"
+                        : "border-[#0e2d4c]/12 bg-white text-[#0e2d4c]/80 hover:-translate-y-px hover:border-[#0e2d4c]/30 hover:bg-gradient-to-r hover:from-[#f7faff] hover:to-[#fff4f5] hover:text-[#0e2d4c] hover:shadow-md"
+                    }`}
+                  >
+                    <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent opacity-0 transition-all duration-500 group-hover:translate-x-full group-hover:opacity-100" />
+                    <svg
+                      className="relative h-4 w-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M15 17h5l-1.4-1.4a2 2 0 01-.6-1.4V11a6 6 0 10-12 0v3.2a2 2 0 01-.6 1.4L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
+                      />
+                    </svg>
+                    {unreadCount > 0 ? (
+                      <span className="absolute -right-1 -top-1 inline-flex min-w-5 items-center justify-center rounded-full bg-[#b62026] px-1.5 py-0.5 text-[10px] font-bold text-white shadow-sm shadow-[#b62026]/40">
+                        <span className="absolute inset-0 rounded-full bg-[#b62026] opacity-40 animate-ping" />
+                        {unreadCount}
+                      </span>
+                    ) : null}
+                  </button>
+
+                  {isNotificationsOpen && (
+                    <div className="absolute right-0 top-[calc(100%+8px)] z-50 w-[340px] rounded-2xl border border-slate-200 bg-white p-3 shadow-2xl">
+                      <p className="px-1 text-sm font-semibold text-slate-900">
+                        การแจ้งเตือนล่าสุด
+                      </p>
+
+                      <ul className="mt-2 max-h-72 space-y-2 overflow-auto">
+                        {notifications.length === 0 ? (
+                          <li className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                            ไม่มีการแจ้งเตือน
+                          </li>
+                        ) : (
+                          notifications.map((item) => (
+                            <li key={item.id}>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  void handleNotificationClick(item)
+                                }
+                                className={`w-full rounded-lg border px-3 py-2 text-left transition ${
+                                  item.isRead
+                                    ? "border-slate-200 bg-slate-50 hover:bg-slate-100"
+                                    : "border-amber-200 bg-amber-50 hover:bg-amber-100"
+                                }`}
+                              >
+                                <p className="text-sm font-medium text-slate-900">
+                                  {item.title}
+                                </p>
+                                <p className="mt-0.5 text-xs text-slate-700 line-clamp-2">
+                                  {item.message}
+                                </p>
+                                <p className="mt-1 text-[11px] text-slate-500">
+                                  {formatNotificationTime(item.createdAt)}
+                                </p>
+                              </button>
+                            </li>
+                          ))
+                        )}
+                      </ul>
+
+                      <Link
+                        href="/my-notifications"
+                        onClick={() => setIsNotificationsOpen(false)}
+                        className="mt-3 inline-flex w-full items-center justify-center rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
+                      >
+                        การแจ้งเตือนทั้งหมด
+                      </Link>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {navItems.map((item) => {
                 const isActive = isActivePath(pathname, item.href);
                 return (
@@ -137,6 +318,7 @@ export function Navbar() {
                     key={item.href}
                     href={item.href}
                     aria-current={isActive ? "page" : undefined}
+                    onClick={() => setIsNotificationsOpen(false)}
                     className={`
                       group/link relative inline-flex items-center gap-2
                       rounded-xl overflow-hidden px-[18px] py-[11px]
@@ -209,33 +391,126 @@ export function Navbar() {
               </Link>
             </div>
 
-            <button
-              onClick={() => setMobileMenuOpen((p) => !p)}
-              aria-label="Toggle menu"
-              aria-expanded={mobileMenuOpen}
-              className="
-                relative inline-flex h-11 w-11 items-center justify-center
-                rounded-xl border border-[#0e2d4c]/12 bg-white
-                text-[#0e2d4c] shadow-sm
-                transition-all duration-200
-                hover:border-[#b62026]/40 hover:text-[#b62026] hover:shadow-md
-                focus-visible:outline-none focus-visible:ring-2
-                focus-visible:ring-[#fed54f] md:hidden
-              "
-            >
-              <span
-                className={`absolute h-[1.5px] w-[22px] bg-current transition-all duration-300 ${mobileMenuOpen ? "rotate-45" : "-translate-y-[6px]"}`}
-              />
-              <span
-                className={`absolute h-[1.5px] w-[22px] bg-current transition-all duration-300 ${mobileMenuOpen ? "scale-x-0 opacity-0" : ""}`}
-              />
-              <span
-                className={`absolute h-[1.5px] w-[22px] bg-current transition-all duration-300 ${mobileMenuOpen ? "-rotate-45" : "translate-y-[6px]"}`}
-              />
-            </button>
+            <div className="flex items-center gap-2 md:hidden">
+              {isEmployeeSessionActive ? (
+                <button
+                  type="button"
+                  onClick={() => setIsNotificationsOpen((prev) => !prev)}
+                  aria-label="เปิดการแจ้งเตือน"
+                  aria-expanded={isNotificationsOpen}
+                  className="
+                    relative inline-flex h-11 w-11 items-center justify-center
+                    rounded-xl border border-[#0e2d4c]/12 bg-white
+                    text-[#0e2d4c] shadow-sm
+                    transition-all duration-200
+                    hover:border-[#b62026]/40 hover:text-[#b62026] hover:shadow-md
+                    focus-visible:outline-none focus-visible:ring-2
+                    focus-visible:ring-[#fed54f]
+                  "
+                >
+                  <svg
+                    className="h-[19px] w-[19px]"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M15 17h5l-1.4-1.4a2 2 0 01-.6-1.4V11a6 6 0 10-12 0v3.2a2 2 0 01-.6 1.4L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
+                    />
+                  </svg>
+
+                  {unreadCount > 0 ? (
+                    <span className="absolute -right-1 -top-1 inline-flex min-w-5 items-center justify-center rounded-full bg-[#b62026] px-1.5 py-0.5 text-[10px] font-bold text-white shadow-sm shadow-[#b62026]/40">
+                      {unreadCount}
+                    </span>
+                  ) : null}
+                </button>
+              ) : null}
+
+              <button
+                onClick={() => {
+                  setIsNotificationsOpen(false);
+                  setMobileMenuOpen((p) => !p);
+                }}
+                aria-label="Toggle menu"
+                aria-expanded={mobileMenuOpen}
+                className="
+                  relative inline-flex h-11 w-11 items-center justify-center
+                  rounded-xl border border-[#0e2d4c]/12 bg-white
+                  text-[#0e2d4c] shadow-sm
+                  transition-all duration-200
+                  hover:border-[#b62026]/40 hover:text-[#b62026] hover:shadow-md
+                  focus-visible:outline-none focus-visible:ring-2
+                  focus-visible:ring-[#fed54f]
+                "
+              >
+                <span
+                  className={`absolute h-[1.5px] w-[22px] bg-current transition-all duration-300 ${mobileMenuOpen ? "rotate-45" : "-translate-y-[6px]"}`}
+                />
+                <span
+                  className={`absolute h-[1.5px] w-[22px] bg-current transition-all duration-300 ${mobileMenuOpen ? "scale-x-0 opacity-0" : ""}`}
+                />
+                <span
+                  className={`absolute h-[1.5px] w-[22px] bg-current transition-all duration-300 ${mobileMenuOpen ? "-rotate-45" : "translate-y-[6px]"}`}
+                />
+              </button>
+            </div>
           </div>
         </div>
       </div>
+
+      {isEmployeeSessionActive && isNotificationsOpen ? (
+        <div className="md:hidden border-b border-[#0e2d4c]/10 bg-white/98 px-4 pb-4 pt-2 shadow-xl backdrop-blur-xl">
+          <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+            <p className="px-1 text-sm font-semibold text-slate-900">
+              การแจ้งเตือนล่าสุด
+            </p>
+
+            <ul className="mt-2 max-h-72 space-y-2 overflow-auto">
+              {notifications.length === 0 ? (
+                <li className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                  ไม่มีการแจ้งเตือน
+                </li>
+              ) : (
+                notifications.map((item) => (
+                  <li key={item.id}>
+                    <button
+                      type="button"
+                      onClick={() => void handleNotificationClick(item)}
+                      className={`w-full rounded-lg border px-3 py-2 text-left transition ${
+                        item.isRead
+                          ? "border-slate-200 bg-slate-50 hover:bg-slate-100"
+                          : "border-amber-200 bg-amber-50 hover:bg-amber-100"
+                      }`}
+                    >
+                      <p className="text-sm font-medium text-slate-900">
+                        {item.title}
+                      </p>
+                      <p className="mt-0.5 text-xs text-slate-700 line-clamp-2">
+                        {item.message}
+                      </p>
+                      <p className="mt-1 text-[11px] text-slate-500">
+                        {formatNotificationTime(item.createdAt)}
+                      </p>
+                    </button>
+                  </li>
+                ))
+              )}
+            </ul>
+
+            <Link
+              href="/my-notifications"
+              onClick={() => setIsNotificationsOpen(false)}
+              className="mt-3 inline-flex w-full items-center justify-center rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
+            >
+              การแจ้งเตือนทั้งหมด
+            </Link>
+          </div>
+        </div>
+      ) : null}
 
       <div
         className={`overflow-hidden transition-all duration-300 ease-in-out md:hidden ${mobileMenuOpen ? "max-h-[420px] opacity-100" : "pointer-events-none max-h-0 opacity-0"}`}
