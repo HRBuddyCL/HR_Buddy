@@ -44,6 +44,7 @@ export function Navbar() {
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const pathname = usePathname();
+  const isAuthPath = pathname === "/auth/otp" || pathname.startsWith("/auth/");
   const adminToken = useAuthToken("admin");
   const employeeSessionExpiresAt = useSessionExpiresAt("employee");
   const isAdminSignedIn = Boolean(adminToken);
@@ -63,11 +64,17 @@ export function Navbar() {
       return;
     }
 
-    const timer = window.setInterval(() => {
+    const syncNowTs = () => {
       setNowTs(Date.now());
+    };
+
+    const rafId = window.requestAnimationFrame(syncNowTs);
+    const timer = window.setInterval(() => {
+      syncNowTs();
     }, 1000);
 
     return () => {
+      window.cancelAnimationFrame(rafId);
       window.clearInterval(timer);
     };
   }, [employeeSessionExpiresAtMs]);
@@ -78,7 +85,7 @@ export function Navbar() {
     }
 
     const msLeft = employeeSessionExpiresAtMs - nowTs;
-    return Math.max(0, Math.ceil(msLeft / 1000));
+    return Math.max(0, Math.floor(msLeft / 1000));
   }, [employeeSessionExpiresAtMs, nowTs]);
 
   const isEmployeeSessionActive =
@@ -216,7 +223,7 @@ export function Navbar() {
             </Link>
 
             <div className="hidden items-center gap-1.5 md:flex">
-              {sessionTimeLabel && (
+              {!isAuthPath && sessionTimeLabel && (
                 <div className="mr-2 inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">
                   <span>เซสชันจะหมดอายุใน</span>
                   <span className="font-mono text-sm font-bold tracking-wide text-amber-900">
@@ -516,7 +523,7 @@ export function Navbar() {
         className={`overflow-hidden transition-all duration-300 ease-in-out md:hidden ${mobileMenuOpen ? "max-h-[420px] opacity-100" : "pointer-events-none max-h-0 opacity-0"}`}
       >
         <div className="border-b border-[#0e2d4c]/10 bg-white/98 px-4 pb-6 pt-3 shadow-xl backdrop-blur-xl">
-          {sessionTimeLabel && (
+          {!isAuthPath && sessionTimeLabel && (
             <div className="mb-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">
               <span>เซสชันจะหมดอายุใน</span>
               <span className="font-mono text-sm font-bold tracking-wide text-amber-900">

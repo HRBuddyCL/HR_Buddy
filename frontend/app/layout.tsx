@@ -3,6 +3,7 @@ import { Kanit, Noto_Sans_Thai } from "next/font/google";
 import "./globals.css";
 import { Navbar } from "./_components/navbar";
 import { SiteFooter } from "./_components/site-footer";
+import { ScrollResetOnLoad } from "./_components/scroll-reset-on-load";
 
 const headlineFont = Kanit({
   subsets: ["latin", "thai"],
@@ -33,6 +34,7 @@ export default function RootLayout({
       <body
         className={`${contentFont.variable} ${headlineFont.variable} flex min-h-screen flex-col antialiased pt-20`}
       >
+        <ScrollResetOnLoad />
         <Navbar />
         <div className="flex flex-1 flex-col">{children}</div>
         <SiteFooter />

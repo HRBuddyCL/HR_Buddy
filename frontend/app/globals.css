@@ -16,7 +16,12 @@
 
 body {
   margin: 0;
-  background: radial-gradient(circle at top right, #dbeafe 0%, #f2f4f8 45%, #eef2ff 100%);
+  background: radial-gradient(
+    circle at top right,
+    #dbeafe 0%,
+    #f2f4f8 45%,
+    #eef2ff 100%
+  );
   color: var(--foreground);
   font-family: var(--font-content), "Noto Sans Thai", "Segoe UI", sans-serif;
 }
