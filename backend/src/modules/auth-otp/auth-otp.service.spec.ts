@@ -34,6 +34,7 @@ describe('AuthOtpService hardening', () => {
     'otp.codeTtlMinutes': 5,
     'otp.sessionTtlMinutes': 30,
     'otp.maxAttempts': 5,
+    'otp.attemptLockMinutes': 5,
     'otp.sendCooldownSeconds': 60,
     'otp.maxSendPerHour': 6,
   };
@@ -91,7 +92,7 @@ describe('AuthOtpService hardening', () => {
   });
 
   it('rejects sendOtp while cooldown is active', async () => {
-    tx.otpSession.findFirst.mockResolvedValue({
+    tx.otpSession.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce({
       createdAt: new Date('2026-03-08T09:59:45.000Z'),
     });
 
@@ -104,6 +105,9 @@ describe('AuthOtpService hardening', () => {
   });
 
   it('rejects sendOtp when hourly limit is reached', async () => {
+    tx.otpSession.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null);
     tx.otpSession.count.mockResolvedValue(6);
 
     await expect(
@@ -115,6 +119,9 @@ describe('AuthOtpService hardening', () => {
   });
 
   it('deletes OTP session when delivery fails', async () => {
+    tx.otpSession.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null);
     sendOtpMock.mockRejectedValueOnce(new Error('delivery failed'));
 
     await expect(
@@ -128,6 +135,10 @@ describe('AuthOtpService hardening', () => {
   });
 
   it('creates OTP session and sends OTP when limits are not exceeded', async () => {
+    tx.otpSession.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null);
+
     const result = await service.sendOtp({
       phone: '+66811111111',
       email: 'employee@cl.local',
@@ -140,6 +151,10 @@ describe('AuthOtpService hardening', () => {
   });
 
   it('acquires advisory lock before issuing OTP', async () => {
+    tx.otpSession.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null);
+
     await service.sendOtp({
       phone: '+66811111111',
       email: 'employee@cl.local',
@@ -149,6 +164,20 @@ describe('AuthOtpService hardening', () => {
     expect(String((tx.$queryRaw as jest.Mock).mock.calls[0][0][0])).toContain(
       'pg_advisory_xact_lock',
     );
+  });
+
+  it('rejects sendOtp while OTP verification lock is active', async () => {
+    tx.otpSession.findFirst.mockResolvedValueOnce({
+      blockedUntil: new Date('2026-03-08T10:04:00.000Z'),
+    });
+
+    await expectErrorCode(
+      service.sendOtp({ phone: '+66811111111', email: 'employee@cl.local' }),
+      'OTP_TEMPORARILY_LOCKED',
+    );
+
+    expect(tx.otpSession.create).not.toHaveBeenCalled();
+    expect(sendOtpMock).not.toHaveBeenCalled();
   });
 
   it('verifies OTP atomically and creates employee session', async () => {
@@ -207,13 +236,14 @@ describe('AuthOtpService hardening', () => {
     expect(tx.employeeAccessSession.create).not.toHaveBeenCalled();
   });
 
-  it('rejects OTP verify with attempts exceeded as soon as max is reached', async () => {
+  it('locks OTP verify for 5 minutes when failed attempts reach max', async () => {
     tx.otpSession.findFirst.mockResolvedValue({
       id: 'otp-verify-1',
       phone: '+66811111111',
       email: 'employee@cl.local',
       otpCodeHash: hashWithSecret('123456', 'very-strong-dev-secret'),
       expiresAt: new Date('2026-03-08T10:05:00.000Z'),
+      blockedUntil: null,
       verifiedAt: null,
       attemptCount: 4,
       createdAt: new Date('2026-03-08T10:00:00.000Z'),
@@ -225,7 +255,7 @@ describe('AuthOtpService hardening', () => {
         email: 'employee@cl.local',
         otpCode: '000000',
       }),
-      'OTP_ATTEMPTS_EXCEEDED',
+      'OTP_TEMPORARILY_LOCKED',
     );
 
     expect(tx.otpSession.updateMany).toHaveBeenCalledWith(
@@ -234,9 +264,37 @@ describe('AuthOtpService hardening', () => {
           id: 'otp-verify-1',
           verifiedAt: null,
         }),
-        data: { attemptCount: { increment: 1 } },
+        data: {
+          attemptCount: 5,
+          blockedUntil: new Date('2026-03-08T10:05:00.000Z'),
+        },
       }),
     );
+    expect(tx.employeeAccessSession.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects OTP verify while lock is still active', async () => {
+    tx.otpSession.findFirst.mockResolvedValue({
+      id: 'otp-verify-1',
+      phone: '+66811111111',
+      email: 'employee@cl.local',
+      otpCodeHash: hashWithSecret('123456', 'very-strong-dev-secret'),
+      expiresAt: new Date('2026-03-08T10:10:00.000Z'),
+      blockedUntil: new Date('2026-03-08T10:04:00.000Z'),
+      verifiedAt: null,
+      attemptCount: 5,
+      createdAt: new Date('2026-03-08T10:00:00.000Z'),
+    });
+
+    await expectErrorCode(
+      service.verifyOtp({
+        phone: '+66811111111',
+        email: 'employee@cl.local',
+        otpCode: '123456',
+      }),
+      'OTP_TEMPORARILY_LOCKED',
+    );
+
     expect(tx.employeeAccessSession.create).not.toHaveBeenCalled();
   });
 

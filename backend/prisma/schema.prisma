@@ -351,12 +351,14 @@ model OtpSession {
 
   expiresAt  DateTime  @map("expires_at")
   verifiedAt DateTime? @map("verified_at")
+  blockedUntil DateTime? @map("blocked_until")
 
   attemptCount Int      @default(0) @map("attempt_count")
   createdAt    DateTime @default(now()) @map("created_at")
 
   @@index([phone, email, createdAt])
   @@index([expiresAt])
+  @@index([blockedUntil])
   @@map("otp_sessions")
 }
 

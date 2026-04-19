@@ -33,6 +33,10 @@ export default () => ({
       10,
     ),
     maxAttempts: parseInt(process.env.OTP_MAX_ATTEMPTS ?? '5', 10),
+    attemptLockMinutes: parseInt(
+      process.env.OTP_ATTEMPT_LOCK_MINUTES ?? '5',
+      10,
+    ),
     sendCooldownSeconds: parseInt(
       process.env.OTP_SEND_COOLDOWN_SECONDS ?? '60',
       10,

@@ -32,6 +32,7 @@ export class AuthOtpService {
       await this.acquireOtpSendLock(tx, dto.phone, normalizedEmail);
 
       const now = new Date();
+      await this.assertVerifyLockNotActive(tx, dto.phone, normalizedEmail, now);
       await this.assertSendCooldown(tx, dto.phone, normalizedEmail, now);
       await this.assertSendRateLimit(tx, dto.phone, normalizedEmail, now);
 
@@ -84,69 +85,112 @@ export class AuthOtpService {
     const normalizedEmail = this.normalizeEmail(dto.email);
     const inputHash = this.hash(dto.otpCode);
 
-    return this.prisma.$transaction(async (tx) => {
-      const otpSession = await tx.otpSession.findFirst({
+    const otpSession = await this.prisma.otpSession.findFirst({
+      where: {
+        phone: dto.phone,
+        email: normalizedEmail,
+        verifiedAt: null,
+      },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        phone: true,
+        email: true,
+        otpCodeHash: true,
+        expiresAt: true,
+        verifiedAt: true,
+        attemptCount: true,
+        blockedUntil: true,
+        createdAt: true,
+      },
+    });
+
+    if (!otpSession) {
+      throw new NotFoundException({
+        code: 'OTP_SESSION_NOT_FOUND',
+        message: 'OTP session not found',
+      });
+    }
+
+    const now = new Date();
+
+    if (otpSession.blockedUntil && otpSession.blockedUntil > now) {
+      throw new BadRequestException({
+        code: 'OTP_TEMPORARILY_LOCKED',
+        message: 'OTP verification is temporarily locked',
+        retryAfterSeconds: this.secondsUntil(otpSession.blockedUntil, now),
+      });
+    }
+
+    let currentAttemptCount = otpSession.attemptCount;
+    if (
+      currentAttemptCount >= this.maxAttempts() &&
+      (!otpSession.blockedUntil || otpSession.blockedUntil <= now)
+    ) {
+      await this.prisma.otpSession.updateMany({
         where: {
-          phone: dto.phone,
-          email: normalizedEmail,
+          id: otpSession.id,
           verifiedAt: null,
         },
-        orderBy: { createdAt: 'desc' },
+        data: {
+          attemptCount: 0,
+          blockedUntil: null,
+        },
       });
+      currentAttemptCount = 0;
+    }
 
-      if (!otpSession) {
-        throw new NotFoundException({
-          code: 'OTP_SESSION_NOT_FOUND',
-          message: 'OTP session not found',
-        });
-      }
+    if (otpSession.expiresAt <= now) {
+      throw new BadRequestException({
+        code: 'OTP_EXPIRED',
+        message: 'OTP is expired',
+      });
+    }
 
-      const now = new Date();
+    if (inputHash !== otpSession.otpCodeHash) {
+      const nextAttemptCount = currentAttemptCount + 1;
 
-      if (otpSession.expiresAt <= now) {
-        throw new BadRequestException({
-          code: 'OTP_EXPIRED',
-          message: 'OTP is expired',
-        });
-      }
+      if (nextAttemptCount >= this.maxAttempts()) {
+        const blockedUntil = this.minutesFromNow(this.attemptLockMinutes());
 
-      if (otpSession.attemptCount >= this.maxAttempts()) {
-        throw new BadRequestException({
-          code: 'OTP_ATTEMPTS_EXCEEDED',
-          message: 'Too many OTP attempts',
-        });
-      }
-
-      if (inputHash !== otpSession.otpCodeHash) {
-        await tx.otpSession.updateMany({
+        await this.prisma.otpSession.updateMany({
           where: {
             id: otpSession.id,
             verifiedAt: null,
           },
-          data: { attemptCount: { increment: 1 } },
+          data: {
+            attemptCount: nextAttemptCount,
+            blockedUntil,
+          },
         });
 
-        // If this failed attempt reaches the max attempts threshold,
-        // require the user to request a brand new OTP immediately.
-        if (otpSession.attemptCount + 1 >= this.maxAttempts()) {
-          throw new BadRequestException({
-            code: 'OTP_ATTEMPTS_EXCEEDED',
-            message: 'Too many OTP attempts',
-          });
-        }
-
         throw new BadRequestException({
-          code: 'INVALID_OTP_CODE',
-          message: 'Invalid OTP code',
+          code: 'OTP_TEMPORARILY_LOCKED',
+          message: 'OTP verification is temporarily locked',
+          retryAfterSeconds: this.secondsUntil(blockedUntil, now),
         });
       }
 
+      await this.prisma.otpSession.updateMany({
+        where: {
+          id: otpSession.id,
+          verifiedAt: null,
+        },
+        data: { attemptCount: { increment: 1 } },
+      });
+
+      throw new BadRequestException({
+        code: 'INVALID_OTP_CODE',
+        message: 'Invalid OTP code',
+      });
+    }
+
+    return this.prisma.$transaction(async (tx) => {
       const verifyResult = await tx.otpSession.updateMany({
         where: {
           id: otpSession.id,
           verifiedAt: null,
           expiresAt: { gt: now },
-          attemptCount: { lt: this.maxAttempts() },
           otpCodeHash: inputHash,
         },
         data: {
@@ -245,6 +289,36 @@ export class AuthOtpService {
     });
   }
 
+  private async assertVerifyLockNotActive(
+    tx: Tx,
+    phone: string,
+    email: string,
+    now: Date,
+  ) {
+    const lockedSession = await tx.otpSession.findFirst({
+      where: {
+        phone,
+        email,
+        verifiedAt: null,
+        blockedUntil: { gt: now },
+      },
+      orderBy: { blockedUntil: 'desc' },
+      select: {
+        blockedUntil: true,
+      },
+    });
+
+    if (!lockedSession?.blockedUntil) {
+      return;
+    }
+
+    throw new BadRequestException({
+      code: 'OTP_TEMPORARILY_LOCKED',
+      message: 'OTP verification is temporarily locked',
+      retryAfterSeconds: this.secondsUntil(lockedSession.blockedUntil, now),
+    });
+  }
+
   private async assertSendRateLimit(
     tx: Tx,
     phone: string,
@@ -310,12 +384,20 @@ export class AuthOtpService {
     return this.config.get<number>('otp.maxAttempts') ?? 5;
   }
 
+  private attemptLockMinutes() {
+    return this.config.get<number>('otp.attemptLockMinutes') ?? 5;
+  }
+
   private otpSendCooldownSeconds() {
     return this.config.get<number>('otp.sendCooldownSeconds') ?? 60;
   }
 
   private otpMaxSendPerHour() {
     return this.config.get<number>('otp.maxSendPerHour') ?? 6;
+  }
+
+  private secondsUntil(target: Date, now = new Date()) {
+    return Math.max(1, Math.ceil((target.getTime() - now.getTime()) / 1000));
   }
 
   private shouldExposeDevOtp() {

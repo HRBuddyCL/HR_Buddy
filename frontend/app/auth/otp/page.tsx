@@ -66,6 +66,11 @@ function formatOtpTtlLabel(totalSeconds: number) {
 
 function toThaiOtpErrorMessage(error: ApiError) {
   const code = error.body?.code;
+  const retryAfterSeconds =
+    typeof (error.body as { retryAfterSeconds?: unknown } | null)
+      ?.retryAfterSeconds === "number"
+      ? ((error.body as { retryAfterSeconds?: number }).retryAfterSeconds ?? 0)
+      : 0;
 
   switch (code) {
     case "INVALID_OTP_CODE":
@@ -74,11 +79,7 @@ function toThaiOtpErrorMessage(error: ApiError) {
       return "รหัส OTP หมดอายุแล้ว กรุณาขอรหัสใหม่";
     case "OTP_ATTEMPTS_EXCEEDED":
       return "คุณกรอกรหัส OTP ผิดเกินจำนวนครั้งที่กำหนด กรุณาขอรหัสใหม่";
-    case "OTP_ALREADY_USED":
-      return "รหัส OTP นี้ถูกใช้งานแล้ว กรุณาขอรหัสใหม่";
-    case "OTP_SESSION_NOT_FOUND":
-      return "ไม่พบรายการ OTP กรุณาขอรหัสใหม่อีกครั้ง";
-    case "OTP_COOLDOWN_ACTIVE": {
+    case "OTP_TEMPORARILY_LOCKED": {
       const retryAfterSeconds =
         typeof (error.body as { retryAfterSeconds?: unknown } | null)
           ?.retryAfterSeconds === "number"
@@ -87,9 +88,22 @@ function toThaiOtpErrorMessage(error: ApiError) {
           : 0;
 
       return retryAfterSeconds > 0
+        ? `คุณกรอกรหัส OTP ผิดครบ 5 ครั้ง ระบบล็อกชั่วคราว กรุณารอ ${retryAfterSeconds} วินาที แล้วลองใหม่`
+        : "คุณกรอกรหัส OTP ผิดครบ 5 ครั้ง ระบบถูกล็อกชั่วคราว 5 นาที";
+    }
+    case "OTP_ALREADY_USED":
+      return "รหัส OTP นี้ถูกใช้งานแล้ว กรุณาขอรหัสใหม่";
+    case "OTP_SESSION_NOT_FOUND":
+      return "ไม่พบรายการ OTP กรุณาขอรหัสใหม่อีกครั้ง";
+    case "OTP_COOLDOWN_ACTIVE": {
+      return retryAfterSeconds > 0
         ? `กรุณารอ ${retryAfterSeconds} วินาที แล้วลองส่ง OTP อีกครั้ง`
         : "เพิ่งมีการส่ง OTP ไปแล้ว กรุณารอสักครู่ก่อนลองใหม่";
     }
+    case "RATE_LIMIT_EXCEEDED":
+      return retryAfterSeconds > 0
+        ? `ขอ OTP ถี่เกินไป กรุณารอ ${retryAfterSeconds} วินาที แล้วลองใหม่`
+        : "ขอ OTP ถี่เกินไป กรุณารอสักครู่แล้วลองใหม่";
     case "OTP_RATE_LIMITED":
       return "ขอ OTP บ่อยเกินไป กรุณาลองใหม่ภายหลัง";
     default:
@@ -104,6 +118,12 @@ function toThaiOtpErrorMessage(error: ApiError) {
 
   if (normalized.includes("expired")) {
     return "รหัส OTP หมดอายุแล้ว กรุณาขอรหัสใหม่";
+  }
+
+  if (error.status === 429) {
+    return retryAfterSeconds > 0
+      ? `คำขอถูกจำกัดความถี่ กรุณารอ ${retryAfterSeconds} วินาที แล้วลองใหม่`
+      : "คำขอถูกจำกัดความถี่ กรุณารอสักครู่แล้วลองใหม่";
   }
 
   return "ไม่สามารถดำเนินการ OTP ได้ในขณะนี้ กรุณาลองใหม่อีกครั้ง";
