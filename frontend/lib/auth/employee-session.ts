@@ -23,7 +23,7 @@ export function computeSessionMaxAgeSeconds(expiresAtIso: string) {
     return 0;
   }
 
-  return Math.max(0, Math.floor((expiresAt - Date.now()) / 1000));
+  return Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000));
 }
 
 export function getEmployeeSessionFromRequest(request: NextRequest) {

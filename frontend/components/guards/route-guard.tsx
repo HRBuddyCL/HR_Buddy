@@ -1,6 +1,12 @@
 "use client";
 
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { ApiError, apiFetch } from "@/lib/api/client";
 import { clearAuthToken, type TokenType } from "@/lib/auth/tokens";
@@ -14,6 +20,7 @@ import { useAuthToken } from "@/lib/auth/use-auth-token";
 type RouteGuardProps = {
   tokenType: TokenType;
   redirectTo: string;
+  nextPathOverride?: string;
   children: ReactNode;
 };
 
@@ -43,6 +50,7 @@ const SESSION_VALIDATION_ERROR =
 export function RouteGuard({
   tokenType,
   redirectTo,
+  nextPathOverride,
   children,
 }: RouteGuardProps) {
   const router = useRouter();
@@ -68,28 +76,41 @@ export function RouteGuard({
   );
   const [isWarningOpen, setIsWarningOpen] = useState(false);
 
+  const resolvedNextPath = useMemo(() => {
+    if (nextPathOverride && nextPathOverride.startsWith("/")) {
+      return nextPathOverride;
+    }
+
+    return pathname || "/";
+  }, [nextPathOverride, pathname]);
+
+  const buildAuthRedirectUrl = useCallback(() => {
+    const separator = redirectTo.includes("?") ? "&" : "?";
+    return `${redirectTo}${separator}next=${encodeURIComponent(resolvedNextPath)}`;
+  }, [redirectTo, resolvedNextPath]);
+
+  const clearEmployeeSessionCookie = useCallback(async () => {
+    if (tokenType !== "employee") {
+      return;
+    }
+
+    try {
+      await fetch("/api/auth/employee/logout", {
+        method: "POST",
+        cache: "no-store",
+        credentials: "same-origin",
+        keepalive: true,
+      });
+    } catch {
+      // Best-effort cookie cleanup.
+    }
+  }, [tokenType]);
+
   useEffect(() => {
     setHasMounted(true);
   }, []);
 
   useEffect(() => {
-    async function clearEmployeeSessionCookie() {
-      if (tokenType !== "employee") {
-        return;
-      }
-
-      try {
-        await fetch("/api/auth/employee/logout", {
-          method: "POST",
-          cache: "no-store",
-          credentials: "same-origin",
-          keepalive: true,
-        });
-      } catch {
-        // Best-effort cookie cleanup.
-      }
-    }
-
     if (!hasMounted) {
       return;
     }
@@ -99,37 +120,17 @@ export function RouteGuard({
       setIsValidating(false);
       setIsValidated(false);
       setValidationError(null);
-      router.replace(
-        `${redirectTo}?next=${encodeURIComponent(pathname || "/")}`,
-      );
+      router.replace(buildAuthRedirectUrl());
     }
   }, [
     hasMounted,
     hasSessionCredential,
-    pathname,
-    redirectTo,
     router,
-    tokenType,
+    clearEmployeeSessionCookie,
+    buildAuthRedirectUrl,
   ]);
 
   useEffect(() => {
-    async function clearEmployeeSessionCookie() {
-      if (tokenType !== "employee") {
-        return;
-      }
-
-      try {
-        await fetch("/api/auth/employee/logout", {
-          method: "POST",
-          cache: "no-store",
-          credentials: "same-origin",
-          keepalive: true,
-        });
-      } catch {
-        // Best-effort cookie cleanup.
-      }
-    }
-
     if (!hasSessionCredential || !sessionExpiresAt) {
       setRemainingSeconds(null);
       return;
@@ -143,7 +144,7 @@ export function RouteGuard({
 
     const updateRemaining = () => {
       const msLeft = expiresAt - Date.now();
-      setRemainingSeconds(Math.max(0, Math.ceil(msLeft / 1000)));
+      setRemainingSeconds(Math.max(0, Math.floor(msLeft / 1000)));
     };
 
     updateRemaining();
@@ -156,9 +157,7 @@ export function RouteGuard({
       clearSessionExpiresAt(tokenType);
       setIsValidated(false);
       setValidationError(null);
-      router.replace(
-        `${redirectTo}?next=${encodeURIComponent(pathname || "/")}`,
-      );
+      router.replace(buildAuthRedirectUrl());
     }, logoutDelay);
 
     return () => {
@@ -169,9 +168,9 @@ export function RouteGuard({
     hasSessionCredential,
     tokenType,
     sessionExpiresAt,
-    pathname,
-    redirectTo,
     router,
+    clearEmployeeSessionCookie,
+    buildAuthRedirectUrl,
   ]);
 
   useEffect(() => {
@@ -207,23 +206,6 @@ export function RouteGuard({
     let active = true;
 
     async function validateSession() {
-      async function clearEmployeeSessionCookie() {
-        if (tokenType !== "employee") {
-          return;
-        }
-
-        try {
-          await fetch("/api/auth/employee/logout", {
-            method: "POST",
-            cache: "no-store",
-            credentials: "same-origin",
-            keepalive: true,
-          });
-        } catch {
-          // Best-effort cookie cleanup.
-        }
-      }
-
       if (!hasSessionCredential) {
         return;
       }
@@ -262,9 +244,7 @@ export function RouteGuard({
           clearSessionExpiresAt(tokenType);
           setIsValidated(false);
           setValidationError(null);
-          router.replace(
-            `${redirectTo}?next=${encodeURIComponent(pathname || "/")}`,
-          );
+          router.replace(buildAuthRedirectUrl());
           return;
         }
 
@@ -272,7 +252,7 @@ export function RouteGuard({
           setIsValidated(false);
           setValidationError(null);
           router.replace(
-            `/unauthorized?next=${encodeURIComponent(pathname || "/")}`,
+            `/unauthorized?next=${encodeURIComponent(resolvedNextPath)}`,
           );
           return;
         }
@@ -295,10 +275,11 @@ export function RouteGuard({
     hasSessionCredential,
     tokenType,
     validationConfig,
-    pathname,
-    redirectTo,
     router,
     validationAttempt,
+    clearEmployeeSessionCookie,
+    buildAuthRedirectUrl,
+    resolvedNextPath,
   ]);
 
   if (

@@ -27,6 +27,8 @@ export type MyRequestItem = {
 export type RequestDetail = MyRequestItem & {
   employeeName: string;
   phone: string;
+  departmentOther: string | null;
+  updatedAt: string;
   cancelReason: string | null;
   hrCloseNote: string | null;
   department: {
@@ -88,6 +90,32 @@ export type RequestDetail = MyRequestItem & {
     outsideBkkMetro: boolean;
     deliveryService: string | null;
     deliveryServiceOther: string | null;
+    senderAddress: {
+      id: string;
+      name: string;
+      phone: string;
+      province: string;
+      district: string;
+      subdistrict: string;
+      postalCode: string;
+      houseNo: string;
+      soi: string | null;
+      road: string | null;
+      extra: string | null;
+    } | null;
+    receiverAddress: {
+      id: string;
+      name: string;
+      phone: string;
+      province: string;
+      district: string;
+      subdistrict: string;
+      postalCode: string;
+      houseNo: string;
+      soi: string | null;
+      road: string | null;
+      extra: string | null;
+    } | null;
   } | null;
   documentRequestDetail: {
     siteNameRaw: string;
@@ -97,6 +125,30 @@ export type RequestDetail = MyRequestItem & {
     deliveryMethod: string;
     note: string | null;
     pickupNote: string | null;
+    digitalFileAttachment: {
+      id: string;
+      fileKind: string;
+      fileName: string;
+      mimeType: string;
+      fileSize: number;
+      storageKey: string;
+      publicUrl: string | null;
+      uploadedByRole: string;
+      createdAt: string;
+    } | null;
+    deliveryAddress: {
+      id: string;
+      name: string;
+      phone: string;
+      province: string;
+      district: string;
+      subdistrict: string;
+      postalCode: string;
+      houseNo: string;
+      soi: string | null;
+      road: string | null;
+      extra: string | null;
+    } | null;
   } | null;
 };
 

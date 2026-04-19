@@ -10,74 +10,179 @@ import {
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { RouteGuard } from "@/components/guards/route-guard";
-import {
-  Button,
-  SelectField,
-  TextareaField,
-} from "@/components/ui/form-controls";
+import { TextareaField } from "@/components/ui/form-controls";
+import ConfirmModal from "@/components/ui/confirm-modal";
 import { VideoPreviewModal } from "@/components/ui/video-preview-modal";
 import { downloadFileFromPresignedUrl } from "@/lib/attachments/download";
 import { getDocumentTypeLabel } from "@/lib/attachments/document-type-label";
 import { ApiError } from "@/lib/api/client";
-import {
-  getAcceptMimeTypes,
-  getAttachmentPolicySummary,
-  inferFileKindFromMimeType,
-  resolveUploadMimeType,
-  validateAttachmentCandidate,
-} from "@/lib/attachments/attachment-policy";
+import { formatPhoneDisplay } from "@/lib/phone-format";
 import {
   cancelMyRequest,
-  completeMyAttachmentUpload,
   getMyRequestAttachmentDownloadUrl,
   getMyRequestDetail,
-  issueMyAttachmentUploadTicket,
-  uploadFileToPresignedUrl,
-  type FileKind,
   type RequestDetail,
+  type RequestType,
   type RequestStatus,
   type Urgency,
 } from "@/lib/api/my-requests";
 
+// ─── Config ────────────────────────────────────────────────────────────────────
+
 const cancellableStatuses: RequestStatus[] = ["NEW", "APPROVED"];
 
-const statusColorClass: Record<RequestStatus, string> = {
-  NEW: "bg-sky-100 text-sky-800",
-  APPROVED: "bg-indigo-100 text-indigo-800",
-  IN_PROGRESS: "bg-amber-100 text-amber-800",
-  IN_TRANSIT: "bg-orange-100 text-orange-800",
-  DONE: "bg-emerald-100 text-emerald-800",
-  REJECTED: "bg-rose-100 text-rose-800",
-  CANCELED: "bg-slate-200 text-slate-800",
+const statusConfig: Record<
+  RequestStatus,
+  { color: string; dot: string; label: string }
+> = {
+  NEW: {
+    color: "bg-sky-50 text-sky-700 ring-1 ring-sky-200",
+    dot: "bg-sky-500",
+    label: "ใหม่",
+  },
+  APPROVED: {
+    color: "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200",
+    dot: "bg-indigo-500",
+    label: "อนุมัติแล้ว",
+  },
+  IN_PROGRESS: {
+    color: "bg-amber-50 text-amber-700 ring-1 ring-amber-200",
+    dot: "bg-amber-500",
+    label: "กำลังดำเนินการ",
+  },
+  IN_TRANSIT: {
+    color: "bg-orange-50 text-orange-700 ring-1 ring-orange-200",
+    dot: "bg-orange-500",
+    label: "กำลังส่ง",
+  },
+  DONE: {
+    color: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200",
+    dot: "bg-emerald-500",
+    label: "เสร็จสิ้น",
+  },
+  REJECTED: {
+    color: "bg-rose-50 text-rose-700 ring-1 ring-rose-200",
+    dot: "bg-rose-500",
+    label: "ถูกปฏิเสธ",
+  },
+  CANCELED: {
+    color: "bg-slate-100 text-slate-500 ring-1 ring-slate-200",
+    dot: "bg-slate-400",
+    label: "ยกเลิก",
+  },
 };
 
-const urgencyLabelMap: Record<Urgency, string> = {
-  NORMAL: "ปกติ",
-  HIGH: "สูง",
-  CRITICAL: "เร่งด่วน",
+const urgencyConfig: Record<
+  Urgency,
+  { label: string; color: string; bg: string; icon: string }
+> = {
+  NORMAL: {
+    label: "ปกติ",
+    color: "text-slate-600",
+    bg: "bg-slate-100",
+    icon: "○",
+  },
+  HIGH: {
+    label: "สูง",
+    color: "text-amber-700 font-semibold",
+    bg: "bg-amber-50 ring-1 ring-amber-200",
+    icon: "▲",
+  },
+  CRITICAL: {
+    label: "เร่งด่วน",
+    color: "text-rose-700 font-bold",
+    bg: "bg-rose-50 ring-1 ring-rose-200",
+    icon: "⚡",
+  },
 };
+
+const requestTypeLabelMap: Record<
+  RequestType,
+  { label: string; icon: string }
+> = {
+  BUILDING: { label: "อาคาร", icon: "🏢" },
+  VEHICLE: { label: "รถยนต์", icon: "🚗" },
+  MESSENGER: { label: "ส่งเอกสาร", icon: "📦" },
+  DOCUMENT: { label: "เอกสาร", icon: "📄" },
+};
+
+const activityActionLabelMap: Record<
+  string,
+  { label: string; icon: string; color: string }
+> = {
+  CREATE: { label: "สร้างคำขอ", icon: "✦", color: "bg-[#0e2d4c]" },
+  APPROVE: { label: "อนุมัติ", icon: "✓", color: "bg-emerald-500" },
+  REJECT: { label: "ปฏิเสธ", icon: "✕", color: "bg-rose-500" },
+  STATUS_CHANGE: { label: "เปลี่ยนสถานะ", icon: "↻", color: "bg-amber-500" },
+  CANCEL: { label: "ยกเลิก", icon: "⊘", color: "bg-slate-400" },
+  UPLOAD_ATTACHMENT: {
+    label: "อัปโหลดไฟล์แนบ",
+    icon: "↑",
+    color: "bg-indigo-500",
+  },
+  REPORT_PROBLEM: { label: "รายงานปัญหา", icon: "!", color: "bg-[#b62026]" },
+  MESSENGER_PICKUP_EVENT: {
+    label: "อัปเดตงานรับส่งเอกสาร",
+    icon: "→",
+    color: "bg-orange-500",
+  },
+};
+
+const actorRoleLabelMap: Record<string, string> = {
+  EMPLOYEE: "พนักงาน",
+  ADMIN: "แอดมิน",
+  MESSENGER: "แมสเซนเจอร์",
+};
+
+const fileKindLabelMap: Record<string, string> = {
+  DOCUMENT: "เอกสาร",
+  IMAGE: "รูปภาพ",
+  VIDEO: "วิดีโอ",
+};
+
+const buildingSideLabelMap: Record<string, string> = {
+  FRONT: "ด้านหน้า",
+  BACK: "ด้านหลัง",
+};
+
+const itemTypeLabelMap: Record<string, string> = {
+  DOCUMENT: "เอกสาร",
+  PACKAGE: "พัสดุ",
+};
+
+const deliveryMethodLabelMap: Record<string, string> = {
+  DIGITAL: "ดิจิทัล",
+  POSTAL: "ไปรษณีย์",
+  PICKUP: "รับด้วยตนเอง",
+};
+
+const deliveryServiceLabelMap: Record<string, string> = {
+  POST: "ไปรษณีย์",
+  NAKHONCHAI_AIR: "นครชัยแอร์",
+  OTHER: "อื่น ๆ",
+};
+
+// ─── Helpers ───────────────────────────────────────────────────────────────────
 
 function formatDateTime(iso?: string | null) {
-  if (!iso) {
-    return "-";
-  }
-
+  if (!iso) return "-";
   return new Intl.DateTimeFormat("th-TH", {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(iso));
 }
 
+function formatDateOnly(iso?: string | null) {
+  if (!iso) return "-";
+  return new Intl.DateTimeFormat("th-TH", {
+    dateStyle: "medium",
+  }).format(new Date(iso));
+}
+
 function formatFileSize(bytes: number) {
-  if (bytes < 1024) {
-    return `${bytes} B`;
-  }
-
+  if (bytes < 1024) return `${bytes} B`;
   const kb = bytes / 1024;
-  if (kb < 1024) {
-    return `${kb.toFixed(1)} KB`;
-  }
-
+  if (kb < 1024) return `${kb.toFixed(1)} KB`;
   return `${(kb / 1024).toFixed(1)} MB`;
 }
 
@@ -85,13 +190,192 @@ function isVideoAttachment(fileKind: string, mimeType: string) {
   return fileKind === "VIDEO" || mimeType.toLowerCase().startsWith("video/");
 }
 
+function hasText(value: string | null | undefined) {
+  return Boolean(value && value.trim().length > 0);
+}
+
+function getFileKindLabel(fileKind: string) {
+  return fileKindLabelMap[fileKind] ?? fileKind;
+}
+
+function getActivityConfig(action: string) {
+  return (
+    activityActionLabelMap[action] ?? {
+      label: action,
+      icon: "•",
+      color: "bg-slate-400",
+    }
+  );
+}
+
+function getActorRoleLabel(actorRole: string) {
+  return actorRoleLabelMap[actorRole] ?? actorRole;
+}
+
+function getDeliveryServiceLabel(deliveryService: string | null) {
+  if (!deliveryService) return "-";
+  return deliveryServiceLabelMap[deliveryService] ?? deliveryService;
+}
+
+function formatAddressLine(address: {
+  houseNo: string;
+  soi: string | null;
+  road: string | null;
+  subdistrict: string;
+  district: string;
+  province: string;
+  postalCode: string;
+  extra: string | null;
+}) {
+  return [
+    `บ้านเลขที่ ${address.houseNo}`,
+    hasText(address.soi) ? `ซอย ${address.soi}` : "",
+    hasText(address.road) ? `ถนน ${address.road}` : "",
+    `แขวง/ตำบล ${address.subdistrict}`,
+    `เขต/อำเภอ ${address.district}`,
+    `จังหวัด ${address.province}`,
+    address.postalCode,
+    hasText(address.extra) ? String(address.extra) : "",
+  ]
+    .filter((s) => s.trim().length > 0)
+    .join(", ");
+}
+
+function hasMessengerShippingInfo(detail: RequestDetail) {
+  const m = detail.messengerBookingDetail;
+  if (!m) return false;
+  return Boolean(
+    m.deliveryService ||
+    hasText(m.deliveryServiceOther) ||
+    m.senderAddress ||
+    m.receiverAddress,
+  );
+}
+
+// ─── Sub-components ────────────────────────────────────────────────────────────
+
+/** ฟิลด์ข้อมูล label + value แบบ card */
+function InfoField({
+  label,
+  value,
+  children,
+}: {
+  label: string;
+  value?: React.ReactNode;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+      <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-500">
+        {label}
+      </p>
+      {children ?? (
+        <p className="text-sm font-semibold leading-relaxed text-[#0e2d4c]">
+          {value ?? "-"}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** Section wrapper มี header bar สีบริษัท */
+function SectionCard({
+  title,
+  icon,
+  children,
+  accent = "navy",
+}: {
+  title: string;
+  icon: React.ReactNode;
+  children: React.ReactNode;
+  accent?: "navy" | "red" | "yellow" | "emerald";
+}) {
+  const accentColor = {
+    navy: "from-[#0e2d4c] to-[#163d64]",
+    red: "from-[#b62026] to-[#d42a30]",
+    yellow: "from-[#fed54f] to-[#fbbf24]",
+    emerald: "from-emerald-600 to-emerald-500",
+  }[accent];
+
+  return (
+    <section className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-[0_8px_28px_-18px_rgba(15,23,42,0.35)]">
+      {/* header bar */}
+      <div
+        className={`flex items-center gap-3 bg-gradient-to-r ${accentColor} px-5 py-3.5`}
+      >
+        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/15 text-white">
+          {icon}
+        </span>
+        <h2 className="text-sm font-bold uppercase tracking-wide text-white">
+          {title}
+        </h2>
+      </div>
+      <div className="border-t border-slate-100 bg-gradient-to-b from-slate-50/40 to-white p-5 md:p-6">
+        {children}
+      </div>
+    </section>
+  );
+}
+
+/** Skeleton loader */
+function SkeletonCard({ lines = 3 }: { lines?: number }) {
+  return (
+    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="h-12 animate-pulse bg-[#0e2d4c]/10" />
+      <div className="space-y-3 p-5">
+        {Array.from({ length: lines }).map((_, i) => (
+          <div
+            key={i}
+            className="h-4 animate-pulse rounded-lg bg-slate-100"
+            style={{ width: `${70 + (i % 3) * 10}%` }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Address card */
+function AddressBlock({
+  label,
+  name,
+  phone,
+  address,
+}: {
+  label: string;
+  name: string;
+  phone: string;
+  address: Parameters<typeof formatAddressLine>[0];
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+      <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-500">
+        {label}
+      </p>
+      <p className="text-sm font-semibold text-[#0e2d4c]">{name}</p>
+      <p className="mt-0.5 text-sm text-slate-600">
+        {formatPhoneDisplay(phone)}
+      </p>
+      <p className="mt-1.5 text-sm leading-relaxed text-slate-600">
+        {formatAddressLine(address)}
+      </p>
+    </div>
+  );
+}
+
 export default function Page() {
   return (
-    <RouteGuard tokenType="employee" redirectTo="/auth/otp">
+    <RouteGuard
+      tokenType="employee"
+      redirectTo="/auth/otp"
+      nextPathOverride="/my-requests"
+    >
       <MyRequestDetailContent />
     </RouteGuard>
   );
 }
+
+// ─── Main Content ──────────────────────────────────────────────────────────────
 
 function MyRequestDetailContent() {
   const params = useParams<{ id: string }>();
@@ -103,10 +387,7 @@ function MyRequestDetailContent() {
 
   const [cancelReason, setCancelReason] = useState("");
   const [canceling, setCanceling] = useState(false);
-
-  const [uploading, setUploading] = useState(false);
-  const [uploadFileKind, setUploadFileKind] = useState<FileKind>("DOCUMENT");
-  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [showConfirmCancel, setShowConfirmCancel] = useState(false);
 
   const [downloadingAttachmentId, setDownloadingAttachmentId] = useState<
     string | null
@@ -119,34 +400,44 @@ function MyRequestDetailContent() {
     fileName: string;
     url: string;
   } | null>(null);
+  const [copiedRequestNo, setCopiedRequestNo] = useState(false);
 
   const canCancel = useMemo(() => {
-    if (!detail) {
-      return false;
-    }
-
+    if (!detail) return false;
     return cancellableStatuses.includes(detail.status);
+  }, [detail]);
+
+  useEffect(() => {
+    if (!canCancel) setShowConfirmCancel(false);
+  }, [canCancel]);
+
+  const employeeAttachments = useMemo(() => {
+    if (!detail) return [];
+    return detail.attachments.filter((a) => a.uploadedByRole === "EMPLOYEE");
+  }, [detail]);
+
+  const latestActivityLog = useMemo(() => {
+    if (!detail || detail.activityLogs.length === 0) return null;
+    return detail.activityLogs[detail.activityLogs.length - 1];
   }, [detail]);
 
   const loadDetail = useCallback(async () => {
     if (!requestId) {
-      setErrorMessage("Invalid request id");
+      setErrorMessage("รหัสคำขอไม่ถูกต้อง");
       setLoading(false);
       return;
     }
-
     setLoading(true);
     setErrorMessage(null);
-
     try {
       const result = await getMyRequestDetail(requestId);
       setDetail(result);
     } catch (error) {
-      if (error instanceof ApiError) {
-        setErrorMessage(error.message);
-      } else {
-        setErrorMessage("Failed to load request detail");
-      }
+      setErrorMessage(
+        error instanceof ApiError
+          ? error.message
+          : "โหลดรายละเอียดคำขอไม่สำเร็จ",
+      );
       setDetail(null);
     } finally {
       setLoading(false);
@@ -157,84 +448,38 @@ function MyRequestDetailContent() {
     void loadDetail();
   }, [loadDetail]);
 
-  const handleCancel = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!detail) {
-      return;
-    }
-
-    if (!cancelReason.trim()) {
-      setErrorMessage("Cancel reason is required.");
-      return;
-    }
-
+  const performCancel = async () => {
+    if (!detail) return;
     setCanceling(true);
     setErrorMessage(null);
-
+    setShowConfirmCancel(false);
     try {
       await cancelMyRequest(detail.id, cancelReason.trim());
       setCancelReason("");
       await loadDetail();
     } catch (error) {
-      if (error instanceof ApiError) {
-        setErrorMessage(error.message);
-      } else {
-        setErrorMessage("Failed to cancel request");
-      }
+      setErrorMessage(
+        error instanceof ApiError ? error.message : "ยกเลิกคำขอไม่สำเร็จ",
+      );
     } finally {
       setCanceling(false);
     }
   };
 
-  const handleUpload = async () => {
-    if (!detail || !uploadFile) {
-      setErrorMessage("Please choose a file before upload.");
+  const handleCancel = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!detail || !canCancel) return;
+    if (!cancelReason.trim()) {
+      setErrorMessage("กรุณาระบุเหตุผลในการยกเลิก");
       return;
     }
-
-    const validation = validateAttachmentCandidate(uploadFile, uploadFileKind);
-    if (!validation.ok) {
-      setErrorMessage(validation.message);
-      return;
-    }
-
-    setUploading(true);
-    setErrorMessage(null);
-
-    try {
-      const resolvedFileKind = uploadFileKind;
-
-      const ticket = await issueMyAttachmentUploadTicket(detail.id, {
-        fileKind: resolvedFileKind,
-        fileName: uploadFile.name,
-        mimeType: validation.mimeType,
-        fileSize: uploadFile.size,
-      });
-
-      await uploadFileToPresignedUrl(ticket, uploadFile);
-      await completeMyAttachmentUpload(detail.id, ticket.uploadToken);
-
-      setUploadFile(null);
-      await loadDetail();
-    } catch (error) {
-      if (error instanceof ApiError) {
-        setErrorMessage(error.message);
-      } else {
-        setErrorMessage("Failed to upload attachment");
-      }
-    } finally {
-      setUploading(false);
-    }
+    setShowConfirmCancel(true);
   };
 
   const handleDownloadAttachment = async (attachmentId: string) => {
-    if (!detail) {
-      return;
-    }
-
+    if (!detail) return;
     setDownloadingAttachmentId(attachmentId);
     setErrorMessage(null);
-
     try {
       const result = await getMyRequestAttachmentDownloadUrl(
         detail.id,
@@ -246,11 +491,11 @@ function MyRequestDetailContent() {
         fallbackFileName: result.fileName,
       });
     } catch (error) {
-      if (error instanceof ApiError) {
-        setErrorMessage(error.message);
-      } else {
-        setErrorMessage("Failed to generate attachment download URL");
-      }
+      setErrorMessage(
+        error instanceof ApiError
+          ? error.message
+          : "สร้างลิงก์ดาวน์โหลดไฟล์แนบไม่สำเร็จ",
+      );
     } finally {
       setDownloadingAttachmentId(null);
     }
@@ -260,418 +505,1169 @@ function MyRequestDetailContent() {
     attachmentId: string,
     fileName: string,
   ) => {
-    if (!detail) {
-      return;
-    }
-
+    if (!detail) return;
     setPreviewingAttachmentId(attachmentId);
     setErrorMessage(null);
-
     try {
       const result = await getMyRequestAttachmentDownloadUrl(
         detail.id,
         attachmentId,
         "inline",
       );
-      setVideoPreview({
-        attachmentId,
-        fileName,
-        url: result.downloadUrl,
-      });
+      setVideoPreview({ attachmentId, fileName, url: result.downloadUrl });
     } catch (error) {
-      if (error instanceof ApiError) {
-        setErrorMessage(error.message);
-      } else {
-        setErrorMessage("Failed to generate attachment preview URL");
-      }
+      setErrorMessage(
+        error instanceof ApiError
+          ? error.message
+          : "สร้างลิงก์พรีวิวไฟล์แนบไม่สำเร็จ",
+      );
     } finally {
       setPreviewingAttachmentId(null);
     }
   };
 
+  const handleCopyRequestNo = async () => {
+    if (!detail) return;
+    try {
+      await navigator.clipboard.writeText(detail.requestNo);
+      setCopiedRequestNo(true);
+      window.setTimeout(() => setCopiedRequestNo(false), 1500);
+    } catch {
+      setErrorMessage("คัดลอกเลขคำขอไม่สำเร็จ");
+    }
+  };
+
+  // ─── Render ──────────────────────────────────────────────────────────────────
+
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-6 px-6 py-10 md:px-10">
-      <header className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-wide text-slate-600">
-              Phase 3 - OTP and Tracking
-            </p>
-            <h1 className="mt-2 text-3xl font-semibold text-slate-900">
-              Request Detail
-            </h1>
-            <p className="mt-2 text-slate-700">
-              View timeline, attachments, and available actions for your
-              request.
-            </p>
-          </div>
+    <div className="min-h-screen bg-[#f8fafc]">
+      <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-6 px-4 pb-12 pt-6 md:px-8">
+        {/* ── Hero Header ───────────────────────────────────────────────── */}
+        <header className="relative overflow-hidden rounded-2xl shadow-lg">
+          <div className="absolute inset-0 bg-gradient-to-r from-[#0e2d4c] via-[#163d64] to-[#0e2d4c]" />
+          <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-[#b62026] via-[#fed54f] to-[#b62026]" />
+          {/* texture */}
+          <div
+            className="absolute inset-0 opacity-5"
+            style={{
+              backgroundImage:
+                "radial-gradient(circle at 20% 50%, #fed54f 1px, transparent 1px)",
+              backgroundSize: "40px 40px",
+            }}
+          />
 
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              className="bg-white text-slate-700 ring-1 ring-slate-300 hover:bg-slate-100"
-              onClick={() => void loadDetail()}
-            >
-              Refresh
-            </Button>
-            <Link
-              href="/my-requests"
-              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white"
-            >
-              Back to list
-            </Link>
-          </div>
-        </div>
-      </header>
-
-      {loading ? (
-        <p className="text-sm text-slate-700">Loading request detail...</p>
-      ) : null}
-
-      {!loading && detail ? (
-        <>
-          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  {detail.type}
-                </p>
-                <h2 className="text-2xl font-semibold text-slate-900">
-                  {detail.requestNo}
-                </h2>
+          <div className="relative flex flex-wrap items-center justify-between gap-4 px-6 py-6 md:px-8">
+            <div>
+              <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1 backdrop-blur-sm">
+                <span className="h-1.5 w-1.5 rounded-full bg-[#fed54f]" />
+                <span className="text-[11px] font-semibold uppercase tracking-widest text-white/80">
+                  HR Buddy
+                </span>
               </div>
-              <span
-                className={`rounded-full px-3 py-1 text-xs font-semibold ${statusColorClass[detail.status]}`}
+              <h1 className="text-2xl font-bold text-white md:text-3xl">
+                รายละเอียดคำขอ
+              </h1>
+              <p className="mt-1 text-sm text-white/65">
+                ดูรายละเอียดบริการ ไทม์ไลน์ ไฟล์แนบ และสถานะของคำขอนี้
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void loadDetail()}
+                className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-3.5 py-2 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-white/20 active:scale-95"
               >
-                {detail.status}
-              </span>
+                <svg
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                  />
+                </svg>
+                รีเฟรช
+              </button>
+              <Link
+                href="/my-requests"
+                className="inline-flex items-center gap-2 rounded-xl bg-white/15 px-3.5 py-2 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-white/25 active:scale-95"
+              >
+                <svg
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M15 19l-7-7 7-7"
+                  />
+                </svg>
+                กลับรายการ
+              </Link>
             </div>
+          </div>
+        </header>
 
-            <div className="mt-4 grid gap-3 md:grid-cols-3">
-              <div className="rounded-lg bg-slate-50 p-3">
-                <p className="text-xs text-slate-500">ความเร่งด่วน</p>
-                <p className="font-medium text-slate-900">
-                  {urgencyLabelMap[detail.urgency]}
-                </p>
+        {/* ── Error Banner ──────────────────────────────────────────────── */}
+        {errorMessage && (
+          <div className="flex items-start gap-3 rounded-xl border border-[#b62026]/30 bg-[#b62026]/5 px-4 py-3.5">
+            <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#b62026] text-[10px] font-bold text-white">
+              !
+            </span>
+            <p className="text-sm font-medium text-[#b62026]">{errorMessage}</p>
+          </div>
+        )}
+
+        {/* ── Loading Skeletons ─────────────────────────────────────────── */}
+        {loading && (
+          <>
+            <SkeletonCard lines={5} />
+            <SkeletonCard lines={3} />
+            <SkeletonCard lines={6} />
+            <SkeletonCard lines={3} />
+            <SkeletonCard lines={4} />
+          </>
+        )}
+
+        {/* ── Main Detail ───────────────────────────────────────────────── */}
+        {!loading && detail && (
+          <>
+            {/* ── 1. Request Summary Card ──────────────────────────────── */}
+            <SectionCard
+              title="สรุปคำขอ"
+              accent="navy"
+              icon={
+                <svg
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+                  />
+                </svg>
+              }
+            >
+              {/* ชื่อ + หมายเลข + badge สถานะ */}
+              <div className="rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] md:p-5">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    {/* icon ประเภท */}
+                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[#0e2d4c]/8 text-3xl">
+                      {requestTypeLabelMap[detail.type]?.icon ?? "📋"}
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-[#0e2d4c]/50">
+                        {requestTypeLabelMap[detail.type]?.label ?? detail.type}
+                      </p>
+                      <h2 className="text-xl font-bold text-[#0e2d4c] md:text-2xl">
+                        {detail.requestNo}
+                      </h2>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    {/* badge สถานะ */}
+                    <span
+                      className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-semibold ${statusConfig[detail.status].color}`}
+                    >
+                      <span
+                        className={`h-2 w-2 rounded-full ${statusConfig[detail.status].dot}`}
+                      />
+                      {statusConfig[detail.status].label}
+                    </span>
+                    {/* ปุ่มคัดลอก */}
+                    <button
+                      type="button"
+                      onClick={() => void handleCopyRequestNo()}
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-[#0e2d4c]/30 hover:bg-[#0e2d4c]/5 hover:text-[#0e2d4c] active:scale-95"
+                    >
+                      {copiedRequestNo ? (
+                        <>
+                          <svg
+                            className="h-3.5 w-3.5 text-emerald-500"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M5 13l4 4L19 7"
+                            />
+                          </svg>
+                          คัดลอกแล้ว
+                        </>
+                      ) : (
+                        <>
+                          <svg
+                            className="h-3.5 w-3.5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                            />
+                          </svg>
+                          คัดลอกเลขคำขอ
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
               </div>
-              <div className="rounded-lg bg-slate-50 p-3">
-                <p className="text-xs text-slate-500">Department</p>
-                <p className="font-medium text-slate-900">
-                  {detail.department.name}
-                </p>
+
+              {/* ตาราง info fields */}
+              <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <InfoField label="ผู้ยื่นคำขอ" value={detail.employeeName} />
+                <InfoField
+                  label="เบอร์โทร"
+                  value={formatPhoneDisplay(detail.phone)}
+                />
+                <InfoField label="ความเร่งด่วน">
+                  <span
+                    className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-sm ${urgencyConfig[detail.urgency].bg} ${urgencyConfig[detail.urgency].color}`}
+                  >
+                    <span>{urgencyConfig[detail.urgency].icon}</span>
+                    {urgencyConfig[detail.urgency].label}
+                  </span>
+                </InfoField>
+                <InfoField label="แผนก">
+                  <p className="text-sm font-medium text-[#0e2d4c]">
+                    {detail.department.name}
+                  </p>
+                  {hasText(detail.departmentOther) && (
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      ระบุเพิ่มเติม: {detail.departmentOther}
+                    </p>
+                  )}
+                </InfoField>
+                <InfoField
+                  label="วันที่สร้างคำขอ"
+                  value={formatDateTime(detail.createdAt)}
+                />
+                <InfoField
+                  label="วันที่ปิดคำขอ"
+                  value={formatDateTime(detail.closedAt)}
+                />
               </div>
-              <div className="rounded-lg bg-slate-50 p-3">
-                <p className="text-xs text-slate-500">Latest activity</p>
-                <p className="font-medium text-slate-900">
-                  {formatDateTime(detail.latestActivityAt)}
-                </p>
+
+              {/* หมายเหตุพิเศษ */}
+              {detail.cancelReason && (
+                <div className="mt-4 flex items-start gap-3 rounded-xl border border-[#b62026]/25 bg-[#b62026]/5 p-4">
+                  <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#b62026] text-[10px] font-bold text-white">
+                    ✕
+                  </span>
+                  <div>
+                    <p className="text-sm font-semibold text-[#b62026]">
+                      เหตุผลการยกเลิก
+                    </p>
+                    <p className="mt-0.5 text-sm text-[#b62026]/80">
+                      {detail.cancelReason}
+                    </p>
+                  </div>
+                </div>
+              )}
+              {detail.hrCloseNote && (
+                <div className="mt-3 flex items-start gap-3 rounded-xl border border-indigo-200 bg-indigo-50 p-4">
+                  <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-indigo-500 text-[10px] font-bold text-white">
+                    ✓
+                  </span>
+                  <div>
+                    <p className="text-sm font-semibold text-indigo-800">
+                      หมายเหตุปิดงานจาก HR
+                    </p>
+                    <p className="mt-0.5 text-sm text-indigo-700">
+                      {detail.hrCloseNote}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </SectionCard>
+
+            {/* ── 2. Status Summary ─────────────────────────────────────── */}
+            <SectionCard
+              title="สรุปสถานะล่าสุด"
+              accent="emerald"
+              icon={
+                <svg
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+              }
+            >
+              <div className="grid gap-3 sm:grid-cols-3">
+                <InfoField label="สถานะปัจจุบัน">
+                  <span
+                    className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-sm font-semibold ${statusConfig[detail.status].color}`}
+                  >
+                    <span
+                      className={`h-1.5 w-1.5 rounded-full ${statusConfig[detail.status].dot}`}
+                    />
+                    {statusConfig[detail.status].label}
+                  </span>
+                </InfoField>
+                <InfoField label="กิจกรรมล่าสุด">
+                  {latestActivityLog ? (
+                    <>
+                      <p className="text-sm font-semibold text-[#0e2d4c]">
+                        {getActivityConfig(latestActivityLog.action).label}
+                      </p>
+                      <p className="mt-0.5 text-xs text-slate-500">
+                        โดย:{" "}
+                        {latestActivityLog.operator?.displayName ||
+                          latestActivityLog.actorDisplayName ||
+                          getActorRoleLabel(latestActivityLog.actorRole)}
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-sm text-slate-500">-</p>
+                  )}
+                </InfoField>
+                <InfoField
+                  label="อัปเดตเมื่อ"
+                  value={formatDateTime(detail.updatedAt)}
+                />
               </div>
-            </div>
+            </SectionCard>
 
-            {detail.cancelReason ? (
-              <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
-                <p className="font-semibold">Cancel reason</p>
-                <p>{detail.cancelReason}</p>
-              </div>
-            ) : null}
+            {/* ── 3. Service Detail ─────────────────────────────────────── */}
+            <SectionCard
+              title="รายละเอียดบริการ"
+              accent="navy"
+              icon={
+                <svg
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+              }
+            >
+              {/* Building */}
+              {detail.buildingRepairDetail && (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <InfoField
+                    label="อาคาร"
+                    value={
+                      buildingSideLabelMap[
+                        detail.buildingRepairDetail.building
+                      ] ?? detail.buildingRepairDetail.building
+                    }
+                  />
+                  <InfoField
+                    label="ชั้น"
+                    value={detail.buildingRepairDetail.floor}
+                  />
+                  <InfoField
+                    label="ตำแหน่ง"
+                    value={detail.buildingRepairDetail.locationDetail}
+                  />
+                  <InfoField
+                    label="หมวดปัญหา"
+                    value={detail.buildingRepairDetail.problemCategory.name}
+                  />
+                  {hasText(
+                    detail.buildingRepairDetail.problemCategoryOther,
+                  ) && (
+                    <InfoField
+                      label="หมวดปัญหา (ระบุเพิ่มเติม)"
+                      value={detail.buildingRepairDetail.problemCategoryOther!}
+                    />
+                  )}
+                  <div className="sm:col-span-2">
+                    <InfoField
+                      label="รายละเอียดอาการ"
+                      value={detail.buildingRepairDetail.description}
+                    />
+                  </div>
+                  {hasText(detail.buildingRepairDetail.additionalDetails) && (
+                    <div className="sm:col-span-2">
+                      <InfoField
+                        label="รายละเอียดเพิ่มเติม"
+                        value={detail.buildingRepairDetail.additionalDetails!}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
 
-            {detail.hrCloseNote ? (
-              <div className="mt-3 rounded-lg border border-indigo-200 bg-indigo-50 p-3 text-sm text-indigo-800">
-                <p className="font-semibold">HR close note</p>
-                <p>{detail.hrCloseNote}</p>
-              </div>
-            ) : null}
-          </section>
+              {/* Vehicle */}
+              {detail.vehicleRepairDetail && (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <InfoField
+                    label="ทะเบียนรถ"
+                    value={detail.vehicleRepairDetail.vehiclePlate}
+                  />
+                  <InfoField
+                    label="หมวดปัญหา"
+                    value={detail.vehicleRepairDetail.issueCategory.name}
+                  />
+                  {hasText(detail.vehicleRepairDetail.issueCategoryOther) && (
+                    <InfoField
+                      label="หมวดปัญหา (ระบุเพิ่มเติม)"
+                      value={detail.vehicleRepairDetail.issueCategoryOther!}
+                    />
+                  )}
+                  <div className="sm:col-span-2">
+                    <InfoField
+                      label="อาการ"
+                      value={detail.vehicleRepairDetail.symptom}
+                    />
+                  </div>
+                  {hasText(detail.vehicleRepairDetail.additionalDetails) && (
+                    <div className="sm:col-span-2">
+                      <InfoField
+                        label="รายละเอียดเพิ่มเติม"
+                        value={detail.vehicleRepairDetail.additionalDetails!}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
 
-          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-semibold text-slate-900">
-              Service detail
-            </h2>
+              {/* Messenger */}
+              {detail.messengerBookingDetail && (
+                <div className="space-y-4">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <InfoField
+                      label="วันที่จัดส่ง"
+                      value={formatDateOnly(
+                        detail.messengerBookingDetail.pickupDatetime,
+                      )}
+                    />
+                    <InfoField
+                      label="ประเภทสิ่งของ"
+                      value={
+                        itemTypeLabelMap[
+                          detail.messengerBookingDetail.itemType
+                        ] ?? detail.messengerBookingDetail.itemType
+                      }
+                    />
+                    <InfoField
+                      label="รายละเอียดสิ่งของ"
+                      value={detail.messengerBookingDetail.itemDescription}
+                    />
+                    <InfoField
+                      label="นอกเขตกรุงเทพฯและปริมณฑล"
+                      value={
+                        detail.messengerBookingDetail.outsideBkkMetro
+                          ? "ใช่"
+                          : "ไม่ใช่"
+                      }
+                    />
+                  </div>
 
-            {detail.buildingRepairDetail ? (
-              <div className="mt-3 space-y-2 text-sm text-slate-700">
-                <p>Building: {detail.buildingRepairDetail.building}</p>
-                <p>Floor: {detail.buildingRepairDetail.floor}</p>
-                <p>Location: {detail.buildingRepairDetail.locationDetail}</p>
-                <p>
-                  Category: {detail.buildingRepairDetail.problemCategory.name}
-                </p>
-                <p>Description: {detail.buildingRepairDetail.description}</p>
-              </div>
-            ) : null}
+                  {hasMessengerShippingInfo(detail) && (
+                    <div className="rounded-xl border border-[#0e2d4c]/[0.15] bg-[#0e2d4c]/[0.04] p-4">
+                      <p className="mb-3 flex items-center gap-2 text-sm font-bold text-[#0e2d4c]">
+                        <svg
+                          className="h-4 w-4"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
+                          />
+                        </svg>
+                        ข้อมูลการจัดส่ง
+                      </p>
+                      <div className="space-y-4">
+                        <InfoField label="บริการขนส่ง">
+                          <p className="text-sm font-medium text-[#0e2d4c]">
+                            {getDeliveryServiceLabel(
+                              detail.messengerBookingDetail.deliveryService,
+                            )}
+                          </p>
+                          {hasText(
+                            detail.messengerBookingDetail.deliveryServiceOther,
+                          ) && (
+                            <p className="mt-0.5 text-xs text-slate-500">
+                              {
+                                detail.messengerBookingDetail
+                                  .deliveryServiceOther
+                              }
+                            </p>
+                          )}
+                        </InfoField>
+                        <div className="grid gap-3 lg:grid-cols-2">
+                          {detail.messengerBookingDetail.senderAddress && (
+                            <div
+                              className={
+                                detail.messengerBookingDetail.receiverAddress
+                                  ? ""
+                                  : "lg:col-span-2"
+                              }
+                            >
+                              <AddressBlock
+                                label="ที่อยู่ผู้ส่ง"
+                                name={
+                                  detail.messengerBookingDetail.senderAddress
+                                    .name
+                                }
+                                phone={
+                                  detail.messengerBookingDetail.senderAddress
+                                    .phone
+                                }
+                                address={
+                                  detail.messengerBookingDetail.senderAddress
+                                }
+                              />
+                            </div>
+                          )}
+                          {detail.messengerBookingDetail.receiverAddress && (
+                            <div
+                              className={
+                                detail.messengerBookingDetail.senderAddress
+                                  ? ""
+                                  : "lg:col-span-2"
+                              }
+                            >
+                              <AddressBlock
+                                label="ที่อยู่ผู้รับ"
+                                name={
+                                  detail.messengerBookingDetail.receiverAddress
+                                    .name
+                                }
+                                phone={
+                                  detail.messengerBookingDetail.receiverAddress
+                                    .phone
+                                }
+                                address={
+                                  detail.messengerBookingDetail.receiverAddress
+                                }
+                              />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
-            {detail.vehicleRepairDetail ? (
-              <div className="mt-3 space-y-2 text-sm text-slate-700">
-                <p>Vehicle plate: {detail.vehicleRepairDetail.vehiclePlate}</p>
-                <p>
-                  Issue category:{" "}
-                  {detail.vehicleRepairDetail.issueCategory.name}
-                </p>
-                <p>Symptom: {detail.vehicleRepairDetail.symptom}</p>
-              </div>
-            ) : null}
+              {/* Document */}
+              {detail.documentRequestDetail &&
+                (() => {
+                  const doc = detail.documentRequestDetail;
+                  return (
+                    <div className="space-y-4">
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <InfoField label="ไซต์งาน" value={doc.siteNameRaw} />
+                        <InfoField
+                          label="วิธีรับเอกสาร"
+                          value={
+                            deliveryMethodLabelMap[doc.deliveryMethod] ??
+                            doc.deliveryMethod
+                          }
+                        />
+                        <InfoField
+                          label="วันที่ต้องการใช้"
+                          value={formatDateTime(doc.neededDate)}
+                        />
+                        <InfoField label="วัตถุประสงค์" value={doc.purpose} />
+                        <div className="sm:col-span-2">
+                          <InfoField
+                            label="เอกสารที่ต้องการ"
+                            value={doc.documentDescription}
+                          />
+                        </div>
+                        {hasText(doc.note) && (
+                          <div className="sm:col-span-2">
+                            <InfoField label="หมายเหตุ" value={doc.note!} />
+                          </div>
+                        )}
+                        {hasText(doc.pickupNote) && (
+                          <div className="sm:col-span-2">
+                            <InfoField
+                              label="หมายเหตุการรับเอกสาร"
+                              value={doc.pickupNote!}
+                            />
+                          </div>
+                        )}
+                      </div>
 
-            {detail.messengerBookingDetail ? (
-              <div className="mt-3 space-y-2 text-sm text-slate-700">
-                <p>
-                  Pickup datetime:{" "}
-                  {formatDateTime(detail.messengerBookingDetail.pickupDatetime)}
-                </p>
-                <p>Item type: {detail.messengerBookingDetail.itemType}</p>
-                <p>
-                  Item description:{" "}
-                  {detail.messengerBookingDetail.itemDescription}
-                </p>
-                <p>
-                  Outside BKK metro:{" "}
-                  {detail.messengerBookingDetail.outsideBkkMetro ? "Yes" : "No"}
-                </p>
-              </div>
-            ) : null}
+                      {/* ไฟล์ดิจิทัล */}
+                      {doc.deliveryMethod === "DIGITAL" &&
+                        doc.digitalFileAttachment && (
+                          <div className="rounded-xl border border-[#0e2d4c]/[0.15] bg-[#0e2d4c]/[0.04] p-4">
+                            <p className="mb-3 flex items-center gap-2 text-sm font-bold text-[#0e2d4c]">
+                              <span>📎</span> เอกสารดิจิทัล
+                            </p>
+                            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4">
+                              <div>
+                                <p className="text-sm font-semibold text-[#0e2d4c]">
+                                  {doc.digitalFileAttachment.fileName}
+                                </p>
+                                <p className="mt-0.5 text-xs text-slate-500">
+                                  {doc.digitalFileAttachment.fileKind ===
+                                  "DOCUMENT"
+                                    ? getDocumentTypeLabel(
+                                        doc.digitalFileAttachment.mimeType,
+                                        doc.digitalFileAttachment.fileName,
+                                      )
+                                    : doc.digitalFileAttachment.mimeType}
+                                  {" · "}
+                                  {formatFileSize(
+                                    doc.digitalFileAttachment.fileSize,
+                                  )}
+                                  {" · "}
+                                  {formatDateTime(
+                                    doc.digitalFileAttachment.createdAt,
+                                  )}
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  void handleDownloadAttachment(
+                                    doc.digitalFileAttachment!.id,
+                                  )
+                                }
+                                disabled={
+                                  downloadingAttachmentId ===
+                                  doc.digitalFileAttachment.id
+                                }
+                                className="inline-flex items-center gap-2 rounded-xl bg-[#0e2d4c] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#163d64] disabled:opacity-50 active:scale-95"
+                              >
+                                <svg
+                                  className="h-4 w-4"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                                  />
+                                </svg>
+                                {downloadingAttachmentId ===
+                                doc.digitalFileAttachment.id
+                                  ? "กำลังเตรียม..."
+                                  : "ดาวน์โหลด"}
+                              </button>
+                            </div>
+                          </div>
+                        )}
 
-            {detail.documentRequestDetail ? (
-              <div className="mt-3 space-y-2 text-sm text-slate-700">
-                <p>Site: {detail.documentRequestDetail.siteNameRaw}</p>
-                <p>
-                  Document: {detail.documentRequestDetail.documentDescription}
-                </p>
-                <p>Purpose: {detail.documentRequestDetail.purpose}</p>
-                <p>
-                  Needed date:{" "}
-                  {formatDateTime(detail.documentRequestDetail.neededDate)}
-                </p>
-                <p>
-                  Delivery method: {detail.documentRequestDetail.deliveryMethod}
-                </p>
-              </div>
-            ) : null}
-          </section>
+                      {/* ยังไม่มีไฟล์ดิจิทัล */}
+                      {doc.deliveryMethod === "DIGITAL" &&
+                        !doc.digitalFileAttachment && (
+                          <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                            <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-400 text-[10px] font-bold text-white">
+                              !
+                            </span>
+                            <div>
+                              <p className="text-sm font-semibold text-amber-800">
+                                ยังไม่มีไฟล์ดิจิทัล
+                              </p>
+                              <p className="mt-0.5 text-sm text-amber-700">
+                                ยังไม่มีไฟล์ดิจิทัลจาก HR สำหรับคำขอนี้
+                                กรุณาติดตามสถานะอีกครั้ง
+                              </p>
+                            </div>
+                          </div>
+                        )}
 
-          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-semibold text-slate-900">
-              Upload attachment
-            </h2>
-            <p className="mt-2 text-sm text-slate-700">
-              Uses the same presign upload flow as production.
-            </p>
+                      {/* ที่อยู่จัดส่ง */}
+                      {doc.deliveryMethod === "POSTAL" &&
+                        doc.deliveryAddress && (
+                          <div className="rounded-xl border border-[#0e2d4c]/[0.15] bg-[#0e2d4c]/[0.04] p-4">
+                            <p className="mb-3 flex items-center gap-2 text-sm font-bold text-[#0e2d4c]">
+                              <svg
+                                className="h-4 w-4"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+                                />
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+                                />
+                              </svg>
+                              ข้อมูลการจัดส่ง
+                            </p>
+                            <AddressBlock
+                              label="ที่อยู่จัดส่งเอกสาร"
+                              name={doc.deliveryAddress.name}
+                              phone={doc.deliveryAddress.phone}
+                              address={doc.deliveryAddress}
+                            />
+                          </div>
+                        )}
+                    </div>
+                  );
+                })()}
 
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
-              <SelectField
-                id="uploadFileKind"
-                label="File kind"
-                value={uploadFileKind}
-                onChange={(event) =>
-                  setUploadFileKind(event.target.value as FileKind)
+              {/* ไม่มีรายละเอียด */}
+              {!detail.buildingRepairDetail &&
+                !detail.vehicleRepairDetail &&
+                !detail.messengerBookingDetail &&
+                !detail.documentRequestDetail && (
+                  <div className="flex flex-col items-center gap-2 py-8 text-center">
+                    <span className="text-3xl">📋</span>
+                    <p className="text-sm text-slate-500">
+                      ยังไม่มีรายละเอียดเฉพาะของคำขอนี้
+                    </p>
+                  </div>
+                )}
+            </SectionCard>
+
+            {/* ── 4. Attachments ────────────────────────────────────────── */}
+            <SectionCard
+              title="ไฟล์แนบ"
+              accent="navy"
+              icon={
+                <svg
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
+                  />
+                </svg>
+              }
+            >
+              {employeeAttachments.length === 0 ? (
+                <div className="flex flex-col items-center gap-2 py-8 text-center">
+                  <span className="text-3xl">📂</span>
+                  <p className="text-sm text-slate-500">ยังไม่มีไฟล์แนบ</p>
+                </div>
+              ) : (
+                <ul className="space-y-2.5">
+                  {employeeAttachments.map((attachment) => {
+                    const isVideo = isVideoAttachment(
+                      attachment.fileKind,
+                      attachment.mimeType,
+                    );
+                    const fileIcon =
+                      attachment.fileKind === "IMAGE"
+                        ? "🖼️"
+                        : attachment.fileKind === "VIDEO"
+                          ? "🎬"
+                          : "📄";
+
+                    return (
+                      <li
+                        key={attachment.id}
+                        className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-[#f8fafc] px-4 py-3.5 transition hover:border-[#0e2d4c]/25 hover:bg-[#0e2d4c]/[0.03]"
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-xl shadow-sm ring-1 ring-slate-200">
+                            {fileIcon}
+                          </span>
+                          <div>
+                            <p className="text-sm font-semibold text-[#0e2d4c]">
+                              {attachment.fileName}
+                            </p>
+                            <p className="mt-0.5 text-xs text-slate-500">
+                              {getFileKindLabel(attachment.fileKind)}
+                              {" · "}
+                              {attachment.fileKind === "DOCUMENT"
+                                ? getDocumentTypeLabel(
+                                    attachment.mimeType,
+                                    attachment.fileName,
+                                  )
+                                : attachment.mimeType}
+                              {" · "}
+                              {formatFileSize(attachment.fileSize)}
+                              {" · "}
+                              {formatDateTime(attachment.createdAt)}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          {/* ปุ่มพรีวิววิดีโอ */}
+                          {isVideo && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void handlePreviewAttachment(
+                                  attachment.id,
+                                  attachment.fileName,
+                                )
+                              }
+                              disabled={
+                                previewingAttachmentId === attachment.id
+                              }
+                              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 transition hover:border-[#0e2d4c]/30 hover:bg-[#0e2d4c]/5 hover:text-[#0e2d4c] disabled:opacity-50 active:scale-95"
+                            >
+                              <svg
+                                className="h-3.5 w-3.5"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"
+                                />
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                                />
+                              </svg>
+                              {previewingAttachmentId === attachment.id
+                                ? "กำลังเตรียม..."
+                                : "ดูตัวอย่าง"}
+                            </button>
+                          )}
+                          {/* ปุ่มดาวน์โหลด */}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void handleDownloadAttachment(attachment.id)
+                            }
+                            disabled={downloadingAttachmentId === attachment.id}
+                            className="inline-flex items-center gap-1.5 rounded-xl bg-[#0e2d4c] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#163d64] disabled:opacity-50 active:scale-95"
+                          >
+                            <svg
+                              className="h-3.5 w-3.5"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                              />
+                            </svg>
+                            {downloadingAttachmentId === attachment.id
+                              ? "กำลังเตรียม..."
+                              : "ดาวน์โหลด"}
+                          </button>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </SectionCard>
+
+            {/* ── 5. Timeline ───────────────────────────────────────────── */}
+            <SectionCard
+              title="ไทม์ไลน์กิจกรรม"
+              accent="navy"
+              icon={
+                <svg
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+              }
+            >
+              {detail.activityLogs.length === 0 ? (
+                <div className="flex flex-col items-center gap-2 py-8 text-center">
+                  <span className="text-3xl">🕐</span>
+                  <p className="text-sm text-slate-500">ยังไม่มีกิจกรรม</p>
+                </div>
+              ) : (
+                <ol className="relative space-y-0">
+                  {detail.activityLogs.map((log, index) => {
+                    const cfg = getActivityConfig(log.action);
+                    const isLast = index === detail.activityLogs.length - 1;
+                    return (
+                      <li key={log.id} className="relative flex gap-4">
+                        {/* เส้นไทม์ไลน์ */}
+                        <div className="flex flex-col items-center">
+                          {/* dot */}
+                          <span
+                            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white shadow-sm ${cfg.color}`}
+                          >
+                            {cfg.icon}
+                          </span>
+                          {/* เส้นเชื่อม */}
+                          {!isLast && (
+                            <span
+                              className="mt-1 w-[2px] flex-1 bg-gradient-to-b from-slate-200 to-slate-100"
+                              style={{ minHeight: "1.5rem" }}
+                            />
+                          )}
+                        </div>
+
+                        {/* เนื้อหา */}
+                        <div
+                          className={`mb-4 flex-1 rounded-xl border border-slate-100 bg-[#f8fafc] p-4 ${isLast ? "border-[#0e2d4c]/20 bg-[#0e2d4c]/[0.04]" : ""}`}
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <p
+                              className={`text-sm font-bold ${isLast ? "text-[#0e2d4c]" : "text-slate-800"}`}
+                            >
+                              {cfg.label}
+                            </p>
+                            <p className="text-xs text-slate-400">
+                              {formatDateTime(log.createdAt)}
+                            </p>
+                          </div>
+
+                          {/* การเปลี่ยนสถานะ */}
+                          {(log.fromStatus || log.toStatus) && (
+                            <div className="mt-2 flex flex-wrap items-center gap-2">
+                              {log.fromStatus && (
+                                <span
+                                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${statusConfig[log.fromStatus].color}`}
+                                >
+                                  <span
+                                    className={`h-1.5 w-1.5 rounded-full ${statusConfig[log.fromStatus].dot}`}
+                                  />
+                                  {statusConfig[log.fromStatus].label}
+                                </span>
+                              )}
+                              {log.fromStatus && log.toStatus && (
+                                <svg
+                                  className="h-3.5 w-3.5 shrink-0 text-slate-400"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M9 5l7 7-7 7"
+                                  />
+                                </svg>
+                              )}
+                              {log.toStatus && (
+                                <span
+                                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${statusConfig[log.toStatus].color}`}
+                                >
+                                  <span
+                                    className={`h-1.5 w-1.5 rounded-full ${statusConfig[log.toStatus].dot}`}
+                                  />
+                                  {statusConfig[log.toStatus].label}
+                                </span>
+                              )}
+                            </div>
+                          )}
+
+                          {/* ผู้ดำเนินการ */}
+                          <p className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
+                            <svg
+                              className="h-3.5 w-3.5"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                              />
+                            </svg>
+                            {log.operator?.displayName ||
+                              log.actorDisplayName ||
+                              getActorRoleLabel(log.actorRole)}
+                          </p>
+
+                          {/* หมายเหตุ */}
+                          {log.note && (
+                            <div className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
+                              <span className="font-semibold text-slate-700">
+                                หมายเหตุ:{" "}
+                              </span>
+                              {log.note}
+                            </div>
+                          )}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ol>
+              )}
+            </SectionCard>
+
+            {/* ── 6. Cancel Section ─────────────────────────────────────── */}
+            {canCancel && (
+              <SectionCard
+                title="ยกเลิกคำขอ"
+                accent="red"
+                icon={
+                  <svg
+                    className="h-4 w-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
                 }
               >
-                <option value="DOCUMENT">DOCUMENT</option>
-                <option value="IMAGE">IMAGE</option>
-                <option value="VIDEO">VIDEO</option>
-              </SelectField>
-
-              <div className="space-y-2">
-                <label
-                  htmlFor="uploadFile"
-                  className="block text-sm font-medium text-slate-800"
-                >
-                  File
-                </label>
-                <input
-                  id="uploadFile"
-                  type="file"
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
-                  accept={getAcceptMimeTypes(uploadFileKind)}
-                  onChange={(event) => {
-                    const file = event.target.files?.[0] || null;
-                    setUploadFile(file);
-                    if (file) {
-                      const inferredKind = inferFileKindFromMimeType(
-                        resolveUploadMimeType(file) ?? "",
-                      );
-                      if (inferredKind) {
-                        setUploadFileKind(inferredKind);
-                      }
-                    }
-                  }}
-                />
-              </div>
-            </div>
-            <p className="mt-2 text-xs text-slate-500">
-              {getAttachmentPolicySummary(uploadFileKind)}
-            </p>
-
-            {uploadFile ? (
-              <p className="mt-3 text-sm text-slate-700">
-                Selected: {uploadFile.name} ({formatFileSize(uploadFile.size)})
-              </p>
-            ) : null}
-
-            <div className="mt-4">
-              <Button
-                type="button"
-                disabled={uploading || !uploadFile}
-                onClick={() => void handleUpload()}
-              >
-                {uploading ? "Uploading..." : "Upload attachment"}
-              </Button>
-            </div>
-          </section>
-
-          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-semibold text-slate-900">
-              Attachments
-            </h2>
-
-            {detail.attachments.length === 0 ? (
-              <p className="mt-3 text-sm text-slate-600">No attachments.</p>
-            ) : (
-              <>
-                <ul className="mt-3 space-y-2">
-                  {detail.attachments.map((attachment) => (
-                    <li
-                      key={attachment.id}
-                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"
-                    >
-                      <div className="text-sm text-slate-700">
-                        <p className="font-medium text-slate-900">
-                          {attachment.fileName}
-                        </p>
-                        <p>
-                          {attachment.fileKind} |{" "}
-                          {attachment.fileKind === "DOCUMENT"
-                            ? getDocumentTypeLabel(
-                                attachment.mimeType,
-                                attachment.fileName,
-                              )
-                            : attachment.mimeType}{" "}
-                          | {formatFileSize(attachment.fileSize)} |{" "}
-                          {formatDateTime(attachment.createdAt)}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {isVideoAttachment(
-                          attachment.fileKind,
-                          attachment.mimeType,
-                        ) ? (
-                          <Button
-                            type="button"
-                            className="bg-white text-slate-700 ring-1 ring-slate-300 hover:bg-slate-100"
-                            onClick={() =>
-                              void handlePreviewAttachment(
-                                attachment.id,
-                                attachment.fileName,
-                              )
-                            }
-                            disabled={previewingAttachmentId === attachment.id}
-                          >
-                            {previewingAttachmentId === attachment.id
-                              ? "Preparing..."
-                              : "Preview"}
-                          </Button>
-                        ) : null}
-
-                        <Button
-                          type="button"
-                          className="bg-white text-slate-700 ring-1 ring-slate-300 hover:bg-slate-100"
-                          onClick={() =>
-                            void handleDownloadAttachment(attachment.id)
-                          }
-                          disabled={downloadingAttachmentId === attachment.id}
-                        >
-                          {downloadingAttachmentId === attachment.id
-                            ? "Preparing..."
-                            : "Download"}
-                        </Button>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
-          </section>
-
-          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-semibold text-slate-900">Timeline</h2>
-
-            {detail.activityLogs.length === 0 ? (
-              <p className="mt-3 text-sm text-slate-600">No activity logs.</p>
-            ) : (
-              <ol className="mt-3 space-y-3">
-                {detail.activityLogs.map((log) => (
-                  <li
-                    key={log.id}
-                    className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700"
+                {/* คำเตือน */}
+                <div className="mb-4 flex items-start gap-3 rounded-xl border border-[#b62026]/20 bg-[#b62026]/5 p-4">
+                  <svg
+                    className="mt-0.5 h-5 w-5 shrink-0 text-[#b62026]"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
                   >
-                    <p className="font-semibold text-slate-900">{log.action}</p>
-                    <p>
-                      {log.fromStatus ?? "-"} to {log.toStatus ?? "-"}
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                    />
+                  </svg>
+                  <div>
+                    <p className="text-sm font-semibold text-[#b62026]">
+                      ข้อควรระวัง
                     </p>
-                    <p>
-                      By:{" "}
-                      {log.operator?.displayName ||
-                        log.actorDisplayName ||
-                        log.actorRole}
+                    <p className="mt-0.5 text-sm text-[#b62026]/80">
+                      ยกเลิกได้เฉพาะเมื่อสถานะเป็น <strong>ใหม่</strong> หรือ{" "}
+                      <strong>อนุมัติแล้ว</strong> เท่านั้น
+                      หลังยกเลิกแล้วจะไม่สามารถดำเนินการต่อได้
                     </p>
-                    {log.note ? <p>Note: {log.note}</p> : null}
-                    <p className="text-xs text-slate-500">
-                      {formatDateTime(log.createdAt)}
+                  </div>
+                </div>
+
+                <form className="space-y-4" onSubmit={handleCancel}>
+                  <TextareaField
+                    id="cancelReason"
+                    label="เหตุผลในการยกเลิก"
+                    required
+                    value={cancelReason}
+                    onChange={(e) => setCancelReason(e.target.value)}
+                    rows={3}
+                    maxLength={1000}
+                    placeholder="กรุณาระบุเหตุผลในการยกเลิกคำขอนี้..."
+                  />
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-xs text-slate-400">
+                      {cancelReason.length}/1000 ตัวอักษร
                     </p>
-                  </li>
-                ))}
-              </ol>
+                    <button
+                      type="submit"
+                      disabled={canceling || !cancelReason.trim()}
+                      className="inline-flex items-center gap-2 rounded-xl bg-[#b62026] px-5 py-2.5 text-sm font-bold text-white shadow-md shadow-[#b62026]/25 transition hover:bg-[#d42a30] disabled:cursor-not-allowed disabled:opacity-50 active:scale-95"
+                    >
+                      {canceling ? (
+                        <>
+                          <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                          กำลังยกเลิก...
+                        </>
+                      ) : (
+                        <>
+                          <svg
+                            className="h-4 w-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"
+                            />
+                          </svg>
+                          ยืนยันยกเลิกคำขอ
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </SectionCard>
             )}
-          </section>
+          </>
+        )}
+      </main>
 
-          {canCancel ? (
-            <section className="rounded-2xl border border-rose-200 bg-white p-6 shadow-sm">
-              <h2 className="text-lg font-semibold text-slate-900">
-                Cancel request
-              </h2>
-              <p className="mt-2 text-sm text-slate-700">
-                You can cancel only when status is NEW or APPROVED.
-              </p>
-
-              <form className="mt-4 space-y-3" onSubmit={handleCancel}>
-                <TextareaField
-                  id="cancelReason"
-                  label="Reason"
-                  required
-                  value={cancelReason}
-                  onChange={(event) => setCancelReason(event.target.value)}
-                  rows={3}
-                  maxLength={1000}
-                  placeholder="Please provide cancellation reason"
-                />
-
-                <Button
-                  type="submit"
-                  disabled={canceling}
-                  className="bg-rose-600 hover:bg-rose-500"
-                >
-                  {canceling ? "Canceling..." : "Confirm cancel request"}
-                </Button>
-              </form>
-            </section>
-          ) : null}
-        </>
-      ) : null}
-
-      {errorMessage ? (
-        <section className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
-          {errorMessage}
-        </section>
-      ) : null}
+      {/* ── Modals ──────────────────────────────────────────────────────── */}
+      <ConfirmModal
+        open={showConfirmCancel && canCancel}
+        title="ยืนยันการยกเลิกคำขอ"
+        description="ยืนยันการยกเลิกคำขอนี้? หลังยกเลิกแล้วจะไม่สามารถดำเนินการต่อได้"
+        confirmLabel={canceling ? "กำลังยืนยัน..." : "ยืนยันยกเลิกคำขอ"}
+        cancelLabel="ยกเลิก"
+        onConfirm={() => void performCancel()}
+        onClose={() => {
+          if (!canceling) setShowConfirmCancel(false);
+        }}
+      />
 
       <VideoPreviewModal
         open={Boolean(videoPreview)}
         title={
           videoPreview
-            ? `Video preview: ${videoPreview.fileName}`
-            : "Video preview"
+            ? `ตัวอย่างวิดีโอ: ${videoPreview.fileName}`
+            : "ตัวอย่างวิดีโอ"
         }
         src={videoPreview?.url ?? ""}
         onClose={() => setVideoPreview(null)}
       />
-    </main>
+    </div>
   );
 }
