@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { ApiError } from "@/lib/api/client";
+import { formatPhoneDisplay } from "@/lib/phone-format";
 import {
   getMessengerLink,
   reportMessengerProblem,
@@ -337,7 +338,7 @@ export default function Page() {
         <h2 className="text-lg font-semibold text-slate-900">Sender</h2>
         <div className="mt-3 space-y-1 text-sm text-slate-700">
           <p>{detail.request.employeeName}</p>
-          <p>{detail.request.phone}</p>
+          <p>{formatPhoneDisplay(detail.request.phone)}</p>
           {detail.messengerDetail.senderAddress ? (
             <>
               <p>{renderAddressLines(detail.messengerDetail.senderAddress)}</p>
@@ -353,7 +354,9 @@ export default function Page() {
         <h2 className="text-lg font-semibold text-slate-900">Receiver</h2>
         <div className="mt-3 space-y-1 text-sm text-slate-700">
           <p>{detail.messengerDetail.receiverAddress.name}</p>
-          <p>{detail.messengerDetail.receiverAddress.phone}</p>
+          <p>
+            {formatPhoneDisplay(detail.messengerDetail.receiverAddress.phone)}
+          </p>
           <p>{renderAddressLines(detail.messengerDetail.receiverAddress)}</p>
           {detail.messengerDetail.receiverAddress.extra ? (
             <p>Note: {detail.messengerDetail.receiverAddress.extra}</p>

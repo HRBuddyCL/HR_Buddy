@@ -20,6 +20,7 @@ import { VideoPreviewModal } from "@/components/ui/video-preview-modal";
 import { downloadFileFromPresignedUrl } from "@/lib/attachments/download";
 import { getDocumentTypeLabel } from "@/lib/attachments/document-type-label";
 import { ApiError } from "@/lib/api/client";
+import { formatPhoneDisplay } from "@/lib/phone-format";
 import {
   getAcceptMimeTypes,
   getAttachmentPolicySummary,
@@ -470,7 +471,7 @@ function AdminRequestDetailContent() {
                   {detail.requestNo}
                 </h2>
                 <p className="text-sm text-slate-700">
-                  {detail.employeeName} | {detail.phone}
+                  {detail.employeeName} | {formatPhoneDisplay(detail.phone)}
                 </p>
               </div>
               <span

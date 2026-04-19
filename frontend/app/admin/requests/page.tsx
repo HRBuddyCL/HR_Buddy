@@ -5,6 +5,7 @@ import Link from "next/link";
 import { RouteGuard } from "@/components/guards/route-guard";
 import { Button, SelectField, TextField } from "@/components/ui/form-controls";
 import { ApiError } from "@/lib/api/client";
+import { formatPhoneDisplay } from "@/lib/phone-format";
 import {
   downloadAdminRequestsCsv,
   getAdminRequests,
@@ -319,7 +320,9 @@ function AdminRequestsPageContent() {
                     <td className="px-3 py-3 text-slate-700">{item.type}</td>
                     <td className="px-3 py-3 text-slate-700">
                       <p>{item.employeeName}</p>
-                      <p className="text-xs text-slate-500">{item.phone}</p>
+                      <p className="text-xs text-slate-500">
+                        {formatPhoneDisplay(item.phone)}
+                      </p>
                     </td>
                     <td className="px-3 py-3 text-slate-700">
                       {urgencyLabelMap[item.urgency]}
