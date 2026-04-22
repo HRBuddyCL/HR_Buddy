@@ -10,6 +10,7 @@ import {
 import { usePathname, useRouter } from "next/navigation";
 import { ApiError, apiFetch } from "@/lib/api/client";
 import { clearAuthToken, type TokenType } from "@/lib/auth/tokens";
+import { hasActiveAdminSessionFromCookie } from "@/lib/auth/admin-session";
 import {
   clearSessionExpiresAt,
   useSessionExpiresAt,
@@ -58,8 +59,13 @@ export function RouteGuard({
   const token = useAuthToken(tokenType);
   const sessionExpiresAt = useSessionExpiresAt(tokenType);
   const hasEmployeeSessionCookie = hasActiveEmployeeSessionFromCookie();
+  const hasAdminSessionCookie = hasActiveAdminSessionFromCookie();
   const hasSessionCredential =
-    tokenType === "employee" ? hasEmployeeSessionCookie : Boolean(token);
+    tokenType === "employee"
+      ? hasEmployeeSessionCookie
+      : tokenType === "admin"
+        ? hasAdminSessionCookie
+        : Boolean(token);
   const validationConfig = useMemo(
     () => SESSION_VALIDATION_BY_TOKEN[tokenType],
     [tokenType],
@@ -90,10 +96,6 @@ export function RouteGuard({
   }, [redirectTo, resolvedNextPath]);
 
   const clearEmployeeSessionCookie = useCallback(async () => {
-    if (tokenType !== "employee") {
-      return;
-    }
-
     try {
       await fetch("/api/auth/employee/logout", {
         method: "POST",
@@ -104,7 +106,20 @@ export function RouteGuard({
     } catch {
       // Best-effort cookie cleanup.
     }
-  }, [tokenType]);
+  }, []);
+
+  const clearAdminSessionCookie = useCallback(async () => {
+    try {
+      await fetch("/api/auth/admin/logout", {
+        method: "POST",
+        cache: "no-store",
+        credentials: "same-origin",
+        keepalive: true,
+      });
+    } catch {
+      // Best-effort cookie cleanup.
+    }
+  }, []);
 
   useEffect(() => {
     setHasMounted(true);
@@ -116,7 +131,14 @@ export function RouteGuard({
     }
 
     if (!hasSessionCredential) {
-      void clearEmployeeSessionCookie();
+      if (tokenType === "employee") {
+        void clearEmployeeSessionCookie();
+      }
+
+      if (tokenType === "admin") {
+        void clearAdminSessionCookie();
+      }
+
       setIsValidating(false);
       setIsValidated(false);
       setValidationError(null);
@@ -127,7 +149,54 @@ export function RouteGuard({
     hasSessionCredential,
     router,
     clearEmployeeSessionCookie,
+    clearAdminSessionCookie,
+    tokenType,
     buildAuthRedirectUrl,
+  ]);
+
+  useEffect(() => {
+    if (!hasMounted) {
+      return;
+    }
+
+    let active = true;
+
+    async function enforceSingleRole() {
+      if (tokenType === "admin" && hasEmployeeSessionCookie) {
+        await clearEmployeeSessionCookie();
+        if (!active) {
+          return;
+        }
+
+        clearAuthToken("employee");
+        clearSessionExpiresAt("employee");
+        return;
+      }
+
+      if (tokenType === "employee" && hasAdminSessionCookie) {
+        await clearAdminSessionCookie();
+
+        if (!active) {
+          return;
+        }
+
+        clearAuthToken("admin");
+        clearSessionExpiresAt("admin");
+      }
+    }
+
+    void enforceSingleRole();
+
+    return () => {
+      active = false;
+    };
+  }, [
+    hasMounted,
+    tokenType,
+    hasEmployeeSessionCookie,
+    hasAdminSessionCookie,
+    clearEmployeeSessionCookie,
+    clearAdminSessionCookie,
   ]);
 
   useEffect(() => {
@@ -152,7 +221,14 @@ export function RouteGuard({
     const ticker = window.setInterval(updateRemaining, 1000);
     const logoutDelay = Math.max(0, expiresAt - Date.now());
     const logoutTimer = window.setTimeout(() => {
-      void clearEmployeeSessionCookie();
+      if (tokenType === "employee") {
+        void clearEmployeeSessionCookie();
+      }
+
+      if (tokenType === "admin") {
+        void clearAdminSessionCookie();
+      }
+
       clearAuthToken(tokenType);
       clearSessionExpiresAt(tokenType);
       setIsValidated(false);
@@ -170,6 +246,7 @@ export function RouteGuard({
     sessionExpiresAt,
     router,
     clearEmployeeSessionCookie,
+    clearAdminSessionCookie,
     buildAuthRedirectUrl,
   ]);
 
@@ -239,7 +316,14 @@ export function RouteGuard({
         }
 
         if (error instanceof ApiError && error.status === 401) {
-          void clearEmployeeSessionCookie();
+          if (tokenType === "employee") {
+            void clearEmployeeSessionCookie();
+          }
+
+          if (tokenType === "admin") {
+            void clearAdminSessionCookie();
+          }
+
           clearAuthToken(tokenType);
           clearSessionExpiresAt(tokenType);
           setIsValidated(false);
@@ -278,6 +362,7 @@ export function RouteGuard({
     router,
     validationAttempt,
     clearEmployeeSessionCookie,
+    clearAdminSessionCookie,
     buildAuthRedirectUrl,
     resolvedNextPath,
   ]);
@@ -401,9 +486,12 @@ export function RouteGuard({
 }
 
 function formatRemainingTime(totalSeconds: number) {
-  const minutes = Math.floor(totalSeconds / 60)
+  const hours = Math.floor(totalSeconds / 3600)
+    .toString()
+    .padStart(2, "0");
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
     .toString()
     .padStart(2, "0");
   const seconds = (totalSeconds % 60).toString().padStart(2, "0");
-  return `${minutes}:${seconds}`;
+  return `${hours} ชม. ${minutes} น. ${seconds} วิ.`;
 }

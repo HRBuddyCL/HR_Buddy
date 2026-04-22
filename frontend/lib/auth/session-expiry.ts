@@ -1,6 +1,10 @@
 import { useSyncExternalStore } from "react";
 import type { TokenType } from "@/lib/auth/tokens";
 import {
+  ADMIN_SESSION_EXPIRES_AT_COOKIE,
+  getAdminSessionExpiresAtFromCookie,
+} from "@/lib/auth/admin-session";
+import {
   EMPLOYEE_SESSION_EXPIRES_AT_COOKIE,
   getEmployeeSessionExpiresAtFromCookie,
 } from "@/lib/auth/employee-session";
@@ -65,6 +69,10 @@ export function getSessionExpiresAt(type: TokenType): string | null {
     return getEmployeeSessionExpiresAtFromCookie();
   }
 
+  if (type === "admin") {
+    return getAdminSessionExpiresAtFromCookie();
+  }
+
   const storage = getStorage();
   if (!storage) {
     return null;
@@ -84,6 +92,12 @@ export function setSessionExpiresAt(type: TokenType, expiresAtIso: string) {
     return;
   }
 
+  if (type === "admin") {
+    setCookieValue(ADMIN_SESSION_EXPIRES_AT_COOKIE, expiresAtIso, expiresAtIso);
+    emitSessionExpiryChanged(type);
+    return;
+  }
+
   const storage = getStorage();
   if (!storage) {
     return;
@@ -96,6 +110,12 @@ export function setSessionExpiresAt(type: TokenType, expiresAtIso: string) {
 export function clearSessionExpiresAt(type: TokenType) {
   if (type === "employee") {
     clearCookieValue(EMPLOYEE_SESSION_EXPIRES_AT_COOKIE);
+    emitSessionExpiryChanged(type);
+    return;
+  }
+
+  if (type === "admin") {
+    clearCookieValue(ADMIN_SESSION_EXPIRES_AT_COOKIE);
     emitSessionExpiryChanged(type);
     return;
   }

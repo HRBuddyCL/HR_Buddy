@@ -5,8 +5,10 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ApiError } from "@/lib/api/client";
 import { ErrorToast } from "@/components/ui/error-toast";
+import { adminLogout } from "@/lib/api/admin-auth";
 import { sendOtp, verifyOtp } from "@/lib/api/auth-otp";
 import {
+  clearSessionExpiresAt,
   getSessionExpiresAt,
   setSessionExpiresAt,
 } from "@/lib/auth/session-expiry";
@@ -15,6 +17,7 @@ import {
   getEmployeeContact,
   setEmployeeContact,
 } from "@/lib/auth/employee-contact";
+import { clearAuthToken } from "@/lib/auth/tokens";
 type Stage = "idle" | "code-sent";
 type OtpToastTitle = "ส่ง OTP ไม่สำเร็จ" | "ยืนยัน OTP ไม่สำเร็จ";
 
@@ -352,6 +355,15 @@ function OtpPageContent() {
         email: email.trim(),
         otpCode: otpCode.trim(),
       });
+
+      try {
+        await adminLogout();
+      } catch {
+        // Best-effort admin logout when switching to employee role.
+      } finally {
+        clearAuthToken("admin");
+        clearSessionExpiresAt("admin");
+      }
 
       setSessionExpiresAt("employee", result.expiresAt);
       setEmployeeContact({ phone: phoneDigits, email: email.trim() });

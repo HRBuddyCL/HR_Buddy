@@ -34,7 +34,7 @@ function resolveTokenStorage() {
 }
 
 function readPersistedToken(type: TokenType): string | null {
-  if (type === "employee") {
+  if (type === "employee" || type === "admin") {
     return null;
   }
 
@@ -96,7 +96,7 @@ export function getAuthToken(type: TokenType): string | null {
 export function setAuthToken(type: TokenType, token: string) {
   tokenCache[type] = token;
 
-  if (type === "employee") {
+  if (type === "employee" || type === "admin") {
     emitTokenChanged(type);
     return;
   }
@@ -112,7 +112,7 @@ export function setAuthToken(type: TokenType, token: string) {
 export function clearAuthToken(type: TokenType) {
   delete tokenCache[type];
 
-  if (type === "employee") {
+  if (type === "employee" || type === "admin") {
     emitTokenChanged(type);
     return;
   }

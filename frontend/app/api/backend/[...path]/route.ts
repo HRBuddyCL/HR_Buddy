@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { getAdminSessionFromRequest } from "@/lib/auth/admin-session";
 import { EMPLOYEE_SESSION_COOKIE } from "@/lib/auth/employee-session";
 
 const RAW_UPSTREAM_BASE_URL =
@@ -30,7 +31,7 @@ function buildUpstreamUrl(request: NextRequest, pathSegments: string[]) {
   return upstreamUrl;
 }
 
-function buildUpstreamHeaders(request: NextRequest) {
+function buildUpstreamHeaders(request: NextRequest, pathSegments: string[]) {
   const headers = new Headers(request.headers);
 
   headers.delete("host");
@@ -38,10 +39,13 @@ function buildUpstreamHeaders(request: NextRequest) {
   headers.set("x-forwarded-host", request.headers.get("host") ?? "");
 
   if (!headers.has("authorization")) {
-    const employeeSessionToken =
-      request.cookies.get(EMPLOYEE_SESSION_COOKIE)?.value ?? null;
-    if (employeeSessionToken) {
-      headers.set("authorization", `Bearer ${employeeSessionToken}`);
+    const isAdminPath = pathSegments[0] === "admin";
+    const sessionToken = isAdminPath
+      ? getAdminSessionFromRequest(request).token
+      : (request.cookies.get(EMPLOYEE_SESSION_COOKIE)?.value ?? null);
+
+    if (sessionToken) {
+      headers.set("authorization", `Bearer ${sessionToken}`);
     }
   }
 
@@ -58,7 +62,7 @@ async function proxyRequest(request: NextRequest, context: RouteContext) {
     method === "GET" || method === "HEAD" || method === "OPTIONS";
   const maxAttempts = isRetryableMethod ? 3 : 1;
 
-  const headers = buildUpstreamHeaders(request);
+  const headers = buildUpstreamHeaders(request, path);
   const body =
     method === "GET" || method === "HEAD"
       ? undefined

@@ -1,12 +1,12 @@
-import { apiFetch } from "@/lib/api/client";
+import { ApiError, apiFetch, type ApiErrorBody } from "@/lib/api/client";
 
 export type AdminLoginPayload = {
   username: string;
   password: string;
+  rememberMe?: boolean;
 };
 
 export type AdminLoginResponse = {
-  sessionToken: string;
   expiresAt: string;
 };
 
@@ -15,15 +15,50 @@ export type AdminSessionMe = {
   expiresAt: string;
 };
 
+async function parseJson(response: Response) {
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!contentType.includes("application/json")) {
+    return null;
+  }
+
+  try {
+    return (await response.json()) as unknown;
+  } catch {
+    return null;
+  }
+}
+
 export async function adminLogin(payload: AdminLoginPayload) {
-  return apiFetch<AdminLoginResponse>("/admin/auth/login", {
+  const response = await fetch("/api/auth/admin/login", {
     method: "POST",
-    body: payload,
-    retry: {
-      attempts: 2,
-      baseDelayMs: 900,
+    headers: {
+      "content-type": "application/json",
+      accept: "application/json",
     },
+    credentials: "same-origin",
+    cache: "no-store",
+    body: JSON.stringify(payload),
   });
+
+  if (!response.ok) {
+    const errorBody = (await parseJson(response)) as ApiErrorBody | null;
+    throw new ApiError(
+      response.status,
+      errorBody,
+      `Request failed: ${response.status}`,
+    );
+  }
+
+  const body = (await parseJson(response)) as AdminLoginResponse | null;
+  if (!body?.expiresAt) {
+    throw new ApiError(
+      502,
+      null,
+      "Admin login response is missing session expiry",
+    );
+  }
+
+  return body;
 }
 
 export async function adminMe() {
@@ -38,8 +73,27 @@ export async function adminMe() {
 }
 
 export async function adminLogout() {
-  return apiFetch<{ ok: boolean }>("/admin/auth/logout", {
+  const response = await fetch("/api/auth/admin/logout", {
     method: "POST",
-    tokenType: "admin",
+    headers: {
+      accept: "application/json",
+    },
+    credentials: "same-origin",
+    cache: "no-store",
   });
+
+  if (!response.ok) {
+    const errorBody = (await parseJson(response)) as ApiErrorBody | null;
+    throw new ApiError(
+      response.status,
+      errorBody,
+      `Request failed: ${response.status}`,
+    );
+  }
+
+  return (
+    ((await parseJson(response)) as { ok: boolean } | null) ?? {
+      ok: true,
+    }
+  );
 }
