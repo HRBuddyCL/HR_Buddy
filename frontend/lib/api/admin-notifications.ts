@@ -18,11 +18,22 @@ export type AdminNotificationListResponse = {
   total: number;
 };
 
-export async function getAdminNotifications(limit = 20) {
+export type AdminNotificationListQuery = {
+  page?: number;
+  limit?: number;
+  isRead?: boolean;
+  eventType?: string;
+};
+
+export async function getAdminNotifications(
+  query: AdminNotificationListQuery = {},
+) {
+  const { page, limit = 20, isRead, eventType } = query;
+
   return apiFetch<AdminNotificationListResponse>("/admin/notifications", {
     method: "GET",
     tokenType: "admin",
-    query: { limit },
+    query: { page, limit, isRead, eventType },
   });
 }
 

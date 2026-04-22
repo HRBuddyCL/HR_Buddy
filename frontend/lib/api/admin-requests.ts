@@ -1,6 +1,5 @@
 import { resolveApiBaseUrl } from "@/lib/api/base-url";
 import { apiFetch, ApiError } from "@/lib/api/client";
-import { getAuthToken } from "@/lib/auth/tokens";
 
 export type AdminRequestType =
   | "BUILDING"
@@ -342,13 +341,7 @@ export async function uploadFileToPresignedUrl(
 
 export async function downloadAdminRequestsCsv(
   query: Omit<AdminRequestListQuery, "page"> = {},
-): Promise<{ fileName: string; csv: string }> {
-  const token = getAuthToken("admin");
-
-  if (!token) {
-    throw new ApiError(401, null, "Admin session token is missing");
-  }
-
+): Promise<{ fileName: string; csvBytes: Uint8Array }> {
   const queryString = toQueryString({
     type: query.type,
     status: query.status,
@@ -363,9 +356,9 @@ export async function downloadAdminRequestsCsv(
     {
       method: "GET",
       headers: {
-        Authorization: `Bearer ${token}`,
         Accept: "text/csv",
       },
+      credentials: "same-origin",
     },
   );
 
@@ -392,6 +385,57 @@ export async function downloadAdminRequestsCsv(
 
   return {
     fileName,
-    csv: await response.text(),
+    csvBytes: new Uint8Array(await response.arrayBuffer()),
+  };
+}
+
+export async function downloadAdminRequestsXlsx(
+  query: Omit<AdminRequestListQuery, "page"> = {},
+): Promise<{ fileName: string; xlsxBytes: Uint8Array }> {
+  const queryString = toQueryString({
+    type: query.type,
+    status: query.status,
+    dateFrom: query.dateFrom,
+    dateTo: query.dateTo,
+    q: query.q,
+    limit: query.limit,
+  });
+
+  const response = await fetch(
+    `${API_BASE_URL}/admin/requests/export/xlsx${queryString ? `?${queryString}` : ""}`,
+    {
+      method: "GET",
+      headers: {
+        Accept:
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      },
+      credentials: "same-origin",
+    },
+  );
+
+  if (!response.ok) {
+    let message = `Failed to export xlsx (${response.status})`;
+
+    try {
+      const body = (await response.json()) as { message?: string | string[] };
+      if (Array.isArray(body.message)) {
+        message = body.message.join(", ");
+      } else if (typeof body.message === "string") {
+        message = body.message;
+      }
+    } catch {
+      // noop
+    }
+
+    throw new ApiError(response.status, null, message);
+  }
+
+  const disposition = response.headers.get("content-disposition") ?? "";
+  const match = disposition.match(/filename="([^"]+)"/i);
+  const fileName = match?.[1] ?? "requests-report.xlsx";
+
+  return {
+    fileName,
+    xlsxBytes: new Uint8Array(await response.arrayBuffer()),
   };
 }

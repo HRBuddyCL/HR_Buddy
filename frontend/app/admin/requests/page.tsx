@@ -7,7 +7,7 @@ import { Button, SelectField, TextField } from "@/components/ui/form-controls";
 import { ApiError } from "@/lib/api/client";
 import { formatPhoneDisplay } from "@/lib/phone-format";
 import {
-  downloadAdminRequestsCsv,
+  downloadAdminRequestsXlsx,
   getAdminRequests,
   type AdminRequestListItem,
   type AdminRequestStatus,
@@ -132,12 +132,12 @@ function AdminRequestsPageContent() {
     [limit, total],
   );
 
-  const handleExportCsv = async () => {
+  const handleExportXlsx = async () => {
     setExporting(true);
     setErrorMessage(null);
 
     try {
-      const result = await downloadAdminRequestsCsv({
+      const result = await downloadAdminRequestsXlsx({
         q: query.trim() || undefined,
         type: type || undefined,
         status: status || undefined,
@@ -146,7 +146,10 @@ function AdminRequestsPageContent() {
         limit: 1000,
       });
 
-      const blob = new Blob([result.csv], { type: "text/csv;charset=utf-8" });
+      const xlsxPayload = Uint8Array.from(result.xlsxBytes);
+      const blob = new Blob([xlsxPayload], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
@@ -159,7 +162,7 @@ function AdminRequestsPageContent() {
       if (error instanceof ApiError) {
         setErrorMessage(error.message);
       } else {
-        setErrorMessage("Failed to export csv");
+        setErrorMessage("Failed to export xlsx");
       }
     } finally {
       setExporting(false);
@@ -178,7 +181,7 @@ function AdminRequestsPageContent() {
               Admin Requests Table
             </h1>
             <p className="mt-2 text-slate-700">
-              Manage request queue with search, filters, date range, and csv
+              Manage request queue with search, filters, date range, and report
               export.
             </p>
           </div>
@@ -192,10 +195,10 @@ function AdminRequestsPageContent() {
             </Link>
             <Button
               type="button"
-              onClick={handleExportCsv}
+              onClick={handleExportXlsx}
               disabled={exporting}
             >
-              {exporting ? "Exporting..." : "Export CSV"}
+              {exporting ? "Exporting..." : "Export Excel Report"}
             </Button>
           </div>
         </div>

@@ -1,6 +1,5 @@
 import { resolveApiBaseUrl } from "@/lib/api/base-url";
 import { apiFetch, ApiError } from "@/lib/api/client";
-import { getAuthToken } from "@/lib/auth/tokens";
 
 export type AuditAction =
   | "CREATE"
@@ -79,12 +78,6 @@ export async function getAdminAuditLogs(query: AdminAuditListQuery = {}) {
 export async function downloadAdminAuditCsv(
   query: Omit<AdminAuditListQuery, "page"> = {},
 ): Promise<{ fileName: string; csv: string }> {
-  const token = getAuthToken("admin");
-
-  if (!token) {
-    throw new ApiError(401, null, "Admin session token is missing");
-  }
-
   const queryString = toQueryString({
     action: query.action,
     actorRole: query.actorRole,
@@ -97,13 +90,16 @@ export async function downloadAdminAuditCsv(
     limit: query.limit,
   });
 
-  const response = await fetch(`${API_BASE_URL}/admin/audit/activity-logs/export/csv${queryString ? `?${queryString}` : ""}`, {
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: "text/csv",
+  const response = await fetch(
+    `${API_BASE_URL}/admin/audit/activity-logs/export/csv${queryString ? `?${queryString}` : ""}`,
+    {
+      method: "GET",
+      headers: {
+        Accept: "text/csv",
+      },
+      credentials: "same-origin",
     },
-  });
+  );
 
   if (!response.ok) {
     let message = `Failed to export csv (${response.status})`;
@@ -131,4 +127,3 @@ export async function downloadAdminAuditCsv(
     csv: await response.text(),
   };
 }
-
