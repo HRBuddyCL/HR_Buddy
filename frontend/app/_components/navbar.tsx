@@ -9,8 +9,11 @@ import {
   markMyNotificationRead,
   type NotificationItem,
 } from "@/lib/api/notifications";
+import {
+  getDisplayNotificationMessage,
+  getDisplayNotificationTitle,
+} from "@/lib/notifications/display";
 import { useSessionExpiresAt } from "@/lib/auth/session-expiry";
-import { useAuthToken } from "@/lib/auth/use-auth-token";
 
 const navItems = [
   {
@@ -45,10 +48,17 @@ export function Navbar() {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const pathname = usePathname();
   const isAuthPath = pathname === "/auth/otp" || pathname.startsWith("/auth/");
-  const adminToken = useAuthToken("admin");
+  const adminSessionExpiresAt = useSessionExpiresAt("admin");
   const employeeSessionExpiresAt = useSessionExpiresAt("employee");
-  const isAdminSignedIn = Boolean(adminToken);
   const [nowTs, setNowTs] = useState(() => Date.now());
+  const isAdminSignedIn = useMemo(() => {
+    if (!adminSessionExpiresAt) {
+      return false;
+    }
+
+    const expiresAt = new Date(adminSessionExpiresAt).getTime();
+    return Number.isFinite(expiresAt) && expiresAt > nowTs;
+  }, [adminSessionExpiresAt, nowTs]);
 
   const employeeSessionExpiresAtMs = useMemo(() => {
     if (!employeeSessionExpiresAt) {
@@ -174,11 +184,14 @@ export function Navbar() {
       return null;
     }
 
-    const minutes = Math.floor(remainingSeconds / 60)
+    const hours = Math.floor(remainingSeconds / 3600)
+      .toString()
+      .padStart(2, "0");
+    const minutes = Math.floor((remainingSeconds % 3600) / 60)
       .toString()
       .padStart(2, "0");
     const seconds = (remainingSeconds % 60).toString().padStart(2, "0");
-    return `${minutes}:${seconds}`;
+    return `${hours} ชม. ${minutes} น. ${seconds} วิ.`;
   }, [remainingSeconds]);
 
   if (pathname === "/admin" || pathname.startsWith("/admin/")) {
@@ -292,10 +305,10 @@ export function Navbar() {
                                 }`}
                               >
                                 <p className="text-sm font-medium text-slate-900">
-                                  {item.title}
+                                  {getDisplayNotificationTitle(item.title)}
                                 </p>
                                 <p className="mt-0.5 text-xs text-slate-700 line-clamp-2">
-                                  {item.message}
+                                  {getDisplayNotificationMessage(item.message)}
                                 </p>
                                 <p className="mt-1 text-[11px] text-slate-500">
                                   {formatNotificationTime(item.createdAt)}
@@ -494,10 +507,10 @@ export function Navbar() {
                       }`}
                     >
                       <p className="text-sm font-medium text-slate-900">
-                        {item.title}
+                        {getDisplayNotificationTitle(item.title)}
                       </p>
                       <p className="mt-0.5 text-xs text-slate-700 line-clamp-2">
-                        {item.message}
+                        {getDisplayNotificationMessage(item.message)}
                       </p>
                       <p className="mt-1 text-[11px] text-slate-500">
                         {formatNotificationTime(item.createdAt)}

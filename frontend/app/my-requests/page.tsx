@@ -16,6 +16,10 @@ import {
   getMyNotifications,
   type NotificationItem,
 } from "@/lib/api/notifications";
+import {
+  getDisplayNotificationMessage,
+  getDisplayNotificationTitle,
+} from "@/lib/notifications/display";
 import { clearSessionExpiresAt } from "@/lib/auth/session-expiry";
 import { clearAuthToken } from "@/lib/auth/tokens";
 
@@ -132,7 +136,7 @@ function MyRequestsContent() {
   const [items, setItems] = useState<MyRequestItem[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const limit = 20;
+  const limit = 10;
 
   const [search, setSearch] = useState("");
   const [type, setType] = useState<"" | RequestType>("");
@@ -386,10 +390,10 @@ function MyRequestsContent() {
                       <p
                         className={`text-sm font-semibold ${!item.isRead ? "text-[#0e2d4c]" : "text-slate-700"}`}
                       >
-                        {item.title}
+                        {getDisplayNotificationTitle(item.title)}
                       </p>
                       <p className="mt-0.5 text-sm text-slate-600">
-                        {item.message}
+                        {getDisplayNotificationMessage(item.message)}
                       </p>
                       <p className="mt-1 text-xs text-slate-400">
                         {formatDateTime(item.createdAt)}

@@ -610,7 +610,7 @@ function MyRequestDetailContent() {
                     d="M15 19l-7-7 7-7"
                   />
                 </svg>
-                กลับรายการ
+                กลับสู่หน้ารายการ
               </Link>
             </div>
           </div>
