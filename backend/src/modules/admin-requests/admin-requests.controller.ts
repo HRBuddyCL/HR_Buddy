@@ -65,6 +65,25 @@ export class AdminRequestsController {
     return result.csvContent;
   }
 
+  @Get('export/xlsx')
+  async exportXlsx(
+    @Query() q: AdminRequestsExportQueryDto,
+    @Res() res: Response,
+  ) {
+    const result = await this.svc.exportXlsx(q);
+
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${result.fileName}"`,
+    );
+    res.setHeader('X-Export-Row-Count', String(result.rowCount));
+    res.send(result.xlsxContent);
+  }
+
   @Get(':id/attachments/:attachmentId/download-url')
   downloadAttachment(
     @Param('id') id: string,

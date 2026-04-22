@@ -1,4 +1,10 @@
-import { IsNotEmpty, IsString, MaxLength } from 'class-validator';
+import {
+  IsBoolean,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  MaxLength,
+} from 'class-validator';
 
 export class AdminLoginDto {
   @IsString()
@@ -10,4 +16,8 @@ export class AdminLoginDto {
   @IsNotEmpty()
   @MaxLength(200)
   password!: string;
+
+  @IsOptional()
+  @IsBoolean()
+  rememberMe?: boolean;
 }

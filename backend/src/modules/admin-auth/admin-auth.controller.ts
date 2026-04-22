@@ -21,7 +21,11 @@ export class AdminAuthController {
   @RateLimitPolicy('adminLogin')
   @Post('login')
   login(@Body() dto: AdminLoginDto) {
-    return this.adminAuthService.login(dto.username, dto.password);
+    return this.adminAuthService.login(
+      dto.username,
+      dto.password,
+      dto.rememberMe === true,
+    );
   }
 
   @UseGuards(AdminSessionGuard)

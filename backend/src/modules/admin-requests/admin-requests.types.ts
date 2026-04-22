@@ -37,4 +37,10 @@ export type AdminRequestCsvExportResult = {
   csvContent: string;
 };
 
+export type AdminRequestXlsxExportResult = {
+  fileName: string;
+  rowCount: number;
+  xlsxContent: Buffer;
+};
+
 export type AdminRequestDetailResponse = unknown;

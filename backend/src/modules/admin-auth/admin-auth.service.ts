@@ -17,7 +17,11 @@ export class AdminAuthService {
     private readonly prisma: PrismaService,
   ) {}
 
-  async login(usernameInput: string, passwordInput: string) {
+  async login(
+    usernameInput: string,
+    passwordInput: string,
+    rememberMe = false,
+  ) {
     const adminUsername =
       this.config.get<string>('adminAuth.username') ?? 'admin';
     const adminPassword =
@@ -34,7 +38,7 @@ export class AdminAuthService {
     const issued = issueAdminSessionToken({
       username: adminUsername,
       secret: this.sessionSecret(),
-      ttlMinutes: this.sessionTtlMinutes(),
+      ttlMinutes: this.resolveSessionTtlMinutes(rememberMe),
     });
 
     await this.prisma.$transaction(async (tx) => {
@@ -152,6 +156,18 @@ export class AdminAuthService {
 
   private sessionTtlMinutes() {
     return this.config.get<number>('adminAuth.sessionTtlMinutes') ?? 480;
+  }
+
+  private rememberSessionTtlMinutes() {
+    return (
+      this.config.get<number>('adminAuth.rememberSessionTtlMinutes') ?? 10080
+    );
+  }
+
+  private resolveSessionTtlMinutes(rememberMe: boolean) {
+    return rememberMe
+      ? this.rememberSessionTtlMinutes()
+      : this.sessionTtlMinutes();
   }
 
   private invalidCredentialError() {

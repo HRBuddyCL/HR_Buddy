@@ -28,6 +28,16 @@ const STATUS_TO_EVENT: Partial<Record<RequestStatus, NotificationEventType>> = {
   CANCELED: NotificationEventType.CANCELED,
 };
 
+const STATUS_LABEL_TH: Record<RequestStatus, string> = {
+  NEW: 'ใหม่',
+  APPROVED: 'อนุมัติแล้ว',
+  IN_PROGRESS: 'กำลังดำเนินการ',
+  IN_TRANSIT: 'กำลังส่ง',
+  DONE: 'เสร็จสิ้น',
+  REJECTED: 'ถูกปฏิเสธ',
+  CANCELED: 'ยกเลิก',
+};
+
 @Injectable()
 export class NotificationsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -72,6 +82,7 @@ export class NotificationsService {
     }
 
     const noteText = params.note?.trim();
+    const statusLabel = STATUS_LABEL_TH[params.status];
 
     await this.create(
       {
@@ -79,10 +90,10 @@ export class NotificationsService {
         recipientPhone: params.phone,
         requestId: params.requestId,
         eventType,
-        title: `Request ${params.requestNo} is ${params.status}`,
+        title: `คำขอ ${params.requestNo} อยู่ในสถานะ${statusLabel}`,
         message: noteText
-          ? `Status changed to ${params.status}. Note: ${noteText}`
-          : `Status changed to ${params.status}.`,
+          ? `สถานะเปลี่ยนเป็น${statusLabel} หมายเหตุ: ${noteText}`
+          : `สถานะเปลี่ยนเป็น${statusLabel}`,
       },
       tx,
     );
@@ -101,8 +112,8 @@ export class NotificationsService {
         recipientRole: RecipientRole.ADMIN,
         requestId: params.requestId,
         eventType: NotificationEventType.MESSENGER_BOOKED,
-        title: 'New messenger booking request',
-        message: `Request ${params.requestNo} from ${params.employeeName}`,
+        title: 'มีคำขอเมสเซนเจอร์ใหม่',
+        message: `คำขอ ${params.requestNo} จาก ${params.employeeName}`,
       },
       tx,
     );
@@ -121,8 +132,8 @@ export class NotificationsService {
         recipientRole: RecipientRole.ADMIN,
         requestId: params.requestId,
         eventType: NotificationEventType.CANCELED,
-        title: 'Request canceled by employee',
-        message: `Request ${params.requestNo}: ${params.reason}`,
+        title: 'พนักงานยกเลิกคำขอ',
+        message: `คำขอ ${params.requestNo}: ${params.reason}`,
       },
       tx,
     );
@@ -141,8 +152,8 @@ export class NotificationsService {
         recipientRole: RecipientRole.ADMIN,
         requestId: params.requestId,
         eventType: NotificationEventType.PROBLEM_REPORTED,
-        title: 'Messenger reported a problem',
-        message: `Request ${params.requestNo}: ${params.note}`,
+        title: 'แมสเซนเจอร์รายงานปัญหา',
+        message: `คำขอ ${params.requestNo}: ${params.note}`,
       },
       tx,
     );

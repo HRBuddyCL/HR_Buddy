@@ -294,6 +294,10 @@ export default () => ({
       process.env.ADMIN_SESSION_TTL_MINUTES ?? '480',
       10,
     ),
+    rememberSessionTtlMinutes: parseInt(
+      process.env.ADMIN_REMEMBER_SESSION_TTL_MINUTES ?? '10080',
+      10,
+    ),
   },
 });
 
