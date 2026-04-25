@@ -1,203 +1,352 @@
 # HR-Buddy Backend
 
-Backend API for HR-Buddy internal service request platform (Construction Lines).
+Backend API service for HR-Buddy (Construction Lines internal request platform), built with NestJS + Prisma + PostgreSQL.
 
-## Current v1 Scope
+Last updated: 2026-04-26
 
-Implemented modules:
+## 1) Scope (v1)
 
-- `requests`
-- `admin-auth`
-- `admin-requests`
-- `admin-audit`
-- `admin-settings`
+Implemented modules in `src/modules`:
 - `auth-otp`
+- `requests`
+- `attachments`
 - `messenger`
 - `notifications`
-- `attachments`
-- `reference`
+- `admin-auth`
+- `admin-requests`
+- `admin-settings`
+- `admin-audit`
 - `maintenance`
-- `activity-log`
+- `reference`
 - `geo`
 
-SLA runtime is not part of active v1 delivery scope, even if legacy SLA code or tables remain in repository/database.
+Notes:
+- Activity/audit logging is integrated in request flows and exposed via admin audit APIs.
+- Legacy SLA artifacts may exist, but SLA runtime is not an active standalone module in this v1 scope.
 
-## Tech Stack
+## 2) Tech Stack
 
-- NestJS 11
-- Prisma + PostgreSQL
-- TypeScript
+- NestJS `11`
+- Prisma `7`
+- PostgreSQL `15+`
+- TypeScript `5`
+- Jest + Supertest
+- ESLint + Prettier
 
-## Prerequisites
+## 3) Project Structure
 
-- Node.js 22+
-- npm 10+
-- PostgreSQL 15+
+```text
+backend/
+|- src/
+|  |- main.ts
+|  |- app.module.ts
+|  |- config/                    # runtime config + env validation
+|  |- common/                    # filters, middleware, rate limit, shared utils
+|  |- modules/
+|     |- auth-otp/
+|     |- requests/
+|     |- attachments/
+|     |- messenger/
+|     |- notifications/
+|     |- admin-auth/
+|     |- admin-requests/
+|     |- admin-settings/
+|     |- admin-audit/
+|     |- maintenance/
+|     |- reference/
+|     |- geo/
+|- prisma/
+|- scripts/                      # release gate, smoke, migrate deploy helper
+|- test/                         # e2e test suite
+|- docs/                         # runbook, API contract, operations checklist
+|- .env.example
+|- .env.deploy.example
+```
 
-On this machine, use `npm.cmd` instead of `npm`.
+## 4) Prerequisites
 
-## Setup (Local)
+- Node.js `22+`
+- npm `10+`
+- PostgreSQL `15+` (local or managed)
 
-1. Install dependencies:
+Windows note:
+- use `npm.cmd` instead of `npm`.
+
+## 5) Local Setup
 
 ```powershell
+cd backend
 npm.cmd install
-```
-
-2. Create env file:
-
-```powershell
 Copy-Item .env.example .env
-```
-
-3. Update required secrets and database connection in `.env`.
-
-4. Apply migrations:
-
-```powershell
+# edit backend/.env
+npm.cmd run prisma:generate
 npm.cmd run prisma:migrate:deploy
-```
-
-5. Run the API:
-
-```powershell
 npm.cmd run start:dev
 ```
 
-API default port is `3001`.
+Default API URL:
+- `http://localhost:3001`
 
-## Useful Commands
+## 6) Environment Variables
 
-```powershell
-npm.cmd run build
-npm.cmd run test
-npm.cmd run test:e2e
-npm.cmd run smoke:preprod
-npm.cmd run release:gate
-npm.cmd run lint
-npm.cmd run freeze:check
-```
+Templates:
+- Local baseline: `backend/.env.example`
+- Deploy baseline: `backend/.env.deploy.example`
 
-## Release Gate
+### 6.1 Required in production
 
-- `npm.cmd run release:gate` runs build + lint + unit tests + e2e tests in sequence.
-- GitHub Actions workflow `Backend Release Gate` also runs the same `release:gate` command on backend PR/push.
-- CI release gate starts an ephemeral PostgreSQL service and injects `DATABASE_URL` for test runtime parity.
-- GitHub Actions workflow `Backend Preprod Smoke` can be triggered manually to run smoke checks against a preprod URL.
-- To include smoke checks in the same gate, set `RELEASE_GATE_INCLUDE_SMOKE=true` and required smoke envs (at minimum `SMOKE_ADMIN_PASSWORD`).
+- Runtime:
+- `NODE_ENV=production`
+- `RUNTIME_ENV=production`
+- `DATABASE_URL`
+- `CORS_ORIGINS`
+- Core secrets:
+- `OTP_HASH_SECRET`
+- `ATTACHMENT_UPLOAD_TICKET_SECRET`
+- `MESSENGER_MAGIC_LINK_SECRET`
+- `ADMIN_SESSION_SECRET`
+- Admin credentials:
+- `ADMIN_USERNAME`
+- `ADMIN_PASSWORD`
+- Provider-specific credentials:
+- OTP webhook mode requires `OTP_WEBHOOK_URL` (recommended with signing secret)
+- OTP smtp mode requires `OTP_SMTP_USERNAME`, `OTP_SMTP_APP_PASSWORD`, `OTP_SMTP_FROM_EMAIL`
+- Attachment `b2` mode requires `ATTACHMENT_B2_*`
+- Attachment `webhook` mode requires `ATTACHMENT_STORAGE_WEBHOOK_URL`
 
-## Optional Dev Seed
+### 6.2 Strongly recommended in production
 
-If you want sample data for development:
+- `DIRECT_DATABASE_URL` (migration pipeline)
+- `HEALTH_CHECK_TOKEN`
+- `TRUST_PROXY` (behind reverse proxy/load balancer)
+- `ABUSE_PROTECTION_STORE=postgres`
+- `ABUSE_PROTECTION_POSTGRES_FAIL_CLOSED_IN_PRODUCTION=true`
+- `ADMIN_REMEMBER_SESSION_TTL_MINUTES`
+- `ATTACHMENT_PUBLIC_UPLOAD_SESSION_TTL_SECONDS`
 
-```powershell
-npx ts-node scripts/seed-dev.ts
-```
+### 6.3 Optional tuning
 
-## Delivery and Operations Docs
+- `READINESS_STRICT_PROVIDERS`
+- `RUNTIME_CONFIG_STRICT`
+- `REQUEST_DEDUPE_WINDOW_SECONDS`
+- `REQUEST_CREATE_USE_DB_LOCK`
+- `RATE_LIMIT_*`
+- `RETENTION_*`
+- `PDPA_ANONYMIZE_MIN_CLOSED_DAYS`
+- `GEO_DATASET_PATH`
 
-- [Deploy Runbook](./docs/deploy-runbook.md)
-- [Operations Checklist](./docs/operations-checklist.md)
-- [Error Contract](./docs/error-contract.md)
-- [Backend v1 Freeze Checklist](./docs/backend-v1-freeze-checklist.md)
-- [Backend Project Structure](./docs/backend-project-structure.md)
-- [Backend Release Notes v1 RC1 (2026-03-09)](./docs/release-notes-backend-v1-rc1-2026-03-09.md)
+## 7) Runtime Behavior
 
-## Health Endpoints
+### 7.1 Health endpoints
 
 - `GET /health`
 - `GET /health/db`
-- `GET /health/ready` (readiness report + 503 when not ready)
+- `GET /health/ready` (returns `503` when readiness checks fail)
 
-## Observability Baseline
+### 7.2 Request IDs and logging
 
-- Every response includes `x-request-id` for request correlation.
-- If client sends `x-request-id`, backend reuses that value.
-- Access and error logs are emitted as structured JSON events (`http_request`, `http_exception`).
+- Every response includes `x-request-id`.
+- If inbound `x-request-id` exists, backend reuses it.
+- Logs include structured events (`http_request`, `http_exception`) for correlation.
 
+### 7.3 Auth model
 
-## Security Baseline
+- Employee: OTP session flow (`/auth-otp/*`) and employee session token/cookie.
+- Admin: session flow (`/admin/auth/*`).
+- Messenger: token via magic link (`/messenger/link/*`).
 
-- HTTP responses include baseline security headers (`x-content-type-options`, `x-frame-options`, `referrer-policy`, `permissions-policy`).
-- CORS credentials behavior is configurable via `CORS_ALLOW_CREDENTIALS`.
-- Production startup guard rejects unsafe CORS combinations:
-- `CORS_ORIGINS` must not include localhost/127.0.0.1 origins
-- `CORS_ORIGINS` must not include `*` when `CORS_ALLOW_CREDENTIALS=true`
-## Admin Audit APIs
+## 8) Security Baseline
 
-- `GET /admin/audit/activity-logs` (filter + pagination)
-- `GET /admin/audit/activity-logs/export/csv` (CSV export for compliance)
+- Security headers middleware enabled.
+- CORS configurable via `CORS_ORIGINS`, `CORS_ALLOW_CREDENTIALS`.
+- Production startup guard checks unsafe config patterns (for example weak/default secret posture).
+- Additional production safety expectations:
+- avoid wildcard origins with credentials enabled
+- avoid localhost origins in production CORS
+- avoid `OTP_DELIVERY_PROVIDER=console` in production
 
-## Rate Limiting / Abuse Protection
+## 9) Abuse Protection and Rate Limiting
 
-- Global abuse protection guard is enabled by default (`ABUSE_PROTECTION_ENABLED=true`).
-- Policy-based limits are applied on high-risk routes:
-- `POST /auth-otp/send` (`otpSend`)
-- `POST /auth-otp/verify` (`otpVerify`)
-- `POST /admin/auth/login` (`adminLogin`)
-- `POST /requests/building|vehicle|messenger|document` (`requestCreate`)
-- Exceeded limits return `429` with `Retry-After` and rate limit headers.
-- Store backend is configurable via `ABUSE_PROTECTION_STORE`:
-- `memory` (default, single-instance)
-- `postgres` (multi-instance safe via shared DB counters)
-- Optional postgres tuning:
-- `ABUSE_PROTECTION_POSTGRES_RETRY_AFTER_SECONDS`
-- `ABUSE_PROTECTION_POSTGRES_CLEANUP_INTERVAL_SECONDS`
-- `ABUSE_PROTECTION_POSTGRES_RETENTION_HOURS`
-- `GET /health/ready` verifies postgres store table readiness when `ABUSE_PROTECTION_STORE=postgres`
+- Global abuse protection enabled by default.
+- Store options:
+- `memory` (single-instance)
+- `postgres` (multi-instance safe)
+- High-risk policy routes include:
+- OTP send/verify
+- admin login
+- request create endpoints
+- messenger link operations
 
-## PDPA Maintenance APIs
+Exceeding limits returns `429` with relevant rate-limit metadata.
 
-- `POST /admin/maintenance/pdpa/requests/:id/anonymize` (request-level anonymization)
-- `POST /admin/maintenance/pdpa/subjects/anonymize` (subject-level anonymization by `phone+email`)
+## 10) Attachments and Storage
 
-## Webhook Provider Security
+Supported storage provider modes:
+- `local`
+- `webhook`
+- `b2`
 
-- Outbound webhook calls (OTP + attachment storage) include `x-hrbuddy-request-id`.
-- If signing secret is configured, calls also include:
-- `x-hrbuddy-webhook-timestamp`
-- `x-hrbuddy-webhook-signature` (format `v1=<hmac_sha256(timestamp.body)>`)
-- Related env vars:
-- `OTP_WEBHOOK_SIGNING_SECRET`
-- `ATTACHMENT_STORAGE_WEBHOOK_SIGNING_SECRET`
+Upload flow pattern:
+1. `presign` endpoint
+2. client uploads to presigned URL
+3. `complete` endpoint to finalize attachment record
 
-## Retention Job Concurrency
+Includes:
+- upload ticket TTL
+- public upload session token (for public form submission flow)
+- download URL TTL and access checks by role
 
-- Retention purge uses PostgreSQL advisory lock by default to avoid concurrent runs across multiple backend instances.
-- Configure with:
-- `RETENTION_USE_DB_LOCK`
-- `RETENTION_DB_LOCK_KEY`
+## 11) Messenger Magic Link
 
-## Request Numbering
+- Tokenized route for messenger operations:
+- `GET /messenger/link/:token`
+- `PATCH /messenger/link/status`
+- `POST /messenger/link/report-problem`
+- Replay-window safeguards and transition rules are enforced server-side.
 
-- Request numbers use a PostgreSQL-backed daily sequence (`HRB-YYYYMMDD-####`).
-- This avoids collisions across concurrent requests and multiple backend instances.
+## 12) Data Retention and PDPA
 
-## OTP Delivery (Email-Only)
+- Retention job configurable via `RETENTION_*`.
+- Advisory DB lock (default enabled) prevents concurrent retention runs across instances.
+- PDPA anonymization endpoints available in admin maintenance APIs.
 
-- OTP webhook payload is email-first; phone is not sent by default.
-- Set `OTP_WEBHOOK_INCLUDE_PHONE=true` only if your provider strictly requires phone.
+## 13) Scripts and Commands
 
-## Production Startup Guard
+Core:
+- `npm.cmd run build`
+- `npm.cmd run start:dev`
+- `npm.cmd run start:prod`
+- `npm.cmd run lint`
+- `npm.cmd run lint:check`
+- `npm.cmd run test`
+- `npm.cmd run test:e2e`
+- `npm.cmd run test:cov`
 
-- On `NODE_ENV=production`, backend validates critical runtime config before listening.
-- Startup fails if insecure defaults are detected (for example default secrets or default admin password).
-- Additional production rules:
-- `OTP_DELIVERY_PROVIDER` must not be `console`
-- when `OTP_DELIVERY_PROVIDER=webhook`, `OTP_WEBHOOK_SIGNING_SECRET` is required
-- when `ATTACHMENT_STORAGE_PROVIDER=webhook`, `ATTACHMENT_STORAGE_WEBHOOK_SIGNING_SECRET` is required
-- if `READINESS_STRICT_PROVIDERS=true`, startup also requires:
-- `OTP_DELIVERY_PROVIDER=webhook`
-- `ATTACHMENT_STORAGE_PROVIDER=webhook`
+Prisma:
+- `npm.cmd run prisma:generate`
+- `npm.cmd run prisma:migrate:deploy`
 
-## Request Create Concurrency
+Release:
+- `npm.cmd run release:gate`
+- `npm.cmd run smoke:preprod`
+- `npm.cmd run freeze:check`
 
-- Request creation can use PostgreSQL advisory transaction lock per `type+phone`.
-- This reduces duplicate race windows when multiple app instances process concurrent submits.
-- Configure with `REQUEST_CREATE_USE_DB_LOCK` (default `true`).
+## 14) Quality Gates
 
-## Geo API Notes
+`release:gate` validates:
+- build
+- lint
+- unit tests
+- e2e tests
 
-- Geo lookups are indexed in-memory at startup for faster read responses.
-- Province/District/Subdistrict queries are whitespace-tolerant and case-insensitive in lookup logic.
-- Dataset path can be overridden with `GEO_DATASET_PATH` for production deployments (for example when running from `dist`).
+Optional smoke in same gate:
+- set `RELEASE_GATE_INCLUDE_SMOKE=true` with required smoke env values.
+
+Recommended pre-release sequence:
+
+```powershell
+npm.cmd run lint:check
+npm.cmd run test
+npm.cmd run test:e2e
+npm.cmd run build
+npm.cmd run release:gate
+```
+
+## 15) API Documentation
+
+Primary references:
+- `docs/api-reference.md`
+- `docs/error-contract.md`
+
+Operational references:
+- `docs/deploy-runbook.md`
+- `docs/operations-checklist.md`
+- `docs/backend-v1-freeze-checklist.md`
+- `docs/legal-compliance-th.md`
+- `docs/backend-project-structure.md`
+- `docs/release-notes-backend-v1-rc1-2026-03-09.md`
+
+## 16) Deployment (Production)
+
+### Step 1: Prepare environment
+
+```powershell
+Copy-Item .env.deploy.example .env
+# fill all production values
+```
+
+### Step 2: Build and migrate
+
+```powershell
+npm.cmd install
+npm.cmd run prisma:generate
+npm.cmd run prisma:migrate:deploy
+npm.cmd run build
+```
+
+### Step 3: Start runtime
+
+```powershell
+npm.cmd run start:prod
+```
+
+### Step 4: Verify
+
+- `GET /health` => `200`
+- `GET /health/db` => `200`
+- `GET /health/ready` => ready result for your environment profile
+
+## 17) Rollback Guide (Short)
+
+If release is unstable:
+1. Stop/limit mutating operations if incident severity is high.
+2. Roll back backend artifact/image to previous stable release.
+3. If needed, execute reviewed DB rollback or safe forward-fix path.
+4. Re-check health endpoints and critical flows (OTP, request create, admin update, messenger link).
+5. Publish incident summary and follow-up actions.
+
+Important:
+- Prepare migration rollback strategy before production release.
+- Avoid ad-hoc destructive DB commands.
+
+## 18) Troubleshooting
+
+### 18.1 `401` on admin endpoints
+
+- verify admin session token/cookie forwarding
+- verify `/admin/auth/login` success and token freshness
+
+### 18.2 OTP not delivered
+
+- check `OTP_DELIVERY_PROVIDER`
+- verify corresponding credentials (`webhook` or `smtp`)
+- verify provider reachability and timeout settings
+
+### 18.3 Attachment upload finalize fails
+
+- confirm client performed upload to presigned URL before `complete`
+- verify ticket not expired
+- verify storage metadata (size/mime) matches ticket
+- verify role/request access for endpoint being used
+
+### 18.4 Messenger link invalid/expired errors
+
+- verify token source header (`x-messenger-token` or bearer)
+- verify `MESSENGER_MAGIC_LINK_SECRET` consistency
+- verify TTL not exceeded
+
+### 18.5 CORS issues from frontend
+
+- verify `CORS_ORIGINS` contains exact frontend domains
+- verify `CORS_ALLOW_CREDENTIALS` setup matches frontend auth flow
+
+## 19) Ownership and Maintenance
+
+- Primary owner: Backend Engineering team
+- Secondary owner: Platform/SRE + QA
+
+Update this README whenever:
+- environment variables change
+- auth/session behavior changes
+- release gate scripts change
+- new module or protected route is added
