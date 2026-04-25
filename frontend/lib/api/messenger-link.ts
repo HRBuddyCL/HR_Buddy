@@ -36,6 +36,17 @@ export type MessengerLinkDetail = {
     senderAddress: MessengerAddress | null;
     receiverAddress: MessengerAddress;
   };
+  attachments: Array<{
+    id: string;
+    fileKind: "IMAGE" | "VIDEO" | "DOCUMENT";
+    fileName: string;
+    mimeType: string;
+    fileSize: number;
+    uploadedByRole: string;
+    createdAt: string;
+    previewUrl: string;
+    downloadUrl: string;
+  }>;
   expiresAt: string;
 };
 
@@ -47,6 +58,7 @@ export type MessengerStatusUpdatePayload = {
 function tokenHeaders(token: string) {
   return {
     "x-messenger-token": token,
+    Authorization: `Bearer ${token}`,
   };
 }
 

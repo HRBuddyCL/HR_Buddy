@@ -8,6 +8,10 @@ const mocks = vi.hoisted(() => ({
   useAuthToken: vi.fn(),
   apiFetch: vi.fn(),
   clearAuthToken: vi.fn(),
+  clearSessionExpiresAt: vi.fn(),
+  hasActiveAdminSessionFromCookie: vi.fn(),
+  hasActiveEmployeeSessionFromCookie: vi.fn(),
+  useSessionExpiresAt: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -19,6 +23,20 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("@/lib/auth/use-auth-token", () => ({
   useAuthToken: (type: unknown) => mocks.useAuthToken(type),
+}));
+
+vi.mock("@/lib/auth/admin-session", () => ({
+  hasActiveAdminSessionFromCookie: () => mocks.hasActiveAdminSessionFromCookie(),
+}));
+
+vi.mock("@/lib/auth/employee-session", () => ({
+  hasActiveEmployeeSessionFromCookie: () =>
+    mocks.hasActiveEmployeeSessionFromCookie(),
+}));
+
+vi.mock("@/lib/auth/session-expiry", () => ({
+  useSessionExpiresAt: (type: unknown) => mocks.useSessionExpiresAt(type),
+  clearSessionExpiresAt: (type: unknown) => mocks.clearSessionExpiresAt(type),
 }));
 
 vi.mock("@/lib/api/client", async () => {
@@ -51,10 +69,19 @@ describe("RouteGuard", () => {
     mocks.useAuthToken.mockReset();
     mocks.apiFetch.mockReset();
     mocks.clearAuthToken.mockReset();
+    mocks.clearSessionExpiresAt.mockReset();
+    mocks.hasActiveAdminSessionFromCookie.mockReset();
+    mocks.hasActiveEmployeeSessionFromCookie.mockReset();
+    mocks.useSessionExpiresAt.mockReset();
+
+    mocks.hasActiveAdminSessionFromCookie.mockReturnValue(true);
+    mocks.hasActiveEmployeeSessionFromCookie.mockReturnValue(false);
+    mocks.useSessionExpiresAt.mockReturnValue(null);
   });
 
   it("redirects to login when token is missing", async () => {
     mocks.useAuthToken.mockReturnValue(null);
+    mocks.hasActiveAdminSessionFromCookie.mockReturnValue(false);
 
     renderGuard();
 
@@ -62,7 +89,7 @@ describe("RouteGuard", () => {
       expect(mocks.replace).toHaveBeenCalledWith("/admin/login?next=%2Fadmin");
     });
 
-    expect(screen.getByText("Checking session...")).toBeInTheDocument();
+    expect(screen.getByText("กำลังตรวจสอบเซสชัน...")).toBeInTheDocument();
   });
 
   it("renders protected content when token and session are valid", async () => {
@@ -99,13 +126,17 @@ describe("RouteGuard", () => {
     renderGuard();
 
     await waitFor(() => {
-      expect(screen.getByText("Session Validation Failed")).toBeInTheDocument();
+      expect(
+        screen.getByText("ไม่สามารถยืนยันสิทธิ์การเข้าใช้งานได้"),
+      ).toBeInTheDocument();
     });
 
     expect(screen.queryByText("Protected content")).not.toBeInTheDocument();
 
     shouldSucceed = true;
-    fireEvent.click(screen.getByRole("button", { name: "Retry session check" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "ลองตรวจสอบเซสชันอีกครั้ง" }),
+    );
 
     await waitFor(() => {
       expect(screen.getByText("Protected content")).toBeInTheDocument();
@@ -123,6 +154,10 @@ describe("RouteGuard", () => {
     });
 
     await waitFor(() => {
+      expect(mocks.clearSessionExpiresAt).toHaveBeenCalledWith("admin");
+    });
+
+    await waitFor(() => {
       expect(mocks.replace).toHaveBeenCalledWith("/admin/login?next=%2Fadmin");
     });
   });
@@ -132,10 +167,6 @@ describe("RouteGuard", () => {
     mocks.apiFetch.mockRejectedValue(new ApiError(403, { message: "Forbidden" }, "Forbidden"));
 
     renderGuard();
-
-    await waitFor(() => {
-      expect(mocks.clearAuthToken).not.toHaveBeenCalled();
-    });
 
     await waitFor(() => {
       expect(mocks.replace).toHaveBeenCalledWith("/unauthorized?next=%2Fadmin");

@@ -499,9 +499,13 @@ export default function Page() {
           fileName: candidate.file.name,
           mimeType: candidate.mimeType,
           fileSize: candidate.file.size,
-        });
+        }, createResult.uploadSessionToken);
         await uploadFileToPresignedUrl(ticket, candidate.file);
-        await completeMyAttachmentUpload(createResult.id, ticket.uploadToken);
+        await completeMyAttachmentUpload(
+          createResult.id,
+          ticket.uploadToken,
+          createResult.uploadSessionToken,
+        );
       }
       document.cookie = `hrb_success_request_no=${encodeURIComponent(createResult.requestNo)}; Path=/; Max-Age=600; SameSite=Lax`;
       document.cookie =

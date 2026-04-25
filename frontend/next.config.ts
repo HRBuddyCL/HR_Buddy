@@ -22,8 +22,20 @@ function resolveExtraConnectSources() {
     .filter((source) => source.length > 0);
 }
 
+function resolveExtraDirectiveSources(envName: string) {
+  const raw = process.env[envName] ?? "";
+
+  return raw
+    .split(",")
+    .map((source) => source.trim())
+    .filter((source) => source.length > 0);
+}
+
 function buildContentSecurityPolicy() {
   const connectSrc = new Set<string>(["'self'"]);
+  const imgSrc = new Set<string>(["'self'", "data:", "blob:"]);
+  const mediaSrc = new Set<string>(["'self'", "data:", "blob:"]);
+  const frameSrc = new Set<string>(["'self'", "blob:"]);
 
   const apiOrigin = resolveApiOrigin();
   if (apiOrigin) {
@@ -32,6 +44,18 @@ function buildContentSecurityPolicy() {
 
   for (const source of resolveExtraConnectSources()) {
     connectSrc.add(source);
+  }
+
+  for (const source of resolveExtraDirectiveSources("FRONTEND_CSP_IMG_SRC")) {
+    imgSrc.add(source);
+  }
+
+  for (const source of resolveExtraDirectiveSources("FRONTEND_CSP_MEDIA_SRC")) {
+    mediaSrc.add(source);
+  }
+
+  for (const source of resolveExtraDirectiveSources("FRONTEND_CSP_FRAME_SRC")) {
+    frameSrc.add(source);
   }
 
   const isProduction = process.env.NODE_ENV === "production";
@@ -55,9 +79,9 @@ function buildContentSecurityPolicy() {
     "object-src 'none'",
     scriptSrc,
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob:",
-    "media-src 'self' data: blob:",
-    "frame-src 'self' blob:",
+    `img-src ${Array.from(imgSrc).join(" ")}`,
+    `media-src ${Array.from(mediaSrc).join(" ")}`,
+    `frame-src ${Array.from(frameSrc).join(" ")}`,
     "font-src 'self' data:",
     "worker-src 'self' blob:",
     `connect-src ${Array.from(connectSrc).join(" ")}`,

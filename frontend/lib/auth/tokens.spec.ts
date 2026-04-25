@@ -9,7 +9,7 @@ describe("auth token storage", () => {
     window.localStorage.clear();
   });
 
-  it("stores tokens in session mode", async () => {
+  it("stores admin token in memory even when session mode is configured", async () => {
     process.env.NEXT_PUBLIC_AUTH_TOKEN_STORAGE = "session";
     const { setAuthToken, getAuthToken, getTokenStorageKey } =
       await import("@/lib/auth/tokens");
@@ -18,7 +18,7 @@ describe("auth token storage", () => {
 
     const key = getTokenStorageKey("admin");
     expect(getAuthToken("admin")).toBe("token-123");
-    expect(window.sessionStorage.getItem(key)).toBe("token-123");
+    expect(window.sessionStorage.getItem(key)).toBeNull();
     expect(window.localStorage.getItem(key)).toBeNull();
   });
 
@@ -35,32 +35,32 @@ describe("auth token storage", () => {
     expect(window.localStorage.getItem(key)).toBeNull();
   });
 
-  it("supports optional session persistence mode", async () => {
+  it("supports optional session persistence mode for messenger token", async () => {
     process.env.NEXT_PUBLIC_AUTH_TOKEN_STORAGE = "session";
     const { setAuthToken, getAuthToken, clearAuthToken, getTokenStorageKey } =
       await import("@/lib/auth/tokens");
 
-    setAuthToken("admin", "persisted-token");
-    expect(window.sessionStorage.getItem(getTokenStorageKey("admin"))).toBe(
+    setAuthToken("messenger", "persisted-token");
+    expect(window.sessionStorage.getItem(getTokenStorageKey("messenger"))).toBe(
       "persisted-token",
     );
-    expect(getAuthToken("admin")).toBe("persisted-token");
+    expect(getAuthToken("messenger")).toBe("persisted-token");
 
-    clearAuthToken("admin");
+    clearAuthToken("messenger");
     expect(
-      window.sessionStorage.getItem(getTokenStorageKey("admin")),
+      window.sessionStorage.getItem(getTokenStorageKey("messenger")),
     ).toBeNull();
   });
 
-  it("migrates legacy localStorage token to sessionStorage", async () => {
+  it("migrates legacy localStorage token to sessionStorage for messenger", async () => {
     const { getAuthToken, getTokenStorageKey } =
       await import("@/lib/auth/tokens");
-    const key = getTokenStorageKey("admin");
+    const key = getTokenStorageKey("messenger");
 
-    window.localStorage.setItem(key, "legacy-admin-token");
+    window.localStorage.setItem(key, "legacy-messenger-token");
 
-    expect(getAuthToken("admin")).toBe("legacy-admin-token");
-    expect(window.sessionStorage.getItem(key)).toBe("legacy-admin-token");
+    expect(getAuthToken("messenger")).toBe("legacy-messenger-token");
+    expect(window.sessionStorage.getItem(key)).toBe("legacy-messenger-token");
     expect(window.localStorage.getItem(key)).toBeNull();
   });
 

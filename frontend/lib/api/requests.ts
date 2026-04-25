@@ -80,6 +80,7 @@ export type CreateRequestResponse = {
   id: string;
   requestNo: string;
   status: string;
+  uploadSessionToken?: string;
 };
 
 export async function createBuildingRequest(

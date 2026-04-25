@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { RouteGuard } from "@/components/guards/route-guard";
 import { SelectField, TextField } from "@/components/ui/form-controls";
@@ -23,7 +23,7 @@ import {
 import { clearSessionExpiresAt } from "@/lib/auth/session-expiry";
 import { clearAuthToken } from "@/lib/auth/tokens";
 
-// ─── Config ────────────────────────────────────────────────────────────────────
+// --- Config --------------------------------------------------------------------
 
 const requestTypeOptions: Array<{
   value: RequestType;
@@ -31,7 +31,7 @@ const requestTypeOptions: Array<{
   icon: string;
 }> = [
   { value: "BUILDING", label: "อาคาร", icon: "🏢" },
-  { value: "VEHICLE", label: "รถยนต์", icon: "🚗" },
+  { value: "VEHICLE", label: "ยานพาหนะ", icon: "🚗" },
   { value: "MESSENGER", label: "เมสเซนเจอร์", icon: "📦" },
   { value: "DOCUMENT", label: "เอกสาร", icon: "📄" },
 ];
@@ -46,7 +46,7 @@ const requestStatusOptions: Array<{ value: RequestStatus; label: string }> = [
   { value: "CANCELED", label: "ยกเลิก" },
 ];
 
-/** Badge สี + label สำหรับแต่ละสถานะ */
+/** Badge สี + label สถานะคำขอ */
 const statusConfig: Record<
   RequestStatus,
   { color: string; label: string; dot: string }
@@ -106,12 +106,21 @@ const typeIconMap: Record<RequestType, string> = {
 
 const typeLabelMap: Record<RequestType, string> = {
   BUILDING: "อาคาร",
-  VEHICLE: "รถยนต์",
+  VEHICLE: "ยานพาหนะ",
   MESSENGER: "เมสเซนเจอร์",
   DOCUMENT: "เอกสาร",
 };
 
 const LOGOUT_REQUEST_TIMEOUT_MS = 5000;
+const THAI_DATE_ONLY_FORMATTER = new Intl.DateTimeFormat(
+  "th-TH-u-ca-buddhist-nu-latn",
+  {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    timeZone: "Asia/Bangkok",
+  },
+);
 
 function formatDateTime(iso: string) {
   return new Intl.DateTimeFormat("th-TH", {
@@ -120,7 +129,76 @@ function formatDateTime(iso: string) {
   }).format(new Date(iso));
 }
 
-// ─── Page Entry ────────────────────────────────────────────────────────────────
+function formatThaiDateOnly(value: string | null | undefined) {
+  if (!value) {
+    return "-";
+  }
+
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) {
+    return "-";
+  }
+
+  return THAI_DATE_ONLY_FORMATTER.format(date);
+}
+
+function formatThaiDateInputValue(isoDate: string) {
+  if (!isoDate) {
+    return "";
+  }
+
+  const [yearRaw, monthRaw, dayRaw] = isoDate.split("-");
+  const year = Number(yearRaw);
+  const month = Number(monthRaw);
+  const day = Number(dayRaw);
+
+  if (
+    !Number.isInteger(year) ||
+    !Number.isInteger(month) ||
+    !Number.isInteger(day)
+  ) {
+    return "";
+  }
+
+  return `${String(day).padStart(2, "0")}/${String(month).padStart(2, "0")}/${year + 543}`;
+}
+
+function parseThaiDateInputToIso(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  const thaiDateMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!thaiDateMatch) {
+    return null;
+  }
+
+  const day = Number(thaiDateMatch[1]);
+  const month = Number(thaiDateMatch[2]);
+  let year = Number(thaiDateMatch[3]);
+
+  if (year >= 2400) {
+    year -= 543;
+  }
+
+  if (year < 1900 || month < 1 || month > 12 || day < 1 || day > 31) {
+    return null;
+  }
+
+  const testDate = new Date(Date.UTC(year, month - 1, day));
+  if (
+    testDate.getUTCFullYear() !== year ||
+    testDate.getUTCMonth() !== month - 1 ||
+    testDate.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+// --- Page Entry ----------------------------------------------------------------
 
 export default function Page() {
   return (
@@ -130,7 +208,7 @@ export default function Page() {
   );
 }
 
-// ─── Main Content ──────────────────────────────────────────────────────────────
+// --- Main Content --------------------------------------------------------------
 
 function MyRequestsContent() {
   const [items, setItems] = useState<MyRequestItem[]>([]);
@@ -141,7 +219,13 @@ function MyRequestsContent() {
   const [search, setSearch] = useState("");
   const [type, setType] = useState<"" | RequestType>("");
   const [status, setStatus] = useState<"" | RequestStatus>("");
+  const [createdDate, setCreatedDate] = useState("");
+  const [closedDate, setClosedDate] = useState("");
+  const [createdDateInput, setCreatedDateInput] = useState("");
+  const [closedDateInput, setClosedDateInput] = useState("");
   const [notifOpen, setNotifOpen] = useState(true);
+  const createdDatePickerRef = useRef<HTMLInputElement | null>(null);
+  const closedDatePickerRef = useRef<HTMLInputElement | null>(null);
 
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const unreadCount = useMemo(
@@ -166,6 +250,10 @@ function MyRequestsContent() {
             q: search.trim() || undefined,
             type: type || undefined,
             status: status || undefined,
+            createdDateFrom: createdDate || undefined,
+            createdDateTo: createdDate || undefined,
+            closedDateFrom: closedDate || undefined,
+            closedDateTo: closedDate || undefined,
             sortBy: "latestActivityAt",
             sortOrder: "desc",
           }),
@@ -188,10 +276,15 @@ function MyRequestsContent() {
     return () => {
       active = false;
     };
-  }, [limit, page, search, status, type]);
+  }, [closedDate, createdDate, limit, page, search, status, type]);
 
   const totalPages = Math.max(1, Math.ceil(total / limit));
-  const hasActiveFilter = search !== "" || type !== "" || status !== "";
+  const hasActiveFilter =
+    search !== "" ||
+    type !== "" ||
+    status !== "" ||
+    createdDate !== "" ||
+    closedDate !== "";
 
   const handleLogout = async () => {
     if (isLoggingOut) {
@@ -232,16 +325,36 @@ function MyRequestsContent() {
     }
   };
 
+  const openNativeDatePicker = (
+    pickerRef: React.RefObject<HTMLInputElement | null>,
+    isoDate: string,
+  ) => {
+    const picker = pickerRef.current;
+    if (!picker) {
+      return;
+    }
+
+    picker.value = isoDate || "";
+
+    if (typeof picker.showPicker === "function") {
+      picker.showPicker();
+      return;
+    }
+
+    picker.focus();
+    picker.click();
+  };
+
   return (
     <div className="min-h-screen bg-[#f8fafc]">
       <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-6 px-4 pb-12 pt-6 md:px-8">
-        {/* ── Hero Header ─────────────────────────────────────────────────── */}
+        {/* -- Hero Header --------------------------------------------------- */}
         <header className="relative overflow-hidden rounded-2xl shadow-lg">
-          {/* พื้นหลัง gradient สีบริษัท */}
+          {/* main gradient background */}
           <div className="absolute inset-0 bg-gradient-to-r from-[#0e2d4c] via-[#163d64] to-[#0e2d4c]" />
-          {/* accent bar ด้านล่าง */}
+          {/* accent bar */}
           <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-[#b62026] via-[#fed54f] to-[#b62026]" />
-          {/* ลาย texture อ่อนๆ */}
+          {/* subtle texture */}
           <div
             className="absolute inset-0 opacity-5"
             style={{
@@ -253,7 +366,7 @@ function MyRequestsContent() {
 
           <div className="relative flex flex-wrap items-center justify-between gap-4 px-6 py-7 md:px-8">
             <div>
-              {/* ป้ายเล็กบน */}
+              {/* mini badge */}
               <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1 backdrop-blur-sm">
                 <span className="h-1.5 w-1.5 rounded-full bg-[#fed54f]" />
                 <span className="text-[11px] font-semibold uppercase tracking-widest text-white/80">
@@ -268,7 +381,7 @@ function MyRequestsContent() {
               </p>
             </div>
 
-            {/* ปุ่มออกจากระบบ */}
+            {/* logout button */}
             <button
               type="button"
               onClick={() => void handleLogout()}
@@ -296,7 +409,7 @@ function MyRequestsContent() {
           </div>
         </header>
 
-        {/* ── Error Banner ──────────────────────────────────────────────────── */}
+        {/* -- Error Banner ---------------------------------------------------- */}
         {errorMessage && (
           <div className="flex items-start gap-3 rounded-xl border border-[#b62026]/30 bg-[#b62026]/5 px-4 py-3.5">
             <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#b62026] text-[10px] font-bold text-white">
@@ -306,16 +419,16 @@ function MyRequestsContent() {
           </div>
         )}
 
-        {/* ── Notifications Panel ───────────────────────────────────────────── */}
+        {/* -- Notifications Panel --------------------------------------------- */}
         <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          {/* Header แถบแจ้งเตือน */}
+          {/* Header notifications */}
           <button
             type="button"
             onClick={() => setNotifOpen((p) => !p)}
             className="flex w-full items-center justify-between px-5 py-4 transition hover:bg-slate-50"
           >
             <div className="flex items-center gap-3">
-              {/* ไอคอนกระดิ่ง */}
+              {/* bell icon */}
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#0e2d4c]/8">
                 <svg
                   className="h-4.5 w-4.5 text-[#0e2d4c]"
@@ -345,7 +458,7 @@ function MyRequestsContent() {
                   {unreadCount}
                 </span>
               )}
-              {/* ลูกศร toggle */}
+              {/* arrow toggle */}
               <svg
                 className={`h-4 w-4 text-slate-400 transition-transform duration-200 ${notifOpen ? "rotate-180" : ""}`}
                 fill="none"
@@ -362,7 +475,7 @@ function MyRequestsContent() {
             </div>
           </button>
 
-          {/* รายการแจ้งเตือน */}
+          {/* expandable content */}
           <div
             className={`transition-all duration-300 ${notifOpen ? "max-h-[600px] opacity-100" : "max-h-0 overflow-hidden opacity-0"}`}
           >
@@ -370,7 +483,7 @@ function MyRequestsContent() {
               {notifications.length === 0 ? (
                 <div className="flex flex-col items-center gap-2 py-6 text-center">
                   <span className="text-3xl">🔔</span>
-                  <p className="text-sm text-slate-500">ยังไม่มีการแจ้งเตือน</p>
+                  <p className="text-sm text-slate-500">ไม่มีการแจ้งเตือน</p>
                 </div>
               ) : (
                 <ul className="space-y-2">
@@ -383,7 +496,7 @@ function MyRequestsContent() {
                           : "border-slate-100 bg-slate-50"
                       }`}
                     >
-                      {/* แถบสีซ้ายถ้ายังไม่ได้อ่าน */}
+                      {/* unread accent strip */}
                       {!item.isRead && (
                         <span className="absolute inset-y-0 left-0 w-[3px] rounded-l-xl bg-[#b62026]" />
                       )}
@@ -403,7 +516,7 @@ function MyRequestsContent() {
                 </ul>
               )}
 
-              {/* ปุ่มดูทั้งหมด */}
+              {/* view all button */}
               <div className="mt-4 flex justify-end">
                 <Link
                   href="/my-notifications"
@@ -429,110 +542,249 @@ function MyRequestsContent() {
           </div>
         </section>
 
-        {/* ── Filter Panel ─────────────────────────────────────────────────── */}
+        {/* -- Filters ------------------------------------------------------- */}
         <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="mb-4 flex items-center gap-2">
-            <svg
-              className="h-4 w-4 text-[#0e2d4c]/60"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z"
-              />
-            </svg>
-            <h2 className="text-sm font-semibold text-[#0e2d4c]">ตัวกรอง</h2>
-            {/* badge แสดงว่ากำลังกรองอยู่ */}
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-sm font-semibold text-[#0e2d4c]">
+              ตัวกรองคำขอ
+            </h2>
             {hasActiveFilter && (
               <span className="rounded-full bg-[#fed54f] px-2 py-0.5 text-[10px] font-bold text-[#0e2d4c]">
-                กำลังกรอง
+                เปิดตัวกรอง
               </span>
             )}
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <TextField
-              id="q"
-              label="ค้นหา"
-              value={search}
-              onChange={(e) => {
-                setPage(1);
-                setSearch(e.target.value);
-              }}
-              placeholder="หมายเลขคำขอหรือชื่อ"
-            />
-            <SelectField
-              id="type"
-              label="ประเภท"
-              value={type}
-              onChange={(e) => {
-                setPage(1);
-                setType(e.target.value as "" | RequestType);
-              }}
-            >
-              <option value="">ทั้งหมด</option>
-              {requestTypeOptions.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.icon} {o.label}
-                </option>
-              ))}
-            </SelectField>
-
-            <SelectField
-              id="status"
-              label="สถานะ"
-              value={status}
-              onChange={(e) => {
-                setPage(1);
-                setStatus(e.target.value as "" | RequestStatus);
-              }}
-            >
-              <option value="">ทั้งหมด</option>
-              {requestStatusOptions.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </SelectField>
-
-            <div className="flex items-end">
-              <button
-                type="button"
-                disabled={!hasActiveFilter}
-                onClick={() => {
-                  setSearch("");
-                  setType("");
-                  setStatus("");
+          <div className="grid gap-3 md:grid-cols-12">
+            <div className="md:col-span-12 lg:col-span-4">
+              <TextField
+                id="q"
+                label="ค้นหา"
+                value={search}
+                onChange={(e) => {
                   setPage(1);
+                  setSearch(e.target.value);
                 }}
-                className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:border-[#b62026]/40 hover:bg-[#b62026]/5 hover:text-[#b62026] disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                <svg
-                  className="h-4 w-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                  />
-                </svg>
-                รีเซ็ตตัวกรอง
-              </button>
+                placeholder="หมายเลขคำขอหรือชื่อ"
+              />
             </div>
+
+            <div className="md:col-span-6 lg:col-span-2">
+              <SelectField
+                id="type"
+                label="ประเภท"
+                value={type}
+                onChange={(e) => {
+                  setPage(1);
+                  setType(e.target.value as "" | RequestType);
+                }}
+              >
+                <option value="">ทั้งหมด</option>
+                {requestTypeOptions.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.icon} {o.label}
+                  </option>
+                ))}
+              </SelectField>
+            </div>
+
+            <div className="md:col-span-6 lg:col-span-2">
+              <SelectField
+                id="status"
+                label="สถานะ"
+                value={status}
+                onChange={(e) => {
+                  setPage(1);
+                  setStatus(e.target.value as "" | RequestStatus);
+                }}
+              >
+                <option value="">ทั้งหมด</option>
+                {requestStatusOptions.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </SelectField>
+            </div>
+
+            <div className="space-y-2 md:col-span-6 lg:col-span-2">
+              <label
+                htmlFor="createdDate"
+                className="block text-sm font-medium text-slate-800"
+              >
+                วันที่สร้าง
+              </label>
+              <div className="relative">
+                <input
+                  id="createdDate"
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="วัน/เดือน/ปี พ.ศ."
+                  value={createdDateInput}
+                  onChange={(e) => {
+                    const nextValue = e.target.value;
+                    setCreatedDateInput(nextValue);
+
+                    const parsed = parseThaiDateInputToIso(nextValue);
+                    if (parsed !== null) {
+                      setPage(1);
+                      setCreatedDate(parsed);
+                    }
+                  }}
+                  onBlur={() => {
+                    setCreatedDateInput(formatThaiDateInputValue(createdDate));
+                  }}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
+                />
+                <button
+                  type="button"
+                  onClick={() =>
+                    openNativeDatePicker(createdDatePickerRef, createdDate)
+                  }
+                  className="absolute right-1 top-1 inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-500 transition hover:bg-slate-50"
+                  aria-label="เปิดปฏิทินวันที่สร้าง"
+                >
+                  <svg
+                    className="h-4 w-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M8 7V3m8 4V3m-9 8h10m-13 9h16a2 2 0 002-2V7a2 2 0 00-2-2H4a2 2 0 00-2 2v11a2 2 0 002 2z"
+                    />
+                  </svg>
+                </button>
+                <input
+                  ref={createdDatePickerRef}
+                  type="date"
+                  tabIndex={-1}
+                  aria-hidden="true"
+                  className="sr-only"
+                  value={createdDate}
+                  onChange={(e) => {
+                    const nextIso = e.target.value;
+                    setPage(1);
+                    setCreatedDate(nextIso);
+                    setCreatedDateInput(formatThaiDateInputValue(nextIso));
+                  }}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2 md:col-span-6 lg:col-span-2">
+              <label
+                htmlFor="closedDate"
+                className="block text-sm font-medium text-slate-800"
+              >
+                วันที่ปิดคำขอ
+              </label>
+              <div className="relative">
+                <input
+                  id="closedDate"
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="วัน/เดือน/ปี พ.ศ."
+                  value={closedDateInput}
+                  onChange={(e) => {
+                    const nextValue = e.target.value;
+                    setClosedDateInput(nextValue);
+
+                    const parsed = parseThaiDateInputToIso(nextValue);
+                    if (parsed !== null) {
+                      setPage(1);
+                      setClosedDate(parsed);
+                    }
+                  }}
+                  onBlur={() => {
+                    setClosedDateInput(formatThaiDateInputValue(closedDate));
+                  }}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
+                />
+                <button
+                  type="button"
+                  onClick={() =>
+                    openNativeDatePicker(closedDatePickerRef, closedDate)
+                  }
+                  className="absolute right-1 top-1 inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-500 transition hover:bg-slate-50"
+                  aria-label="เปิดปฏิทินวันที่ปิดคำขอ"
+                >
+                  <svg
+                    className="h-4 w-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M8 7V3m8 4V3m-9 8h10m-13 9h16a2 2 0 002-2V7a2 2 0 00-2-2H4a2 2 0 00-2 2v11a2 2 0 002 2z"
+                    />
+                  </svg>
+                </button>
+                <input
+                  ref={closedDatePickerRef}
+                  type="date"
+                  tabIndex={-1}
+                  aria-hidden="true"
+                  className="sr-only"
+                  value={closedDate}
+                  onChange={(e) => {
+                    const nextIso = e.target.value;
+                    setPage(1);
+                    setClosedDate(nextIso);
+                    setClosedDateInput(formatThaiDateInputValue(nextIso));
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
+            <p className="text-xs text-slate-500">
+              เลือกตัวกรองเพื่อแสดงรายการคำขอที่ต้องการ
+            </p>
+
+            <button
+              type="button"
+              disabled={!hasActiveFilter}
+              onClick={() => {
+                setSearch("");
+                setType("");
+                setStatus("");
+                setCreatedDate("");
+                setClosedDate("");
+                setCreatedDateInput("");
+                setClosedDateInput("");
+                setPage(1);
+              }}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:border-[#b62026]/40 hover:bg-[#b62026]/5 hover:text-[#b62026] disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <svg
+                className="h-4 w-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                />
+              </svg>
+              รีเซ็ตตัวกรอง
+            </button>
           </div>
         </section>
 
-        {/* ── Request List ─────────────────────────────────────────────────── */}
+        {/* -- Request List --------------------------------------------------- */}
         <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-          {/* Header ของ section */}
+          {/* Header list section */}
           <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
             <div className="flex items-center gap-2">
               <svg
@@ -572,9 +824,9 @@ function MyRequestsContent() {
                 <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100 text-3xl">
                   📋
                 </div>
-                <p className="font-semibold text-slate-700">ไม่พบรายการคำขอ</p>
+                <p className="font-semibold text-slate-700">ไม่พบคำขอ</p>
                 <p className="text-sm text-slate-500">
-                  ลองปรับตัวกรองเพื่อดูผลลัพธ์อื่น
+                  ลองปรับตัวกรองหรือสร้างคำขอใหม่อีกครั้ง
                 </p>
               </div>
             ) : (
@@ -592,7 +844,7 @@ function MyRequestsContent() {
                     >
                       <span className="pointer-events-none absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-[#0e2d4c]/15 to-transparent" />
 
-                      {/* แถบสีด้านซ้ายตาม urgency */}
+                      {/* urgency strip */}
                       <span
                         className={`absolute inset-y-0 left-0 w-1.5 rounded-l-3xl ${
                           item.urgency === "CRITICAL"
@@ -605,9 +857,9 @@ function MyRequestsContent() {
 
                       <div className="pl-5 pr-5 py-5 md:px-6 md:py-6">
                         <div className="flex flex-wrap items-start justify-between gap-4 rounded-2xl border border-slate-100 bg-white p-4 md:p-5">
-                          {/* ซ้าย: ประเภท + หมายเลข */}
+                          {/* left: type + request no */}
                           <div className="flex items-center gap-3">
-                            {/* ไอคอนประเภท */}
+                            {/* type icon */}
                             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-[#0e2d4c]/10 bg-[#0e2d4c]/5 text-xl">
                               {typeIconMap[item.type]}
                             </div>
@@ -621,7 +873,7 @@ function MyRequestsContent() {
                             </div>
                           </div>
 
-                          {/* ขวา: badge สถานะ */}
+                          {/* right: status badge */}
                           <span
                             className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${sc.color}`}
                           >
@@ -632,10 +884,49 @@ function MyRequestsContent() {
                           </span>
                         </div>
 
-                        {/* แถวล่าง: กิจกรรมล่าสุด + ความเร่งด่วน + ปุ่มดูรายละเอียด */}
+                        {/* footer: created/closed/latest + urgency */}
                         <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-white px-4 py-3.5 md:px-5">
                           <div className="flex flex-wrap items-center gap-4">
-                            {/* วันที่กิจกรรมล่าสุด */}
+                            {/* created date */}
+                            <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                              <svg
+                                className="h-3.5 w-3.5"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M8 7V3m8 4V3m-9 8h10m-13 9h16a2 2 0 002-2V7a2 2 0 00-2-2H4a2 2 0 00-2 2v11a2 2 0 002 2z"
+                                />
+                              </svg>
+                              วันที่สร้าง {formatThaiDateOnly(item.createdAt)}
+                            </div>
+
+                            {/* closed date */}
+                            <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                              <svg
+                                className="h-3.5 w-3.5"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M9 12l2 2 4-4m5 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                                />
+                              </svg>
+                              วันที่ปิดคำขอ{" "}
+                              {item.closedAt
+                                ? formatThaiDateOnly(item.closedAt)
+                                : "ยังไม่ปิดคำขอ"}
+                            </div>
+
+                            {/* latest activity */}
                             <div className="flex items-center gap-1.5 text-xs text-slate-500">
                               <svg
                                 className="h-3.5 w-3.5"
@@ -652,7 +943,7 @@ function MyRequestsContent() {
                               </svg>
                               {formatDateTime(item.latestActivityAt)}
                             </div>
-                            {/* ความเร่งด่วน */}
+                            {/* urgency */}
                             <div
                               className={`flex items-center gap-1 text-xs ${uc.color}`}
                             >
@@ -661,7 +952,7 @@ function MyRequestsContent() {
                             </div>
                           </div>
 
-                          {/* ปุ่มดูรายละเอียด */}
+                          {/* view detail action */}
                           <span className="inline-flex items-center gap-2 text-xs font-semibold text-[#0e2d4c]">
                             <span className="rounded-lg bg-[#0e2d4c] px-3.5 py-1.5 text-white transition group-hover:bg-[#163d64]">
                               ดูรายละเอียด
@@ -690,7 +981,7 @@ function MyRequestsContent() {
               </div>
             )}
 
-            {/* ── Pagination ──────────────────────────────────────────────── */}
+            {/* -- Pagination ------------------------------------------------ */}
             {!loading && items.length > 0 && (
               <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-5">
                 <p className="text-sm text-slate-500">
@@ -726,7 +1017,7 @@ function MyRequestsContent() {
                     ก่อนหน้า
                   </button>
 
-                  {/* หน้าปัจจุบัน */}
+                  {/* current page */}
                   <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#0e2d4c] text-sm font-bold text-white">
                     {page}
                   </span>
@@ -761,3 +1052,4 @@ function MyRequestsContent() {
     </div>
   );
 }
+

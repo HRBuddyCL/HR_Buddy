@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import {
   useCallback,
@@ -12,6 +12,8 @@ import { useParams } from "next/navigation";
 import { RouteGuard } from "@/components/guards/route-guard";
 import { TextareaField } from "@/components/ui/form-controls";
 import ConfirmModal from "@/components/ui/confirm-modal";
+import { DocumentPreviewModal } from "@/components/ui/document-preview-modal";
+import { ImagePreviewModal } from "@/components/ui/image-preview-modal";
 import { VideoPreviewModal } from "@/components/ui/video-preview-modal";
 import { downloadFileFromPresignedUrl } from "@/lib/attachments/download";
 import { getDocumentTypeLabel } from "@/lib/attachments/document-type-label";
@@ -134,12 +136,6 @@ const actorRoleLabelMap: Record<string, string> = {
   MESSENGER: "แมสเซนเจอร์",
 };
 
-const fileKindLabelMap: Record<string, string> = {
-  DOCUMENT: "เอกสาร",
-  IMAGE: "รูปภาพ",
-  VIDEO: "วิดีโอ",
-};
-
 const buildingSideLabelMap: Record<string, string> = {
   FRONT: "ด้านหน้า",
   BACK: "ด้านหลัง",
@@ -179,23 +175,22 @@ function formatDateOnly(iso?: string | null) {
   }).format(new Date(iso));
 }
 
-function formatFileSize(bytes: number) {
-  if (bytes < 1024) return `${bytes} B`;
-  const kb = bytes / 1024;
-  if (kb < 1024) return `${kb.toFixed(1)} KB`;
-  return `${(kb / 1024).toFixed(1)} MB`;
+function getAttachmentExtensionLabel(fileName: string, fileKind: string) {
+  const ext = fileName.split(".").pop()?.trim().toUpperCase();
+  if (ext) return ext;
+  if (fileKind === "IMAGE") return "IMG";
+  if (fileKind === "VIDEO") return "VID";
+  return "FILE";
 }
 
-function isVideoAttachment(fileKind: string, mimeType: string) {
-  return fileKind === "VIDEO" || mimeType.toLowerCase().startsWith("video/");
+function getAttachmentBadgeClass(fileKind: string) {
+  if (fileKind === "IMAGE") return "bg-blue-100 text-blue-700";
+  if (fileKind === "VIDEO") return "bg-purple-100 text-purple-700";
+  return "bg-slate-200 text-slate-600";
 }
 
 function hasText(value: string | null | undefined) {
   return Boolean(value && value.trim().length > 0);
-}
-
-function getFileKindLabel(fileKind: string) {
-  return fileKindLabelMap[fileKind] ?? fileKind;
 }
 
 function getActivityConfig(action: string) {
@@ -400,7 +395,20 @@ function MyRequestDetailContent() {
     fileName: string;
     url: string;
   } | null>(null);
+  const [imagePreview, setImagePreview] = useState<{
+    attachmentId: string;
+    fileName: string;
+    url: string;
+  } | null>(null);
+  const [documentPreview, setDocumentPreview] = useState<{
+    attachmentId: string;
+    fileName: string;
+    url: string;
+    mimeType: string;
+  } | null>(null);
   const [copiedRequestNo, setCopiedRequestNo] = useState(false);
+  const [inlinePreviewUrlByAttachmentId, setInlinePreviewUrlByAttachmentId] =
+    useState<Record<string, string>>({});
 
   const canCancel = useMemo(() => {
     if (!detail) return false;
@@ -415,6 +423,94 @@ function MyRequestDetailContent() {
     if (!detail) return [];
     return detail.attachments.filter((a) => a.uploadedByRole === "EMPLOYEE");
   }, [detail]);
+
+  const adminDigitalDocumentAttachments = useMemo(() => {
+    if (!detail) return [];
+    if (detail.type !== "DOCUMENT") return [];
+    if (detail.documentRequestDetail?.deliveryMethod !== "DIGITAL") return [];
+    return detail.attachments.filter(
+      (attachment) =>
+        attachment.uploadedByRole === "ADMIN" &&
+        attachment.fileKind === "DOCUMENT",
+    );
+  }, [detail]);
+
+  const adminPickupMediaAttachments = useMemo(() => {
+    if (!detail) return [];
+    if (detail.type !== "DOCUMENT") return [];
+    if (detail.documentRequestDetail?.deliveryMethod !== "PICKUP") return [];
+    return detail.attachments.filter(
+      (attachment) =>
+        attachment.uploadedByRole === "ADMIN" &&
+        (attachment.fileKind === "IMAGE" || attachment.fileKind === "VIDEO"),
+    );
+  }, [detail]);
+
+  const visibleAttachments = useMemo(() => {
+    if (!detail) return [];
+    if (
+      detail.type === "DOCUMENT" &&
+      detail.documentRequestDetail?.deliveryMethod === "DIGITAL"
+    ) {
+      return adminDigitalDocumentAttachments;
+    }
+    if (
+      detail.type === "DOCUMENT" &&
+      detail.documentRequestDetail?.deliveryMethod === "PICKUP"
+    ) {
+      return adminPickupMediaAttachments;
+    }
+    return employeeAttachments;
+  }, [
+    adminDigitalDocumentAttachments,
+    adminPickupMediaAttachments,
+    detail,
+    employeeAttachments,
+  ]);
+
+  useEffect(() => {
+    setInlinePreviewUrlByAttachmentId({});
+  }, [detail?.id]);
+
+  useEffect(() => {
+    if (!detail) return;
+
+    const targetAttachments = visibleAttachments.filter(
+      (attachment) =>
+        (attachment.fileKind === "IMAGE" || attachment.fileKind === "VIDEO") &&
+        !attachment.publicUrl,
+    );
+
+    if (targetAttachments.length === 0) return;
+
+    let cancelled = false;
+
+    void Promise.allSettled(
+      targetAttachments.map(async (attachment) => {
+        const result = await getMyRequestAttachmentDownloadUrl(
+          detail.id,
+          attachment.id,
+          "inline",
+        );
+        return { id: attachment.id, url: result.downloadUrl };
+      }),
+    ).then((results) => {
+      if (cancelled) return;
+      setInlinePreviewUrlByAttachmentId((prev) => {
+        const next = { ...prev };
+        for (const result of results) {
+          if (result.status === "fulfilled") {
+            next[result.value.id] = result.value.url;
+          }
+        }
+        return next;
+      });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [detail, visibleAttachments]);
 
   const latestActivityLog = useMemo(() => {
     if (!detail || detail.activityLogs.length === 0) return null;
@@ -501,7 +597,7 @@ function MyRequestDetailContent() {
     }
   };
 
-  const handlePreviewAttachment = async (
+  const handlePreviewVideoAttachment = async (
     attachmentId: string,
     fileName: string,
   ) => {
@@ -520,6 +616,66 @@ function MyRequestDetailContent() {
         error instanceof ApiError
           ? error.message
           : "สร้างลิงก์พรีวิวไฟล์แนบไม่สำเร็จ",
+      );
+    } finally {
+      setPreviewingAttachmentId(null);
+    }
+  };
+
+  const handlePreviewImageAttachment = async (
+    attachmentId: string,
+    fileName: string,
+  ) => {
+    if (!detail) return;
+    setPreviewingAttachmentId(attachmentId);
+    setErrorMessage(null);
+    try {
+      const result = await getMyRequestAttachmentDownloadUrl(
+        detail.id,
+        attachmentId,
+        "inline",
+      );
+      setImagePreview({ attachmentId, fileName, url: result.downloadUrl });
+    } catch (error) {
+      setErrorMessage(
+        error instanceof ApiError
+          ? error.message
+          : "ไม่สามารถสร้างลิงก์พรีวิวไฟล์แนบได้",
+      );
+    } finally {
+      setPreviewingAttachmentId(null);
+    }
+  };
+
+  const handleDocumentAttachmentAction = async (
+    attachmentId: string,
+    fileName: string,
+    mimeType: string,
+  ) => {
+    if (mimeType !== "application/pdf") {
+      await handleDownloadAttachment(attachmentId);
+      return;
+    }
+    if (!detail) return;
+    setPreviewingAttachmentId(attachmentId);
+    setErrorMessage(null);
+    try {
+      const result = await getMyRequestAttachmentDownloadUrl(
+        detail.id,
+        attachmentId,
+        "inline",
+      );
+      setDocumentPreview({
+        attachmentId,
+        fileName,
+        url: result.downloadUrl,
+        mimeType,
+      });
+    } catch (error) {
+      setErrorMessage(
+        error instanceof ApiError
+          ? error.message
+          : "ไม่สามารถสร้างลิงก์พรีวิวไฟล์แนบได้",
       );
     } finally {
       setPreviewingAttachmentId(null);
@@ -1098,16 +1254,14 @@ function MyRequestDetailContent() {
                             doc.deliveryMethod
                           }
                         />
-                        <InfoField
-                          label="วันที่ต้องการใช้"
-                          value={formatDateTime(doc.neededDate)}
-                        />
-                        <InfoField label="วัตถุประสงค์" value={doc.purpose} />
                         <div className="sm:col-span-2">
                           <InfoField
                             label="เอกสารที่ต้องการ"
                             value={doc.documentDescription}
                           />
+                        </div>
+                        <div className="sm:col-span-2">
+                          <InfoField label="วัตถุประสงค์" value={doc.purpose} />
                         </div>
                         {hasText(doc.note) && (
                           <div className="sm:col-span-2">
@@ -1123,90 +1277,6 @@ function MyRequestDetailContent() {
                           </div>
                         )}
                       </div>
-
-                      {/* ไฟล์ดิจิทัล */}
-                      {doc.deliveryMethod === "DIGITAL" &&
-                        doc.digitalFileAttachment && (
-                          <div className="rounded-xl border border-[#0e2d4c]/[0.15] bg-[#0e2d4c]/[0.04] p-4">
-                            <p className="mb-3 flex items-center gap-2 text-sm font-bold text-[#0e2d4c]">
-                              <span>📎</span> เอกสารดิจิทัล
-                            </p>
-                            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4">
-                              <div>
-                                <p className="text-sm font-semibold text-[#0e2d4c]">
-                                  {doc.digitalFileAttachment.fileName}
-                                </p>
-                                <p className="mt-0.5 text-xs text-slate-500">
-                                  {doc.digitalFileAttachment.fileKind ===
-                                  "DOCUMENT"
-                                    ? getDocumentTypeLabel(
-                                        doc.digitalFileAttachment.mimeType,
-                                        doc.digitalFileAttachment.fileName,
-                                      )
-                                    : doc.digitalFileAttachment.mimeType}
-                                  {" · "}
-                                  {formatFileSize(
-                                    doc.digitalFileAttachment.fileSize,
-                                  )}
-                                  {" · "}
-                                  {formatDateTime(
-                                    doc.digitalFileAttachment.createdAt,
-                                  )}
-                                </p>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  void handleDownloadAttachment(
-                                    doc.digitalFileAttachment!.id,
-                                  )
-                                }
-                                disabled={
-                                  downloadingAttachmentId ===
-                                  doc.digitalFileAttachment.id
-                                }
-                                className="inline-flex items-center gap-2 rounded-xl bg-[#0e2d4c] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#163d64] disabled:opacity-50 active:scale-95"
-                              >
-                                <svg
-                                  className="h-4 w-4"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  viewBox="0 0 24 24"
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                                  />
-                                </svg>
-                                {downloadingAttachmentId ===
-                                doc.digitalFileAttachment.id
-                                  ? "กำลังเตรียม..."
-                                  : "ดาวน์โหลด"}
-                              </button>
-                            </div>
-                          </div>
-                        )}
-
-                      {/* ยังไม่มีไฟล์ดิจิทัล */}
-                      {doc.deliveryMethod === "DIGITAL" &&
-                        !doc.digitalFileAttachment && (
-                          <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
-                            <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-400 text-[10px] font-bold text-white">
-                              !
-                            </span>
-                            <div>
-                              <p className="text-sm font-semibold text-amber-800">
-                                ยังไม่มีไฟล์ดิจิทัล
-                              </p>
-                              <p className="mt-0.5 text-sm text-amber-700">
-                                ยังไม่มีไฟล์ดิจิทัลจาก HR สำหรับคำขอนี้
-                                กรุณาติดตามสถานะอีกครั้ง
-                              </p>
-                            </div>
-                          </div>
-                        )}
 
                       {/* ที่อยู่จัดส่ง */}
                       {doc.deliveryMethod === "POSTAL" &&
@@ -1280,106 +1350,81 @@ function MyRequestDetailContent() {
                 </svg>
               }
             >
-              {employeeAttachments.length === 0 ? (
-                <div className="flex flex-col items-center gap-2 py-8 text-center">
-                  <span className="text-3xl">📂</span>
-                  <p className="text-sm text-slate-500">ยังไม่มีไฟล์แนบ</p>
-                </div>
+              {visibleAttachments.length === 0 ? (
+                detail.type === "DOCUMENT" &&
+                detail.documentRequestDetail?.deliveryMethod === "DIGITAL" ? (
+                  <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-400 text-[10px] font-bold text-white">
+                      !
+                    </span>
+                    <div>
+                      <p className="text-sm font-semibold text-amber-800">
+                        ยังไม่มีไฟล์ดิจิทัล
+                      </p>
+                      <p className="mt-0.5 text-sm text-amber-700">
+                        ยังไม่มีไฟล์ดิจิทัลจาก HR สำหรับคำขอนี้
+                        กรุณาติดตามสถานะอีกครั้ง
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center gap-2 py-8 text-center">
+                    <span className="text-3xl">📂</span>
+                    <p className="text-sm text-slate-500">ยังไม่มีไฟล์แนบ</p>
+                  </div>
+                )
               ) : (
-                <ul className="space-y-2.5">
-                  {employeeAttachments.map((attachment) => {
-                    const isVideo = isVideoAttachment(
+                <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  {visibleAttachments.map((attachment) => {
+                    const badgeLabel = getAttachmentExtensionLabel(
+                      attachment.fileName,
                       attachment.fileKind,
-                      attachment.mimeType,
                     );
-                    const fileIcon =
-                      attachment.fileKind === "IMAGE"
-                        ? "🖼️"
-                        : attachment.fileKind === "VIDEO"
-                          ? "🎬"
-                          : "📄";
+                    const badgeClass = getAttachmentBadgeClass(
+                      attachment.fileKind,
+                    );
+                    const documentType =
+                      attachment.fileKind === "DOCUMENT"
+                        ? getDocumentTypeLabel(
+                            attachment.mimeType,
+                            attachment.fileName,
+                          )
+                        : attachment.mimeType;
+                    const previewUrl =
+                      attachment.publicUrl ??
+                      inlinePreviewUrlByAttachmentId[attachment.id] ??
+                      null;
+                    const hasPublicPreview = Boolean(previewUrl);
 
                     return (
                       <li
                         key={attachment.id}
-                        className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-[#f8fafc] px-4 py-3.5 transition hover:border-[#0e2d4c]/25 hover:bg-[#0e2d4c]/[0.03]"
+                        className="flex min-h-[11rem] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"
                       >
-                        <div className="flex items-center gap-3">
-                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-xl shadow-sm ring-1 ring-slate-200">
-                            {fileIcon}
+                        <div className="flex items-center gap-2 border-b border-slate-100 bg-slate-50 px-3 py-2">
+                          <span
+                            className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${badgeClass}`}
+                          >
+                            {badgeLabel}
                           </span>
-                          <div>
-                            <p className="text-sm font-semibold text-[#0e2d4c]">
-                              {attachment.fileName}
-                            </p>
-                            <p className="mt-0.5 text-xs text-slate-500">
-                              {getFileKindLabel(attachment.fileKind)}
-                              {" · "}
-                              {attachment.fileKind === "DOCUMENT"
-                                ? getDocumentTypeLabel(
-                                    attachment.mimeType,
-                                    attachment.fileName,
-                                  )
-                                : attachment.mimeType}
-                              {" · "}
-                              {formatFileSize(attachment.fileSize)}
-                              {" · "}
-                              {formatDateTime(attachment.createdAt)}
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          {/* ปุ่มพรีวิววิดีโอ */}
-                          {isVideo && (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                void handlePreviewAttachment(
-                                  attachment.id,
-                                  attachment.fileName,
-                                )
-                              }
-                              disabled={
-                                previewingAttachmentId === attachment.id
-                              }
-                              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 transition hover:border-[#0e2d4c]/30 hover:bg-[#0e2d4c]/5 hover:text-[#0e2d4c] disabled:opacity-50 active:scale-95"
-                            >
-                              <svg
-                                className="h-3.5 w-3.5"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"
-                                />
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                                />
-                              </svg>
-                              {previewingAttachmentId === attachment.id
-                                ? "กำลังเตรียม..."
-                                : "ดูตัวอย่าง"}
-                            </button>
-                          )}
-                          {/* ปุ่มดาวน์โหลด */}
+                          <p
+                            className="min-w-0 flex-1 truncate text-[11px] font-medium text-slate-700"
+                            title={attachment.fileName}
+                          >
+                            {attachment.fileName}
+                          </p>
                           <button
                             type="button"
                             onClick={() =>
                               void handleDownloadAttachment(attachment.id)
                             }
                             disabled={downloadingAttachmentId === attachment.id}
-                            className="inline-flex items-center gap-1.5 rounded-xl bg-[#0e2d4c] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#163d64] disabled:opacity-50 active:scale-95"
+                            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#0e2d4c]/10 text-[#0e2d4c] shadow-sm transition hover:bg-[#0e2d4c] hover:text-white disabled:opacity-50"
+                            aria-label={`ดาวน์โหลด ${attachment.fileName}`}
+                            title={`ดาวน์โหลด ${attachment.fileName}`}
                           >
                             <svg
-                              className="h-3.5 w-3.5"
+                              className="h-5 w-5"
                               fill="none"
                               stroke="currentColor"
                               viewBox="0 0 24 24"
@@ -1387,14 +1432,167 @@ function MyRequestDetailContent() {
                               <path
                                 strokeLinecap="round"
                                 strokeLinejoin="round"
-                                strokeWidth={2}
+                                strokeWidth={2.5}
                                 d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
                               />
                             </svg>
-                            {downloadingAttachmentId === attachment.id
-                              ? "กำลังเตรียม..."
-                              : "ดาวน์โหลด"}
                           </button>
+                        </div>
+
+                        <div className="p-2.5">
+                          {attachment.fileKind === "IMAGE" ? (
+                            hasPublicPreview ? (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setImagePreview({
+                                    attachmentId: attachment.id,
+                                    fileName: attachment.fileName,
+                                    url: previewUrl ?? "",
+                                  })
+                                }
+                              className="group relative block h-40 w-full overflow-hidden rounded-lg border border-slate-100 bg-slate-100"
+                              >
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                  src={previewUrl ?? ""}
+                                  alt={attachment.fileName}
+                                  className="h-full w-full object-cover transition duration-200 group-hover:scale-105"
+                                />
+                              <div className="absolute inset-0 bg-black/0 transition group-hover:bg-black/10" />
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  void handlePreviewImageAttachment(
+                                    attachment.id,
+                                    attachment.fileName,
+                                  )
+                                }
+                                disabled={
+                                  previewingAttachmentId === attachment.id
+                                }
+                                className="flex h-40 w-full items-center justify-center rounded-lg border border-slate-100 bg-slate-50 text-sm font-semibold text-slate-500 transition hover:bg-slate-100 disabled:opacity-50"
+                              >
+                                {previewingAttachmentId === attachment.id
+                                  ? "กำลังเตรียม..."
+                                  : "ดูตัวอย่างรูปภาพ"}
+                              </button>
+                            )
+                          ) : null}
+
+                          {attachment.fileKind === "VIDEO" ? (
+                            hasPublicPreview ? (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  void handlePreviewVideoAttachment(
+                                    attachment.id,
+                                    attachment.fileName,
+                                  )
+                                }
+                              className="group relative block h-40 w-full overflow-hidden rounded-lg border border-slate-100 bg-black"
+                              >
+                                <video
+                                  className="h-full w-full object-cover opacity-60"
+                                  muted
+                                  playsInline
+                                  preload="metadata"
+                                >
+                                  <source
+                                    src={previewUrl ?? ""}
+                                    type={attachment.mimeType}
+                                  />
+                                </video>
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/90 shadow transition-transform group-hover:scale-110">
+                                    <svg
+                                      viewBox="0 0 24 24"
+                                      className="h-4 w-4 translate-x-0.5 fill-[#0e2d4c]"
+                                    >
+                                      <path d="M8 5v14l11-7z" />
+                                    </svg>
+                                  </span>
+                                </div>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  void handlePreviewVideoAttachment(
+                                    attachment.id,
+                                    attachment.fileName,
+                                  )
+                                }
+                                disabled={
+                                  previewingAttachmentId === attachment.id
+                                }
+                                className="flex h-40 w-full items-center justify-center rounded-lg border border-slate-100 bg-slate-50 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 disabled:opacity-50"
+                              >
+                                {previewingAttachmentId === attachment.id
+                                  ? "กำลังเตรียม..."
+                                  : "ดูตัวอย่างวิดีโอ"}
+                              </button>
+                            )
+                          ) : null}
+
+                          {attachment.fileKind === "DOCUMENT" ? (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void handleDocumentAttachmentAction(
+                                  attachment.id,
+                                  attachment.fileName,
+                                  attachment.mimeType,
+                                )
+                              }
+                              disabled={
+                                downloadingAttachmentId === attachment.id ||
+                                previewingAttachmentId === attachment.id
+                              }
+                              className="flex w-full items-center gap-2.5 rounded-lg border border-slate-100 bg-slate-50 p-2.5 text-left transition hover:border-[#0e2d4c]/20 hover:bg-[#0e2d4c]/5 disabled:opacity-60"
+                            >
+                              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#0e2d4c]/10 text-[#0e2d4c]">
+                                <svg
+                                  viewBox="0 0 24 24"
+                                  className="h-4 w-4 fill-current"
+                                >
+                                  <path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7z" />
+                                  <path
+                                    d="M14 2v5h5"
+                                    className="fill-white/60"
+                                  />
+                                </svg>
+                              </span>
+                              <div className="min-w-0 flex-1">
+                                <p
+                                  className="truncate text-[11px] font-semibold leading-tight text-slate-800"
+                                  title={attachment.fileName}
+                                >
+                                  {attachment.fileName}
+                                </p>
+                                <p className="mt-0.5 text-[10px] uppercase tracking-wide text-slate-400">
+                                  {documentType}
+                                </p>
+                              </div>
+                              <span className="shrink-0 rounded-md bg-[#0e2d4c] px-2 py-0.5 text-[10px] font-bold text-white">
+                                {previewingAttachmentId === attachment.id ||
+                                downloadingAttachmentId === attachment.id
+                                  ? "กำลังเตรียม..."
+                                  : attachment.mimeType === "application/pdf"
+                                    ? "ดู"
+                                    : "ดาวน์โหลด"}
+                              </span>
+                            </button>
+                          ) : null}
+                        </div>
+
+                        <div className="border-t border-slate-100 px-3 py-1.5 text-center text-[10px] text-slate-400">
+                          {Math.max(attachment.fileSize / 1024 / 1024, 0.01).toFixed(
+                            2,
+                          )}{" "}
+                          MB
                         </div>
                       </li>
                     );
@@ -1658,12 +1856,31 @@ function MyRequestDetailContent() {
         }}
       />
 
+      <ImagePreviewModal
+        open={Boolean(imagePreview)}
+        title={
+          imagePreview ? `พรีวิวรูปภาพ: ${imagePreview.fileName}` : "พรีวิวรูปภาพ"
+        }
+        src={imagePreview?.url ?? ""}
+        onClose={() => setImagePreview(null)}
+      />
+      <DocumentPreviewModal
+        open={Boolean(documentPreview)}
+        title={
+          documentPreview
+            ? `พรีวิวเอกสาร: ${documentPreview.fileName}`
+            : "พรีวิวเอกสาร"
+        }
+        src={documentPreview?.url ?? ""}
+        mimeType={documentPreview?.mimeType}
+        onClose={() => setDocumentPreview(null)}
+      />
       <VideoPreviewModal
         open={Boolean(videoPreview)}
         title={
           videoPreview
-            ? `ตัวอย่างวิดีโอ: ${videoPreview.fileName}`
-            : "ตัวอย่างวิดีโอ"
+            ? `พรีวิววิดีโอ: ${videoPreview.fileName}`
+            : "พรีวิววิดีโอ"
         }
         src={videoPreview?.url ?? ""}
         onClose={() => setVideoPreview(null)}
@@ -1671,3 +1888,10 @@ function MyRequestDetailContent() {
     </div>
   );
 }
+
+
+
+
+
+
+

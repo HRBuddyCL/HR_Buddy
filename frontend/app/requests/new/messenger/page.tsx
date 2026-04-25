@@ -807,16 +807,8 @@ export default function Page() {
     handleDownloadDocumentFile(preview);
   };
 
-  const setSuccessCookies = (
-    nextRequestNo: string,
-    hasPartialAttachments = false,
-  ) => {
+  const setSuccessCookies = (nextRequestNo: string) => {
     document.cookie = `hrb_success_request_no=${encodeURIComponent(nextRequestNo)}; Path=/; Max-Age=600; SameSite=Lax`;
-    if (hasPartialAttachments) {
-      document.cookie =
-        "hrb_success_attachments=partial; Path=/; Max-Age=600; SameSite=Lax";
-      return;
-    }
     document.cookie =
       "hrb_success_attachments=; Path=/; Max-Age=0; SameSite=Lax";
   };
@@ -867,29 +859,58 @@ export default function Page() {
     }
 
     let createdRequestNo: string | null = null;
+    let failedAttachmentName: string | null = null;
 
     try {
       const result = await createMessengerRequest(payload);
       createdRequestNo = result.requestNo;
 
       for (const candidate of attachmentCandidatesResult.candidates) {
-        const ticket = await issueMyAttachmentUploadTicket(result.id, {
-          fileKind: candidate.fileKind,
-          fileName: candidate.file.name,
-          mimeType: candidate.mimeType,
-          fileSize: candidate.file.size,
-        });
+        const maxUploadAttempts = 3;
+        let uploadCompleted = false;
+        let lastUploadError: unknown = null;
 
-        await uploadFileToPresignedUrl(ticket, candidate.file);
-        await completeMyAttachmentUpload(result.id, ticket.uploadToken);
+        for (let attempt = 1; attempt <= maxUploadAttempts; attempt += 1) {
+          try {
+            const ticket = await issueMyAttachmentUploadTicket(result.id, {
+              fileKind: candidate.fileKind,
+              fileName: candidate.file.name,
+              mimeType: candidate.mimeType,
+              fileSize: candidate.file.size,
+            }, result.uploadSessionToken);
+
+            await uploadFileToPresignedUrl(ticket, candidate.file);
+            await completeMyAttachmentUpload(
+              result.id,
+              ticket.uploadToken,
+              result.uploadSessionToken,
+            );
+            uploadCompleted = true;
+            break;
+          } catch (uploadError) {
+            lastUploadError = uploadError;
+          }
+        }
+
+        if (!uploadCompleted) {
+          failedAttachmentName = candidate.file.name;
+          throw (
+            lastUploadError ?? new Error("Failed to upload messenger attachment")
+          );
+        }
       }
 
       setSuccessCookies(result.requestNo);
       router.push("/requests/success");
     } catch (error) {
       if (createdRequestNo) {
-        setSuccessCookies(createdRequestNo, true);
-        router.push("/requests/success");
+        const failedFileMessage = failedAttachmentName
+          ? `ไฟล์ ${failedAttachmentName}`
+          : "ไฟล์แนบ";
+        const apiMessage = error instanceof ApiError ? ` (${error.message})` : "";
+        setErrorMessage(
+          `สร้างคำขอ ${createdRequestNo} สำเร็จแล้ว แต่${failedFileMessage}อัปโหลดไม่สำเร็จ กรุณาลองใหม่อีกครั้ง${apiMessage}`,
+        );
         return;
       }
 

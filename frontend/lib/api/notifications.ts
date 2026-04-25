@@ -1,5 +1,16 @@
 import { apiFetch } from "@/lib/api/client";
 
+export const EMPLOYEE_NOTIFICATIONS_REFRESH_EVENT =
+  "employee-notifications:refresh";
+
+function dispatchEmployeeNotificationsRefreshEvent() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.dispatchEvent(new Event(EMPLOYEE_NOTIFICATIONS_REFRESH_EVENT));
+}
+
 export type NotificationEventType =
   | "APPROVED"
   | "REJECTED"
@@ -47,15 +58,21 @@ export async function getMyNotifications(
 }
 
 export async function markMyNotificationRead(id: string) {
-  return apiFetch<{ ok: boolean }>(`/notifications/my/${id}/read`, {
+  const result = await apiFetch<{ ok: boolean }>(`/notifications/my/${id}/read`, {
     method: "PATCH",
     tokenType: "employee",
   });
+
+  dispatchEmployeeNotificationsRefreshEvent();
+  return result;
 }
 
 export async function markMyNotificationsReadAll() {
-  return apiFetch<{ updated: number }>("/notifications/my/read-all", {
+  const result = await apiFetch<{ updated: number }>("/notifications/my/read-all", {
     method: "PATCH",
     tokenType: "employee",
   });
+
+  dispatchEmployeeNotificationsRefreshEvent();
+  return result;
 }

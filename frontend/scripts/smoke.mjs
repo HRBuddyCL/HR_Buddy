@@ -41,6 +41,16 @@ const routes = [
   "/unauthorized",
 ];
 
+const protectedRouteRedirectTargets = new Map([
+  ["/my-requests", "/auth/otp?next=%2Fmy-requests"],
+  ["/my-requests/sample-id", "/auth/otp?next=%2Fmy-requests%2Fsample-id"],
+  ["/admin", "/admin/login"],
+  ["/admin/requests", "/admin/login"],
+  ["/admin/requests/sample-id", "/admin/login"],
+  ["/admin/settings", "/admin/login"],
+  ["/admin/audit", "/admin/login"],
+]);
+
 const requireApi =
   process.argv.includes("--require-api") ||
   String(process.env.SMOKE_REQUIRE_API ?? "false").toLowerCase() === "true";
@@ -96,6 +106,15 @@ async function checkRoute(route) {
 
       if (response.status < 200 || response.status >= 400) {
         throw new Error(`${route} returned ${response.status}`);
+      }
+
+      if (response.status >= 300 && response.status < 400) {
+        const expectedLocation = protectedRouteRedirectTargets.get(route);
+        const location = response.headers.get("location") ?? "";
+        if (expectedLocation && location.startsWith(expectedLocation)) {
+          log(`[smoke] ok ${route} (${response.status} -> ${location})`);
+          return;
+        }
       }
 
       const html = await response.text();

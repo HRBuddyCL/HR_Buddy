@@ -48,6 +48,10 @@ const SESSION_VALIDATION_BY_TOKEN: Partial<
 const SESSION_VALIDATION_ERROR =
   "ไม่สามารถตรวจสอบเซสชันกับระบบได้ กรุณาตรวจสอบการเชื่อมต่อ API แล้วลองใหม่อีกครั้ง";
 
+function warningDismissedStorageKey(tokenType: TokenType) {
+  return `hrbuddy.${tokenType}.sessionWarningDismissedFor`;
+}
+
 export function RouteGuard({
   tokenType,
   redirectTo,
@@ -78,7 +82,19 @@ export function RouteGuard({
   const [validationAttempt, setValidationAttempt] = useState(0);
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
   const [warningDismissedFor, setWarningDismissedFor] = useState<string | null>(
-    null,
+    () => {
+      if (typeof window === "undefined") {
+        return null;
+      }
+
+      try {
+        return window.sessionStorage.getItem(
+          warningDismissedStorageKey(tokenType),
+        );
+      } catch {
+        return null;
+      }
+    },
   );
   const [isWarningOpen, setIsWarningOpen] = useState(false);
 
@@ -249,6 +265,23 @@ export function RouteGuard({
     clearAdminSessionCookie,
     buildAuthRedirectUrl,
   ]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    try {
+      const storageKey = warningDismissedStorageKey(tokenType);
+      if (warningDismissedFor) {
+        window.sessionStorage.setItem(storageKey, warningDismissedFor);
+      } else {
+        window.sessionStorage.removeItem(storageKey);
+      }
+    } catch {
+      // Ignore sessionStorage errors.
+    }
+  }, [tokenType, warningDismissedFor]);
 
   useEffect(() => {
     if (

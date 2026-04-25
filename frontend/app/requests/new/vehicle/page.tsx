@@ -443,10 +443,14 @@ export default function Page() {
           fileName: candidate.file.name,
           mimeType: candidate.mimeType,
           fileSize: candidate.file.size,
-        });
+        }, created.uploadSessionToken);
 
         await uploadFileToPresignedUrl(ticket, candidate.file);
-        await completeMyAttachmentUpload(created.id, ticket.uploadToken);
+        await completeMyAttachmentUpload(
+          created.id,
+          ticket.uploadToken,
+          created.uploadSessionToken,
+        );
       }
 
       document.cookie = `hrb_success_request_no=${encodeURIComponent(created.requestNo)}; Path=/; Max-Age=600; SameSite=Lax`;

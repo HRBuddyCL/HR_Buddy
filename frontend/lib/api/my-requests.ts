@@ -163,6 +163,10 @@ export type MyRequestsQuery = {
   type?: RequestType;
   status?: RequestStatus;
   q?: string;
+  createdDateFrom?: string;
+  createdDateTo?: string;
+  closedDateFrom?: string;
+  closedDateTo?: string;
   sortBy?: "latestActivityAt" | "createdAt";
   sortOrder?: "asc" | "desc";
   page?: number;
@@ -234,13 +238,16 @@ export async function getMyRequestAttachmentDownloadUrl(
 export async function issueMyAttachmentUploadTicket(
   requestId: string,
   payload: UploadTicketPayload,
+  uploadSessionToken?: string,
 ) {
   return apiFetch<UploadTicketResponse>(
     `/requests/${requestId}/attachments/presign`,
     {
       method: "POST",
       tokenType: "employee",
-      body: payload,
+      body: uploadSessionToken
+        ? { ...payload, uploadSessionToken }
+        : payload,
     },
   );
 }
@@ -248,13 +255,16 @@ export async function issueMyAttachmentUploadTicket(
 export async function completeMyAttachmentUpload(
   requestId: string,
   uploadToken: string,
+  uploadSessionToken?: string,
 ) {
   return apiFetch<{ id: string }>(
     `/requests/${requestId}/attachments/complete`,
     {
       method: "POST",
       tokenType: "employee",
-      body: { uploadToken },
+      body: uploadSessionToken
+        ? { uploadToken, uploadSessionToken }
+        : { uploadToken },
     },
   );
 }

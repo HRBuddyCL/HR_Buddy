@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  EMPLOYEE_NOTIFICATIONS_REFRESH_EVENT,
   getMyNotifications,
   markMyNotificationRead,
   type NotificationItem,
@@ -46,6 +47,7 @@ export function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [unreadTotal, setUnreadTotal] = useState(0);
   const pathname = usePathname();
   const isAuthPath = pathname === "/auth/otp" || pathname.startsWith("/auth/");
   const adminSessionExpiresAt = useSessionExpiresAt("admin");
@@ -108,24 +110,34 @@ export function Navbar() {
       if (!isEmployeeSessionActive) {
         if (active) {
           setNotifications([]);
+          setUnreadTotal(0);
         }
         return;
       }
 
       try {
-        const result = await getMyNotifications({
-          limit: 5,
-          page: 1,
-        });
+        const [latestResult, unreadResult] = await Promise.all([
+          getMyNotifications({
+            limit: 5,
+            page: 1,
+          }),
+          getMyNotifications({
+            limit: 1,
+            page: 1,
+            isRead: false,
+          }),
+        ]);
 
         if (!active) {
           return;
         }
 
-        setNotifications(result.items);
+        setNotifications(latestResult.items);
+        setUnreadTotal(unreadResult.total);
       } catch {
         if (active) {
           setNotifications([]);
+          setUnreadTotal(0);
         }
       }
     }
@@ -138,26 +150,50 @@ export function Navbar() {
       };
     }
 
+    const onRefresh = () => {
+      void loadNotifications();
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void loadNotifications();
+      }
+    };
+
     const poller = window.setInterval(() => {
       void loadNotifications();
-    }, 30000);
+    }, 5000);
+
+    window.addEventListener("focus", onRefresh);
+    window.addEventListener(
+      EMPLOYEE_NOTIFICATIONS_REFRESH_EVENT,
+      onRefresh as EventListener,
+    );
+    document.addEventListener("visibilitychange", onVisibilityChange);
 
     return () => {
       active = false;
       window.clearInterval(poller);
+      window.removeEventListener("focus", onRefresh);
+      window.removeEventListener(
+        EMPLOYEE_NOTIFICATIONS_REFRESH_EVENT,
+        onRefresh as EventListener,
+      );
+      document.removeEventListener("visibilitychange", onVisibilityChange);
     };
   }, [isEmployeeSessionActive]);
 
-  const unreadCount = useMemo(
-    () => notifications.filter((item) => !item.isRead).length,
-    [notifications],
-  );
+  const unreadCountLabel = useMemo(() => {
+    if (unreadTotal > 99) return "99+";
+    return String(unreadTotal);
+  }, [unreadTotal]);
 
   const handleNotificationClick = async (item: NotificationItem) => {
     if (item.isRead) {
       return;
     }
 
+    setUnreadTotal((prev) => Math.max(0, prev - 1));
     setNotifications((prev) =>
       prev.map((current) =>
         current.id === item.id
@@ -169,6 +205,7 @@ export function Navbar() {
     try {
       await markMyNotificationRead(item.id);
     } catch {
+      setUnreadTotal((prev) => prev + 1);
       setNotifications((prev) =>
         prev.map((current) =>
           current.id === item.id
@@ -251,7 +288,7 @@ export function Navbar() {
                     type="button"
                     onClick={() => setIsNotificationsOpen((prev) => !prev)}
                     aria-label="เปิดการแจ้งเตือน"
-                    className={`group relative inline-flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl border shadow-sm transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#fed54f] focus-visible:ring-offset-2 ${
+                    className={`group relative inline-flex h-10 w-10 items-center justify-center rounded-xl border shadow-sm transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#fed54f] focus-visible:ring-offset-2 ${
                       isNotificationsOpen
                         ? "border-[#0e2d4c]/20 bg-[#0e2d4c] text-white shadow-md shadow-[#0e2d4c]/25"
                         : "border-[#0e2d4c]/12 bg-white text-[#0e2d4c]/80 hover:-translate-y-px hover:border-[#0e2d4c]/30 hover:bg-gradient-to-r hover:from-[#f7faff] hover:to-[#fff4f5] hover:text-[#0e2d4c] hover:shadow-md"
@@ -271,10 +308,9 @@ export function Navbar() {
                         d="M15 17h5l-1.4-1.4a2 2 0 01-.6-1.4V11a6 6 0 10-12 0v3.2a2 2 0 01-.6 1.4L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
                       />
                     </svg>
-                    {unreadCount > 0 ? (
-                      <span className="absolute -right-1 -top-1 inline-flex min-w-5 items-center justify-center rounded-full bg-[#b62026] px-1.5 py-0.5 text-[10px] font-bold text-white shadow-sm shadow-[#b62026]/40">
-                        <span className="absolute inset-0 rounded-full bg-[#b62026] opacity-40 animate-ping" />
-                        {unreadCount}
+                    {unreadTotal > 0 ? (
+                      <span className="absolute -right-2 -top-2 inline-flex h-6 min-w-6 items-center justify-center rounded-full border-[2.5px] border-white bg-[#c71f2d] px-1 text-[13px] font-extrabold leading-none text-white shadow-[0_6px_14px_-6px_rgba(199,31,45,0.78)]">
+                        {unreadCountLabel}
                       </span>
                     ) : null}
                   </button>
@@ -442,9 +478,9 @@ export function Navbar() {
                     />
                   </svg>
 
-                  {unreadCount > 0 ? (
-                    <span className="absolute -right-1 -top-1 inline-flex min-w-5 items-center justify-center rounded-full bg-[#b62026] px-1.5 py-0.5 text-[10px] font-bold text-white shadow-sm shadow-[#b62026]/40">
-                      {unreadCount}
+                  {unreadTotal > 0 ? (
+                    <span className="absolute -right-2 -top-2 inline-flex h-6 min-w-6 items-center justify-center rounded-full border-[2.5px] border-white bg-[#c71f2d] px-1 text-[13px] font-extrabold leading-none text-white shadow-[0_6px_14px_-6px_rgba(199,31,45,0.78)]">
+                      {unreadCountLabel}
                     </span>
                   ) : null}
                 </button>
