@@ -10,8 +10,10 @@ import {
   Prisma,
   RequestStatus,
   RequestType,
+  UploadedByRole,
 } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AttachmentStorageService } from '../attachments/storage/attachment-storage.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { MessengerPickupEventDto } from './dto/messenger-pickup-event.dto';
 import { MessengerProblemReportDto } from './dto/messenger-problem-report.dto';
@@ -52,6 +54,7 @@ export class MessengerService {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     private readonly notificationsService: NotificationsService,
+    private readonly attachmentStorageService: AttachmentStorageService,
   ) {}
 
   async getByToken(token: string) {
@@ -68,6 +71,12 @@ export class MessengerService {
                 receiverAddress: true,
               },
             },
+            attachments: {
+              where: {
+                uploadedByRole: UploadedByRole.EMPLOYEE,
+              },
+              orderBy: { createdAt: 'asc' },
+            },
           },
         },
       },
@@ -81,6 +90,30 @@ export class MessengerService {
       select: { id: true },
     });
 
+    const attachments = await Promise.all(
+      link.request.attachments.map(async (attachment) => ({
+        id: attachment.id,
+        fileKind: attachment.fileKind,
+        fileName: attachment.fileName,
+        mimeType: attachment.mimeType,
+        fileSize: attachment.fileSize,
+        uploadedByRole: attachment.uploadedByRole,
+        createdAt: attachment.createdAt,
+        previewUrl: await this.resolveAttachmentUrl(
+          attachment.storageKey,
+          attachment.fileName,
+          attachment.publicUrl,
+          'inline',
+        ),
+        downloadUrl: await this.resolveAttachmentUrl(
+          attachment.storageKey,
+          attachment.fileName,
+          attachment.publicUrl,
+          'download',
+        ),
+      })),
+    );
+
     return {
       request: {
         id: link.request.id,
@@ -93,6 +126,7 @@ export class MessengerService {
         latestActivityAt: link.request.latestActivityAt,
       },
       messengerDetail: link.request.messengerBookingDetail,
+      attachments,
       expiresAt: link.expiresAt,
     };
   }
@@ -412,6 +446,34 @@ export class MessengerService {
     return hashMagicLinkToken(token, this.magicLinkSecret());
   }
 
+  private async resolveAttachmentUrl(
+    storageKey: string,
+    fileName: string,
+    publicUrl: string | null,
+    mode: 'inline' | 'download',
+  ) {
+    if (publicUrl) {
+      return publicUrl;
+    }
+
+    const presign = await this.attachmentStorageService
+      .getProvider()
+      .createDownloadPresign({
+        storageKey,
+        fileName,
+        disposition: mode === 'inline' ? 'inline' : 'attachment',
+        expiresAt: this.secondsFromNow(this.messengerAttachmentUrlTtlSeconds()),
+      });
+
+    return presign.url;
+  }
+
+  private messengerAttachmentUrlTtlSeconds() {
+    return (
+      this.config.get<number>('messengerAttachmentDownloadUrlTtlSeconds') ?? 900
+    );
+  }
+
   private magicLinkSecret() {
     return (
       this.config.get<string>('messengerMagicLinkSecret') ??
@@ -441,6 +503,10 @@ export class MessengerService {
 
   private hoursFromNow(hours: number) {
     return new Date(Date.now() + hours * 60 * 60 * 1000);
+  }
+
+  private secondsFromNow(seconds: number) {
+    return new Date(Date.now() + seconds * 1000);
   }
 
   private normalizeOptionalText(value?: string) {

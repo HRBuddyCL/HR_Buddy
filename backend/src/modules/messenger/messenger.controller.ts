@@ -65,16 +65,16 @@ export class MessengerController {
   }
 
   private extractToken(authorization?: string, headerToken?: string) {
-    const fromAuthorization = this.extractBearerToken(authorization);
-
-    if (fromAuthorization) {
-      return fromAuthorization;
-    }
-
     const fromHeader = headerToken?.trim();
 
     if (fromHeader) {
       return fromHeader;
+    }
+
+    const fromAuthorization = this.extractBearerToken(authorization);
+
+    if (fromAuthorization) {
+      return fromAuthorization;
     }
 
     throw new BadRequestException({

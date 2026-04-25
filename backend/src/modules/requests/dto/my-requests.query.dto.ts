@@ -1,6 +1,7 @@
 import { RequestStatus, RequestType } from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
+  IsDateString,
   IsEnum,
   IsIn,
   IsInt,
@@ -29,6 +30,22 @@ export class MyRequestsQueryDto {
   @IsString()
   @MaxLength(100)
   q?: string;
+
+  @IsOptional()
+  @IsDateString()
+  createdDateFrom?: string;
+
+  @IsOptional()
+  @IsDateString()
+  createdDateTo?: string;
+
+  @IsOptional()
+  @IsDateString()
+  closedDateFrom?: string;
+
+  @IsOptional()
+  @IsDateString()
+  closedDateTo?: string;
 
   @IsOptional()
   @IsIn(SORTABLE_FIELDS)

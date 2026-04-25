@@ -6,6 +6,8 @@ import {
   Patch,
   Post,
   Query,
+  Req,
+  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { RateLimitPolicy } from '../../common/security/rate-limit.decorator';
@@ -17,6 +19,7 @@ import { AttachmentsService } from '../attachments/attachments.service';
 import { EmployeeSession } from '../auth-otp/employee-session.decorator';
 import { EmployeeSessionGuard } from '../auth-otp/employee-session.guard';
 import type { EmployeeSessionPrincipal } from '../auth-otp/employee-session.types';
+import { AuthOtpService } from '../auth-otp/auth-otp.service';
 import { CancelRequestDto } from './dto/cancel-request.dto';
 import { CreateBuildingRequestDto } from './dto/create-building-request.dto';
 import { CreateDocumentRequestDto } from './dto/create-document-request.dto';
@@ -30,6 +33,7 @@ export class RequestsController {
   constructor(
     private readonly requestsService: RequestsService,
     private readonly attachmentsService: AttachmentsService,
+    private readonly authOtpService: AuthOtpService,
   ) {}
 
   @RateLimitPolicy('requestCreate')
@@ -56,13 +60,21 @@ export class RequestsController {
     return this.requestsService.createDocument(dto);
   }
 
-  @UseGuards(EmployeeSessionGuard)
   @Post(':id/attachments/presign')
-  presignAttachment(
+  async presignAttachment(
     @Param('id') id: string,
     @Body() dto: CreateAttachmentUploadTicketDto,
-    @EmployeeSession() session: EmployeeSessionPrincipal,
+    @Req() request: EmployeeRequestContext,
   ) {
+    if (dto.uploadSessionToken) {
+      return this.attachmentsService.issuePublicUploadTicket(
+        id,
+        dto.uploadSessionToken,
+        dto,
+      );
+    }
+
+    const session = await this.resolveEmployeeSession(request);
     return this.attachmentsService.issueEmployeeUploadTicket(
       id,
       session.phone,
@@ -70,13 +82,21 @@ export class RequestsController {
     );
   }
 
-  @UseGuards(EmployeeSessionGuard)
   @Post(':id/attachments/complete')
-  completeAttachment(
+  async completeAttachment(
     @Param('id') id: string,
     @Body() dto: CompleteAttachmentUploadDto,
-    @EmployeeSession() session: EmployeeSessionPrincipal,
+    @Req() request: EmployeeRequestContext,
   ) {
+    if (dto.uploadSessionToken) {
+      return this.attachmentsService.completePublicUpload(
+        id,
+        dto.uploadSessionToken,
+        dto,
+      );
+    }
+
+    const session = await this.resolveEmployeeSession(request);
     return this.attachmentsService.completeEmployeeUpload(
       id,
       session.phone,
@@ -141,4 +161,59 @@ export class RequestsController {
   ) {
     return this.requestsService.getRequestDetail(id, session.phone);
   }
+
+  private async resolveEmployeeSession(
+    request: EmployeeRequestContext,
+  ): Promise<EmployeeSessionPrincipal> {
+    const token = this.extractSessionToken(
+      request.headers?.authorization,
+      request.headers?.['x-employee-session-token'],
+    );
+
+    if (!token) {
+      throw new UnauthorizedException({
+        code: 'SESSION_TOKEN_REQUIRED',
+        message: 'Missing session token',
+      });
+    }
+
+    const session = await this.authOtpService.validateSessionToken(token);
+    if (!session) {
+      throw new UnauthorizedException({
+        code: 'INVALID_OR_EXPIRED_SESSION',
+        message: 'Invalid or expired session token',
+      });
+    }
+
+    return {
+      sessionId: session.id,
+      phone: session.phone,
+      email: session.email,
+      expiresAt: session.expiresAt,
+    };
+  }
+
+  private extractSessionToken(
+    authorization?: string,
+    headerToken?: string | string[],
+  ): string | null {
+    if (authorization?.startsWith('Bearer ')) {
+      const token = authorization.slice('Bearer '.length).trim();
+      return token.length > 0 ? token : null;
+    }
+
+    if (typeof headerToken === 'string') {
+      const token = headerToken.trim();
+      return token.length > 0 ? token : null;
+    }
+
+    return null;
+  }
 }
+
+type EmployeeRequestContext = {
+  headers?: {
+    authorization?: string;
+    'x-employee-session-token'?: string | string[];
+  };
+};

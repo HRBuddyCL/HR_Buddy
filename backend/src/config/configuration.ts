@@ -193,6 +193,10 @@ export default () => ({
       process.env.ATTACHMENT_UPLOAD_TICKET_TTL_SECONDS ?? '900',
       10,
     ),
+    publicUploadSessionTtlSeconds: parseInt(
+      process.env.ATTACHMENT_PUBLIC_UPLOAD_SESSION_TTL_SECONDS ?? '1800',
+      10,
+    ),
     downloadUrlTtlSeconds: parseInt(
       process.env.ATTACHMENT_DOWNLOAD_URL_TTL_SECONDS ?? '900',
       10,

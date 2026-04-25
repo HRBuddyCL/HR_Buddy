@@ -19,6 +19,6 @@ import { WebhookAttachmentStorageProvider } from './storage/webhook-attachment-s
     WebhookAttachmentStorageProvider,
     B2AttachmentStorageProvider,
   ],
-  exports: [AttachmentsService],
+  exports: [AttachmentsService, AttachmentStorageService],
 })
 export class AttachmentsModule {}

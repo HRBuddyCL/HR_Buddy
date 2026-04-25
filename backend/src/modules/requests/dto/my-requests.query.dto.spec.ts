@@ -11,6 +11,10 @@ describe('MyRequestsQueryDto', () => {
       sortBy: 'createdAt',
       sortOrder: 'asc',
       q: 'HRB-2026',
+      createdDateFrom: '2026-04-01',
+      createdDateTo: '2026-04-30',
+      closedDateFrom: '2026-04-05',
+      closedDateTo: '2026-04-25',
     });
 
     const errors = validateSync(dto);

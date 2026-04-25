@@ -8,8 +8,10 @@ import { ConfigService } from '@nestjs/config';
 import {
   ActivityAction,
   ActorRole,
+  DeliveryMethod,
   FileKind,
   Prisma,
+  RequestType,
   UploadedByRole,
 } from '@prisma/client';
 import { randomBytes } from 'crypto';
@@ -28,6 +30,10 @@ import {
   signAttachmentUploadTicket,
   verifyAttachmentUploadTicket,
 } from './utils/attachment-upload-ticket.util';
+import {
+  signPublicUploadSessionToken,
+  verifyPublicUploadSessionToken,
+} from './utils/public-upload-session-token.util';
 
 @Injectable()
 export class AttachmentsService {
@@ -58,6 +64,8 @@ export class AttachmentsService {
   async addAdminAttachment(requestId: string, dto: CreateAttachmentDto) {
     return this.prisma.$transaction(async (tx) => {
       await this.assertRequestExists(tx, requestId);
+      await this.assertAdminUploadPolicy(tx, requestId, dto.fileKind);
+      const operatorId = await this.assertActiveOperator(tx, dto.operatorId);
 
       return this.createAttachment(
         tx,
@@ -65,6 +73,7 @@ export class AttachmentsService {
         dto,
         UploadedByRole.ADMIN,
         ActorRole.ADMIN,
+        operatorId,
       );
     });
   }
@@ -86,12 +95,43 @@ export class AttachmentsService {
     });
   }
 
+  issuePublicUploadSessionToken(requestId: string) {
+    const expiresAt = this.secondsFromNow(this.publicUploadSessionTtlSeconds());
+
+    return signPublicUploadSessionToken(
+      {
+        requestId,
+        exp: Math.floor(expiresAt.getTime() / 1000),
+      },
+      this.uploadTicketSecret(),
+    );
+  }
+
+  async issuePublicUploadTicket(
+    requestId: string,
+    uploadSessionToken: string,
+    dto: CreateAttachmentUploadTicketDto,
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      await this.assertRequestExists(tx, requestId);
+      this.assertPublicUploadSessionToken(requestId, uploadSessionToken);
+
+      return this.issueUploadTicket(
+        tx,
+        requestId,
+        dto,
+        UploadedByRole.EMPLOYEE,
+      );
+    });
+  }
+
   async issueAdminUploadTicket(
     requestId: string,
     dto: CreateAttachmentUploadTicketDto,
   ) {
     return this.prisma.$transaction(async (tx) => {
       await this.assertRequestExists(tx, requestId);
+      await this.assertAdminUploadPolicy(tx, requestId, dto.fileKind);
 
       return this.issueUploadTicket(tx, requestId, dto, UploadedByRole.ADMIN);
     });
@@ -115,12 +155,32 @@ export class AttachmentsService {
     });
   }
 
+  async completePublicUpload(
+    requestId: string,
+    uploadSessionToken: string,
+    dto: CompleteAttachmentUploadDto,
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      await this.assertRequestExists(tx, requestId);
+      this.assertPublicUploadSessionToken(requestId, uploadSessionToken);
+
+      return this.completeUpload(
+        tx,
+        requestId,
+        dto.uploadToken,
+        UploadedByRole.EMPLOYEE,
+        ActorRole.EMPLOYEE,
+      );
+    });
+  }
+
   async completeAdminUpload(
     requestId: string,
     dto: CompleteAttachmentUploadDto,
   ) {
     return this.prisma.$transaction(async (tx) => {
       await this.assertRequestExists(tx, requestId);
+      const operatorId = await this.assertActiveOperator(tx, dto.operatorId);
 
       return this.completeUpload(
         tx,
@@ -128,6 +188,7 @@ export class AttachmentsService {
         dto.uploadToken,
         UploadedByRole.ADMIN,
         ActorRole.ADMIN,
+        operatorId,
       );
     });
   }
@@ -217,6 +278,7 @@ export class AttachmentsService {
     uploadToken: string,
     uploadedByRole: UploadedByRole,
     actorRole: ActorRole,
+    operatorId?: string,
   ) {
     const ticket = verifyAttachmentUploadTicket(
       uploadToken,
@@ -283,6 +345,7 @@ export class AttachmentsService {
       },
       uploadedByRole,
       actorRole,
+      operatorId,
     );
   }
 
@@ -342,6 +405,7 @@ export class AttachmentsService {
     dto: CreateAttachmentDto,
     uploadedByRole: UploadedByRole,
     actorRole: ActorRole,
+    operatorId?: string,
   ) {
     assertAttachmentPolicy({
       fileKind: dto.fileKind,
@@ -415,6 +479,7 @@ export class AttachmentsService {
         action: ActivityAction.UPLOAD_ATTACHMENT,
         note: attachment.fileName,
         actorRole,
+        operatorId,
       },
     });
 
@@ -444,6 +509,77 @@ export class AttachmentsService {
     }
   }
 
+  private async assertAdminUploadPolicy(
+    tx: Prisma.TransactionClient,
+    requestId: string,
+    fileKind: FileKind,
+  ) {
+    const request = await tx.request.findUnique({
+      where: { id: requestId },
+      select: {
+        type: true,
+        documentRequestDetail: {
+          select: {
+            deliveryMethod: true,
+          },
+        },
+      },
+    });
+
+    if (!request) {
+      throw new NotFoundException({
+        code: 'REQUEST_NOT_FOUND',
+        message: 'Request not found',
+      });
+    }
+
+    if (request.type !== RequestType.DOCUMENT) {
+      throw new BadRequestException({
+        code: 'ADMIN_ATTACHMENT_ALLOWED_ONLY_FOR_DOCUMENT_REQUESTS',
+        message: 'Admin upload is allowed only for DOCUMENT requests',
+      });
+    }
+
+    if (!request.documentRequestDetail) {
+      throw new BadRequestException({
+        code: 'DOCUMENT_DETAIL_NOT_FOUND',
+        message: 'Document detail not found for this request',
+      });
+    }
+
+    const { deliveryMethod } = request.documentRequestDetail;
+
+    if (deliveryMethod === DeliveryMethod.POSTAL) {
+      throw new BadRequestException({
+        code: 'ADMIN_ATTACHMENT_NOT_ALLOWED_FOR_POSTAL_DELIVERY',
+        message: 'Admin upload is not allowed when deliveryMethod is POSTAL',
+      });
+    }
+
+    if (
+      deliveryMethod === DeliveryMethod.DIGITAL &&
+      fileKind !== FileKind.DOCUMENT
+    ) {
+      throw new BadRequestException({
+        code: 'DOCUMENT_DIGITAL_DELIVERY_REQUIRES_DOCUMENT_FILE',
+        message:
+          'When deliveryMethod is DIGITAL, admin upload must be DOCUMENT',
+      });
+    }
+
+    if (
+      deliveryMethod === DeliveryMethod.PICKUP &&
+      fileKind !== FileKind.IMAGE &&
+      fileKind !== FileKind.VIDEO
+    ) {
+      throw new BadRequestException({
+        code: 'DOCUMENT_PICKUP_DELIVERY_REQUIRES_MEDIA_FILE',
+        message:
+          'When deliveryMethod is PICKUP, admin upload must be IMAGE or VIDEO',
+      });
+    }
+  }
+
   private async assertEmployeeRequestAccess(
     tx: Prisma.TransactionClient,
     requestId: string,
@@ -467,6 +603,40 @@ export class AttachmentsService {
         message: 'Not your request',
       });
     }
+  }
+
+  private async assertActiveOperator(
+    tx: Prisma.TransactionClient,
+    operatorId: string | undefined,
+  ) {
+    const normalizedOperatorId = operatorId?.trim() ?? '';
+    if (!normalizedOperatorId) {
+      throw new BadRequestException({
+        code: 'INVALID_OPERATOR_ID',
+        message: 'Invalid operatorId',
+      });
+    }
+
+    const operator = await tx.operator.findUnique({
+      where: { id: normalizedOperatorId },
+      select: { id: true, isActive: true },
+    });
+
+    if (!operator) {
+      throw new BadRequestException({
+        code: 'INVALID_OPERATOR_ID',
+        message: 'Invalid operatorId',
+      });
+    }
+
+    if (!operator.isActive) {
+      throw new BadRequestException({
+        code: 'OPERATOR_INACTIVE',
+        message: 'operatorId is inactive',
+      });
+    }
+
+    return operator.id;
   }
 
   private assertUploadedObjectMetadata(params: {
@@ -556,6 +726,40 @@ export class AttachmentsService {
     const code = (error as { code?: unknown }).code;
     return code === 'P2002';
   }
+
+  private assertPublicUploadSessionToken(
+    requestId: string,
+    uploadSessionToken: string,
+  ) {
+    const payload = verifyPublicUploadSessionToken(
+      uploadSessionToken,
+      this.uploadTicketSecret(),
+    );
+
+    if (!payload) {
+      throw new BadRequestException({
+        code: 'INVALID_PUBLIC_UPLOAD_SESSION_TOKEN',
+        message: 'Invalid upload session token',
+      });
+    }
+
+    const nowSeconds = Math.floor(Date.now() / 1000);
+
+    if (payload.exp < nowSeconds) {
+      throw new BadRequestException({
+        code: 'PUBLIC_UPLOAD_SESSION_TOKEN_EXPIRED',
+        message: 'Upload session token is expired',
+      });
+    }
+
+    if (payload.requestId !== requestId) {
+      throw new BadRequestException({
+        code: 'PUBLIC_UPLOAD_SESSION_TOKEN_REQUEST_MISMATCH',
+        message: 'Upload session token is not for this request',
+      });
+    }
+  }
+
   private uploadTicketSecret() {
     return (
       this.config.get<string>('attachments.uploadTicketSecret') ??
@@ -565,6 +769,13 @@ export class AttachmentsService {
 
   private uploadTicketTtlSeconds() {
     return this.config.get<number>('attachments.uploadTicketTtlSeconds') ?? 900;
+  }
+
+  private publicUploadSessionTtlSeconds() {
+    return (
+      this.config.get<number>('attachments.publicUploadSessionTtlSeconds') ??
+      1800
+    );
   }
 
   private downloadUrlTtlSeconds() {

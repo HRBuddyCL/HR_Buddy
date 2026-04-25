@@ -39,4 +39,10 @@ export class CreateAttachmentDto {
   @IsUrl({ require_tld: false })
   @MaxLength(1000)
   publicUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(100)
+  operatorId?: string;
 }

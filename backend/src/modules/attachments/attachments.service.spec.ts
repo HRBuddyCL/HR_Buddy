@@ -23,6 +23,9 @@ describe('AttachmentsService', () => {
     requestActivityLog: {
       create: jest.fn(),
     },
+    operator: {
+      findUnique: jest.fn(),
+    },
   };
 
   const prisma = {
@@ -84,9 +87,20 @@ describe('AttachmentsService', () => {
 
     tx.$queryRaw.mockResolvedValue([{ pg_advisory_xact_lock: null }]);
 
-    tx.request.findUnique.mockResolvedValue({
-      id: 'req-1',
-      phone: '+66811111111',
+    tx.request.findUnique.mockImplementation(async ({ select }: any) => {
+      if (select?.type) {
+        return {
+          type: 'DOCUMENT',
+          documentRequestDetail: {
+            deliveryMethod: 'DIGITAL',
+          },
+        };
+      }
+
+      return {
+        id: 'req-1',
+        phone: '+66811111111',
+      };
     });
 
     tx.request.update.mockResolvedValue({ id: 'req-1' });
@@ -107,6 +121,10 @@ describe('AttachmentsService', () => {
     });
 
     tx.requestActivityLog.create.mockResolvedValue({ id: 'log-1' });
+    tx.operator.findUnique.mockResolvedValue({
+      id: 'op-1',
+      isActive: true,
+    });
 
     storageProvider.createUploadPresign.mockResolvedValue({
       url: 'https://upload.example/put',
@@ -163,6 +181,88 @@ describe('AttachmentsService', () => {
     );
   });
 
+  it('rejects admin upload for DOCUMENT/PICKUP when file kind is not IMAGE or VIDEO', async () => {
+    tx.request.findUnique.mockImplementation(async ({ select }: any) => {
+      if (select?.type) {
+        return {
+          type: 'DOCUMENT',
+          documentRequestDetail: {
+            deliveryMethod: 'PICKUP',
+          },
+        };
+      }
+
+      return {
+        id: 'req-1',
+        phone: '+66811111111',
+      };
+    });
+
+    await expectErrorCode(
+      service.issueAdminUploadTicket('req-1', {
+        fileKind: 'DOCUMENT',
+        fileName: 'pickup-proof.pdf',
+        mimeType: 'application/pdf',
+        fileSize: 1024,
+      }),
+      'DOCUMENT_PICKUP_DELIVERY_REQUIRES_MEDIA_FILE',
+    );
+  });
+
+  it('rejects admin upload for non-document request types', async () => {
+    tx.request.findUnique.mockImplementation(async ({ select }: any) => {
+      if (select?.type) {
+        return {
+          type: 'BUILDING',
+          documentRequestDetail: null,
+        };
+      }
+
+      return {
+        id: 'req-1',
+        phone: '+66811111111',
+      };
+    });
+
+    await expectErrorCode(
+      service.issueAdminUploadTicket('req-1', {
+        fileKind: 'IMAGE',
+        fileName: 'building-proof.jpg',
+        mimeType: 'image/jpeg',
+        fileSize: 1024,
+      }),
+      'ADMIN_ATTACHMENT_ALLOWED_ONLY_FOR_DOCUMENT_REQUESTS',
+    );
+  });
+
+  it('rejects admin upload for DOCUMENT/POSTAL for all file kinds', async () => {
+    tx.request.findUnique.mockImplementation(async ({ select }: any) => {
+      if (select?.type) {
+        return {
+          type: 'DOCUMENT',
+          documentRequestDetail: {
+            deliveryMethod: 'POSTAL',
+          },
+        };
+      }
+
+      return {
+        id: 'req-1',
+        phone: '+66811111111',
+      };
+    });
+
+    await expectErrorCode(
+      service.issueAdminUploadTicket('req-1', {
+        fileKind: 'IMAGE',
+        fileName: 'postal-proof.jpg',
+        mimeType: 'image/jpeg',
+        fileSize: 1024,
+      }),
+      'ADMIN_ATTACHMENT_NOT_ALLOWED_FOR_POSTAL_DELIVERY',
+    );
+  });
+
   it('rejects issue upload ticket when mime type is invalid for file kind', async () => {
     await expectErrorCode(
       service.issueAdminUploadTicket('req-1', {
@@ -191,7 +291,10 @@ describe('AttachmentsService', () => {
 
   it('rejects complete upload when token is invalid', async () => {
     await expectErrorCode(
-      service.completeAdminUpload('req-1', { uploadToken: 'invalid-token' }),
+      service.completeAdminUpload('req-1', {
+        uploadToken: 'invalid-token',
+        operatorId: 'op-1',
+      }),
       'INVALID_ATTACHMENT_UPLOAD_TOKEN',
     );
   });
@@ -214,7 +317,7 @@ describe('AttachmentsService', () => {
     storageProvider.getObjectMetadata.mockResolvedValue(null);
 
     await expectErrorCode(
-      service.completeAdminUpload('req-1', { uploadToken }),
+      service.completeAdminUpload('req-1', { uploadToken, operatorId: 'op-1' }),
       'ATTACHMENT_OBJECT_NOT_FOUND',
     );
 
@@ -241,7 +344,7 @@ describe('AttachmentsService', () => {
     });
 
     await expectErrorCode(
-      service.completeAdminUpload('req-1', { uploadToken }),
+      service.completeAdminUpload('req-1', { uploadToken, operatorId: 'op-1' }),
       'ATTACHMENT_FILE_SIZE_MISMATCH',
     );
   });
@@ -267,7 +370,7 @@ describe('AttachmentsService', () => {
     });
 
     await expectErrorCode(
-      service.completeAdminUpload('req-1', { uploadToken }),
+      service.completeAdminUpload('req-1', { uploadToken, operatorId: 'op-1' }),
       'ATTACHMENT_MIME_TYPE_MISMATCH',
     );
   });
@@ -288,7 +391,7 @@ describe('AttachmentsService', () => {
     );
 
     await expectErrorCode(
-      service.completeAdminUpload('req-1', { uploadToken }),
+      service.completeAdminUpload('req-1', { uploadToken, operatorId: 'op-1' }),
       'ATTACHMENT_UPLOAD_TOKEN_ROLE_MISMATCH',
     );
   });
@@ -308,7 +411,10 @@ describe('AttachmentsService', () => {
       uploadSecret,
     );
 
-    const result = await service.completeAdminUpload('req-1', { uploadToken });
+    const result = await service.completeAdminUpload('req-1', {
+      uploadToken,
+      operatorId: 'op-1',
+    });
 
     expect(result).toMatchObject({
       id: 'att-1',
@@ -322,6 +428,7 @@ describe('AttachmentsService', () => {
         requestId: 'req-1',
         action: 'UPLOAD_ATTACHMENT',
         actorRole: 'ADMIN',
+        operatorId: 'op-1',
         note: 'doc.pdf',
       }),
     });
@@ -402,7 +509,10 @@ describe('AttachmentsService', () => {
       uploadSecret,
     );
 
-    await service.completeAdminUpload('req-1', { uploadToken });
+    await service.completeAdminUpload('req-1', {
+      uploadToken,
+      operatorId: 'op-1',
+    });
 
     expect(tx.$queryRaw).toHaveBeenCalledTimes(2);
     expect((tx.$queryRaw as jest.Mock).mock.calls[0][1]).toContain(
@@ -427,7 +537,7 @@ describe('AttachmentsService', () => {
     tx.requestAttachment.create.mockRejectedValue({ code: 'P2002' });
 
     await expectErrorCode(
-      service.completeAdminUpload('req-1', { uploadToken }),
+      service.completeAdminUpload('req-1', { uploadToken, operatorId: 'op-1' }),
       'DUPLICATE_ATTACHMENT_STORAGE_KEY',
     );
   });

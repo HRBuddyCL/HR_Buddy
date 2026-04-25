@@ -29,7 +29,12 @@ describe('RequestsService create lock', () => {
   };
 
   const notificationsService = {
+    notifyAdminRequestSubmitted: jest.fn(),
     notifyAdminRequestCanceled: jest.fn(),
+  };
+
+  const attachmentsService = {
+    issuePublicUploadSessionToken: jest.fn(() => 'upload-session-token'),
   };
 
   const buildService = (useDbLock: boolean) => {
@@ -53,6 +58,7 @@ describe('RequestsService create lock', () => {
       notificationsService as never,
       { next: jest.fn(async () => 'HRB-20260308-0001') } as never,
       config as never,
+      attachmentsService as never,
     );
   };
 
@@ -77,6 +83,9 @@ describe('RequestsService create lock', () => {
     });
     tx.request.update.mockResolvedValue({ id: 'req-1' });
     tx.requestActivityLog.create.mockResolvedValue({ id: 'log-1' });
+    notificationsService.notifyAdminRequestSubmitted.mockResolvedValue({
+      id: 'notif-0',
+    });
     notificationsService.notifyAdminRequestCanceled.mockResolvedValue({
       id: 'notif-1',
     });

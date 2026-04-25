@@ -44,11 +44,17 @@ describe('MessengerService replay guard', () => {
     notifyAdminProblemReported: jest.fn(),
     notifyEmployeeStatusChange: jest.fn(),
   };
+  const attachmentStorageService = {
+    getProvider: jest.fn(() => ({
+      createDownloadPresign: jest.fn(),
+    })),
+  };
 
   const service = new MessengerService(
     prisma as never,
     config as never,
     notificationsService as never,
+    attachmentStorageService as never,
   );
 
   const baseLink = {

@@ -5,6 +5,7 @@ import {
   Prisma,
   RecipientRole,
   RequestStatus,
+  RequestType,
 } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationListQueryDto } from './dto/notification-list.query.dto';
@@ -36,6 +37,13 @@ const STATUS_LABEL_TH: Record<RequestStatus, string> = {
   DONE: 'เสร็จสิ้น',
   REJECTED: 'ถูกปฏิเสธ',
   CANCELED: 'ยกเลิก',
+};
+
+const REQUEST_TYPE_LABEL_TH: Record<RequestType, string> = {
+  BUILDING: 'ซ่อมอาคาร',
+  VEHICLE: 'ซ่อมรถ',
+  MESSENGER: 'เมสเซนเจอร์',
+  DOCUMENT: 'เอกสาร',
 };
 
 @Injectable()
@@ -113,6 +121,30 @@ export class NotificationsService {
         requestId: params.requestId,
         eventType: NotificationEventType.MESSENGER_BOOKED,
         title: 'มีคำขอเมสเซนเจอร์ใหม่',
+        message: `คำขอ ${params.requestNo} จาก ${params.employeeName}`,
+      },
+      tx,
+    );
+  }
+
+  async notifyAdminRequestSubmitted(
+    params: {
+      requestId: string;
+      requestNo: string;
+      employeeName: string;
+      type: RequestType;
+    },
+    tx?: Tx,
+  ) {
+    const requestTypeLabel = REQUEST_TYPE_LABEL_TH[params.type] ?? params.type;
+
+    await this.create(
+      {
+        recipientRole: RecipientRole.ADMIN,
+        requestId: params.requestId,
+        // Reuse existing enum for newly submitted requests.
+        eventType: NotificationEventType.MESSENGER_BOOKED,
+        title: `มีคำขอใหม่ (${requestTypeLabel})`,
         message: `คำขอ ${params.requestNo} จาก ${params.employeeName}`,
       },
       tx,

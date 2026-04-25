@@ -158,6 +158,10 @@ export const envValidationSchema = Joi.object({
     .integer()
     .min(60)
     .default(900),
+  ATTACHMENT_PUBLIC_UPLOAD_SESSION_TTL_SECONDS: Joi.number()
+    .integer()
+    .min(60)
+    .default(1800),
   ATTACHMENT_DOWNLOAD_URL_TTL_SECONDS: Joi.number()
     .integer()
     .min(60)

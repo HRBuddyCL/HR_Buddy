@@ -649,6 +649,49 @@ describe('HR Buddy API (e2e)', () => {
       });
   });
 
+  it('messenger flow: admin approves, messenger closes DONE, admin sees DONE', async () => {
+    const adminToken = await loginAsAdmin();
+
+    adminRequestsServiceMock.updateStatus.mockResolvedValueOnce({
+      id: 'req-1',
+      status: 'APPROVED',
+    });
+    messengerServiceMock.updateStatus.mockResolvedValueOnce({
+      id: 'req-1',
+      status: 'DONE',
+    });
+    adminRequestsServiceMock.detail.mockResolvedValueOnce({
+      id: 'req-1',
+      status: 'DONE',
+    });
+
+    await request(app.getHttpServer())
+      .patch('/admin/requests/req-1/status')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ status: 'APPROVED', operatorId: 'op-1', note: 'Approved' })
+      .expect(200)
+      .expect((res) => {
+        expect(res.body).toMatchObject({ id: 'req-1', status: 'APPROVED' });
+      });
+
+    await request(app.getHttpServer())
+      .patch('/messenger/link/status')
+      .set('x-messenger-token', 'token-abc')
+      .send({ status: 'DONE', note: 'Delivered to destination' })
+      .expect(200)
+      .expect((res) => {
+        expect(res.body.status).toBe('DONE');
+      });
+
+    await request(app.getHttpServer())
+      .get('/admin/requests/req-1')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(200)
+      .expect((res) => {
+        expect(res.body).toMatchObject({ id: 'req-1', status: 'DONE' });
+      });
+  });
+
   it('POST /messenger/link/report-problem validates body', async () => {
     await request(app.getHttpServer())
       .post('/messenger/link/report-problem')

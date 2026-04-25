@@ -3,6 +3,7 @@ import {
   IsEnum,
   IsInt,
   IsNotEmpty,
+  IsOptional,
   IsString,
   Max,
   MaxLength,
@@ -27,4 +28,10 @@ export class CreateAttachmentUploadTicketDto {
   @Min(1)
   @Max(104857600)
   fileSize!: number;
+
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(5000)
+  uploadSessionToken?: string;
 }

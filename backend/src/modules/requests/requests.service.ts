@@ -45,6 +45,7 @@ import {
 import { MessengerService } from '../messenger/messenger.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { RequestNoService } from './request-no.service';
+import { AttachmentsService } from '../attachments/attachments.service';
 
 type Tx = Prisma.TransactionClient;
 type DetailCreator = (tx: Tx, requestId: string) => Promise<void>;
@@ -58,6 +59,7 @@ export class RequestsService {
     private readonly notificationsService: NotificationsService,
     private readonly requestNoService: RequestNoService,
     private readonly config: ConfigService,
+    private readonly attachmentsService: AttachmentsService,
   ) {}
 
   /**
@@ -188,16 +190,15 @@ export class RequestsService {
         },
       });
 
-      if (type === RequestType.MESSENGER) {
-        await this.notificationsService.notifyAdminMessengerBooked(
-          {
-            requestId: request.id,
-            requestNo: request.requestNo,
-            employeeName: request.employeeName,
-          },
-          tx,
-        );
-      }
+      await this.notificationsService.notifyAdminRequestSubmitted(
+        {
+          requestId: request.id,
+          requestNo: request.requestNo,
+          employeeName: request.employeeName,
+          type,
+        },
+        tx,
+      );
 
       // 4) latestActivityAt (common)
       await tx.request.update({
@@ -210,6 +211,8 @@ export class RequestsService {
         id: request.id,
         requestNo: request.requestNo,
         status: request.status,
+        uploadSessionToken:
+          this.attachmentsService.issuePublicUploadSessionToken(request.id),
       };
     });
   }
@@ -525,6 +528,40 @@ export class RequestsService {
         { requestNo: { contains: query, mode: 'insensitive' } },
         { employeeName: { contains: query, mode: 'insensitive' } },
       ];
+    }
+
+    if (q.createdDateFrom || q.createdDateTo) {
+      const createdAt: Prisma.DateTimeFilter = {};
+
+      if (q.createdDateFrom) {
+        createdAt.gte = new Date(q.createdDateFrom);
+      }
+
+      if (q.createdDateTo) {
+        const endOfDate = new Date(q.createdDateTo);
+        endOfDate.setHours(23, 59, 59, 999);
+        createdAt.lte = endOfDate;
+      }
+
+      where.createdAt = createdAt;
+    }
+
+    if (q.closedDateFrom || q.closedDateTo) {
+      const closedAt: Prisma.DateTimeNullableFilter = {
+        not: null,
+      };
+
+      if (q.closedDateFrom) {
+        closedAt.gte = new Date(q.closedDateFrom);
+      }
+
+      if (q.closedDateTo) {
+        const endOfDate = new Date(q.closedDateTo);
+        endOfDate.setHours(23, 59, 59, 999);
+        closedAt.lte = endOfDate;
+      }
+
+      where.closedAt = closedAt;
     }
 
     const MAX_LIMIT = 100;
