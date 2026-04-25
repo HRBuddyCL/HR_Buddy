@@ -25,4 +25,12 @@ describe('buildAdminAuditWhere', () => {
     expect(where.OR).toBeDefined();
     expect(where.OR).toHaveLength(5);
   });
+
+  it('maps request urgency filter into nested request where clause', () => {
+    const where = buildAdminAuditWhere({ requestUrgency: 'CRITICAL' });
+
+    expect(where.request).toEqual({
+      urgency: 'CRITICAL',
+    });
+  });
 });

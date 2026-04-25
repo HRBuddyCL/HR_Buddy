@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -42,6 +43,11 @@ export class AdminSettingsController {
     return this.settingsService.updateDepartment(id, dto);
   }
 
+  @Delete('departments/:id')
+  deleteDepartment(@Param('id') id: string) {
+    return this.settingsService.deleteDepartment(id);
+  }
+
   @Get('problem-categories')
   listProblemCategories(@Query() q: AdminSettingsListQueryDto) {
     return this.settingsService.listProblemCategories(q);
@@ -58,6 +64,11 @@ export class AdminSettingsController {
     @Body() dto: UpdateProblemCategoryDto,
   ) {
     return this.settingsService.updateProblemCategory(id, dto);
+  }
+
+  @Delete('problem-categories/:id')
+  deleteProblemCategory(@Param('id') id: string) {
+    return this.settingsService.deleteProblemCategory(id);
   }
 
   @Get('vehicle-issue-categories')
@@ -78,6 +89,11 @@ export class AdminSettingsController {
     return this.settingsService.updateVehicleIssueCategory(id, dto);
   }
 
+  @Delete('vehicle-issue-categories/:id')
+  deleteVehicleIssueCategory(@Param('id') id: string) {
+    return this.settingsService.deleteVehicleIssueCategory(id);
+  }
+
   @Get('operators')
   listOperators(@Query() q: AdminSettingsListQueryDto) {
     return this.settingsService.listOperators(q);
@@ -91,5 +107,10 @@ export class AdminSettingsController {
   @Patch('operators/:id')
   updateOperator(@Param('id') id: string, @Body() dto: UpdateOperatorDto) {
     return this.settingsService.updateOperator(id, dto);
+  }
+
+  @Delete('operators/:id')
+  deleteOperator(@Param('id') id: string) {
+    return this.settingsService.deleteOperator(id);
   }
 }

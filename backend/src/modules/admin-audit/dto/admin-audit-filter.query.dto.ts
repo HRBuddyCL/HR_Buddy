@@ -1,4 +1,10 @@
-import { ActivityAction, ActorRole } from '@prisma/client';
+import {
+  ActivityAction,
+  ActorRole,
+  RequestStatus,
+  RequestType,
+  Urgency,
+} from '@prisma/client';
 import {
   IsDateString,
   IsEnum,
@@ -8,6 +14,18 @@ import {
 } from 'class-validator';
 
 export class AdminAuditFilterQueryDto {
+  @IsOptional()
+  @IsEnum(RequestType)
+  requestType?: RequestType;
+
+  @IsOptional()
+  @IsEnum(RequestStatus)
+  requestStatus?: RequestStatus;
+
+  @IsOptional()
+  @IsEnum(Urgency)
+  requestUrgency?: Urgency;
+
   @IsOptional()
   @IsEnum(ActivityAction)
   action?: ActivityAction;
@@ -20,6 +38,11 @@ export class AdminAuditFilterQueryDto {
   @IsString()
   @MaxLength(50)
   operatorId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  departmentId?: string;
 
   @IsOptional()
   @IsString()

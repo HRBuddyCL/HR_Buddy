@@ -1,9 +1,20 @@
-import { ActivityAction, ActorRole, Prisma } from '@prisma/client';
+import {
+  ActivityAction,
+  ActorRole,
+  Prisma,
+  RequestStatus,
+  RequestType,
+  Urgency,
+} from '@prisma/client';
 
 export type AdminAuditFilter = {
+  requestType?: RequestType;
+  requestStatus?: RequestStatus;
+  requestUrgency?: Urgency;
   action?: ActivityAction;
   actorRole?: ActorRole;
   operatorId?: string;
+  departmentId?: string;
   requestId?: string;
   requestNo?: string;
   dateFrom?: string;
@@ -15,6 +26,19 @@ export function buildAdminAuditWhere(
   filter: AdminAuditFilter,
 ): Prisma.RequestActivityLogWhereInput {
   const where: Prisma.RequestActivityLogWhereInput = {};
+  const request: Prisma.RequestWhereInput = {};
+
+  if (filter.requestType) {
+    request.type = filter.requestType;
+  }
+
+  if (filter.requestStatus) {
+    request.status = filter.requestStatus;
+  }
+
+  if (filter.requestUrgency) {
+    request.urgency = filter.requestUrgency;
+  }
 
   if (filter.action) {
     where.action = filter.action;
@@ -28,17 +52,23 @@ export function buildAdminAuditWhere(
     where.operatorId = filter.operatorId;
   }
 
+  if (filter.departmentId) {
+    request.departmentId = filter.departmentId;
+  }
+
   if (filter.requestId) {
     where.requestId = filter.requestId;
   }
 
   if (filter.requestNo?.trim()) {
-    where.request = {
-      requestNo: {
-        contains: filter.requestNo.trim(),
-        mode: 'insensitive',
-      },
+    request.requestNo = {
+      contains: filter.requestNo.trim(),
+      mode: 'insensitive',
     };
+  }
+
+  if (Object.keys(request).length > 0) {
+    where.request = request;
   }
 
   if (filter.dateFrom || filter.dateTo) {
@@ -61,11 +91,13 @@ export function buildAdminAuditWhere(
 
   if (query) {
     where.OR = [
-      { note: { contains: query, mode: 'insensitive' } },
       {
         request: {
           requestNo: { contains: query, mode: 'insensitive' },
         },
+      },
+      {
+        actorDisplayName: { contains: query, mode: 'insensitive' },
       },
       {
         request: {

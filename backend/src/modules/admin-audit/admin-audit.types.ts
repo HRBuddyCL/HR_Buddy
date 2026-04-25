@@ -3,14 +3,17 @@ import {
   ActorRole,
   RequestStatus,
   RequestType,
+  Urgency,
 } from '@prisma/client';
 
 export type AdminAuditLogItem = {
   id: string;
   requestId: string;
   requestNo: string;
+  departmentName: string | null;
   requestType: RequestType;
   requestStatus: RequestStatus;
+  requestUrgency: Urgency;
   action: ActivityAction;
   fromStatus: RequestStatus | null;
   toStatus: RequestStatus | null;
@@ -34,4 +37,10 @@ export type AdminAuditCsvExportResult = {
   fileName: string;
   rowCount: number;
   csvContent: string;
+};
+
+export type AdminAuditXlsxExportResult = {
+  fileName: string;
+  rowCount: number;
+  xlsxContent: Buffer;
 };

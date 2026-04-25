@@ -66,6 +66,28 @@ const URGENCY_LABEL: Record<Urgency, string> = {
 
 type Tx = Prisma.TransactionClient;
 
+const STATUS_XLSX_BADGE_STYLE: Record<
+  RequestStatus,
+  { fill: string; font: string }
+> = {
+  NEW: { fill: 'FFDCEEFF', font: 'FF075985' },
+  APPROVED: { fill: 'FFE0E7FF', font: 'FF3730A3' },
+  IN_PROGRESS: { fill: 'FFFEF3C7', font: 'FF92400E' },
+  IN_TRANSIT: { fill: 'FFFFEDD5', font: 'FF9A3412' },
+  DONE: { fill: 'FFDCFCE7', font: 'FF166534' },
+  REJECTED: { fill: 'FFFFE4E6', font: 'FF9F1239' },
+  CANCELED: { fill: 'FFE2E8F0', font: 'FF334155' },
+};
+
+const URGENCY_XLSX_BADGE_STYLE: Record<
+  Urgency,
+  { fill: string; font: string }
+> = {
+  NORMAL: { fill: 'FFF1F5F9', font: 'FF334155' },
+  HIGH: { fill: 'FFFEF3C7', font: 'FF92400E' },
+  CRITICAL: { fill: 'FFFEE2E2', font: 'FFB91C1C' },
+};
+
 @Injectable()
 export class AdminRequestsService {
   private readonly thaiCsvDateTimeFormatter = new Intl.DateTimeFormat(
@@ -126,6 +148,8 @@ export class AdminRequestsService {
 
   private formatFilterSummary(q: AdminRequestsExportQueryDto): string {
     const parts: string[] = [];
+    const createdDateFrom = q.createdDateFrom ?? q.dateFrom;
+    const createdDateTo = q.createdDateTo ?? q.dateTo;
 
     if (q.type) {
       parts.push(`ประเภท: ${this.formatTypeLabel(q.type)}`);
@@ -135,12 +159,28 @@ export class AdminRequestsService {
       parts.push(`สถานะ: ${this.formatStatusLabel(q.status)}`);
     }
 
-    if (q.dateFrom) {
-      parts.push(`ตั้งแต่วันที่: ${q.dateFrom}`);
+    if (q.urgency) {
+      parts.push(`ระดับความเร่งด่วน: ${this.formatUrgencyLabel(q.urgency)}`);
     }
 
-    if (q.dateTo) {
-      parts.push(`ถึงวันที่: ${q.dateTo}`);
+    if (q.departmentId?.trim()) {
+      parts.push(`แผนก: ${q.departmentId.trim()}`);
+    }
+
+    if (createdDateFrom) {
+      parts.push(`วันที่สร้างตั้งแต่: ${createdDateFrom}`);
+    }
+
+    if (createdDateTo) {
+      parts.push(`วันที่สร้างถึง: ${createdDateTo}`);
+    }
+
+    if (q.closedDateFrom) {
+      parts.push(`วันที่ปิดตั้งแต่: ${q.closedDateFrom}`);
+    }
+
+    if (q.closedDateTo) {
+      parts.push(`วันที่ปิดถึง: ${q.closedDateTo}`);
     }
 
     if (q.q?.trim()) {
@@ -357,9 +397,19 @@ export class AdminRequestsService {
   ): Promise<AdminRequestXlsxExportResult> {
     const items = await this.getExportItems(q);
     const workbook = new Workbook();
-    const worksheet = workbook.addWorksheet('รายงานคำขอ', {
-      views: [{ state: 'frozen', ySplit: 6 }],
-    });
+    workbook.creator = 'HR Buddy';
+    workbook.lastModifiedBy = 'HR Buddy';
+    workbook.created = new Date();
+    workbook.modified = new Date();
+
+    const worksheet = workbook.addWorksheet('Requests Report');
+    worksheet.pageSetup = {
+      orientation: 'landscape',
+      fitToPage: true,
+      fitToWidth: 1,
+      fitToHeight: 0,
+      horizontalCentered: true,
+    };
 
     const columns = [
       { header: 'ลำดับ', width: 8 },
@@ -375,50 +425,95 @@ export class AdminRequestsService {
       { header: 'วันที่ปิดงาน', width: 24 },
     ];
 
+    const totalColumns = columns.length;
+    const createdDateFrom = q.createdDateFrom ?? q.dateFrom;
+    const createdDateTo = q.createdDateTo ?? q.dateTo;
+    const createdRange =
+      createdDateFrom || createdDateTo
+        ? `${createdDateFrom ?? '-'} to ${createdDateTo ?? '-'}`
+        : 'All';
+    const closedRange =
+      q.closedDateFrom || q.closedDateTo
+        ? `${q.closedDateFrom ?? '-'} to ${q.closedDateTo ?? '-'}`
+        : 'All';
+
+    const metadataRows = [
+      ['Generated at', this.formatThaiDateTime(new Date())],
+      ['Created date range', createdRange],
+      ['Closed date range', closedRange],
+      ['Filters', this.formatFilterSummary(q)],
+      ['Total rows', `${items.length}`],
+    ] as const;
+
+    const headerRowIndex = metadataRows.length + 4;
+
+    worksheet.views = [{ state: 'frozen', ySplit: headerRowIndex }];
     worksheet.columns = columns.map((column) => ({ width: column.width }));
-    worksheet.mergeCells(1, 1, 1, columns.length);
+
+    worksheet.mergeCells(1, 1, 1, totalColumns);
     worksheet.getCell(1, 1).value = 'รายงานคำขอฝ่ายผู้ดูแลระบบ';
     worksheet.getCell(1, 1).font = {
       bold: true,
-      size: 16,
-      color: { argb: 'FF0F172A' },
+      size: 18,
+      color: { argb: 'FFFFFFFF' },
     };
     worksheet.getCell(1, 1).alignment = {
       vertical: 'middle',
       horizontal: 'left',
     };
-    worksheet.getRow(1).height = 28;
-
-    const metadataRows = [
-      ['วันที่ออกรายงาน', this.formatThaiDateTime(new Date())],
-      ['จำนวนรายการ', String(items.length)],
-      ['ตัวกรองที่ใช้', this.formatFilterSummary(q)],
-    ];
+    worksheet.getCell(1, 1).fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FF0F172A' },
+    };
+    worksheet.getRow(1).height = 32;
 
     metadataRows.forEach((values, index) => {
-      const rowIndex = index + 2;
+      const rowIndex = index + 3;
       worksheet.getCell(rowIndex, 1).value = values[0];
       worksheet.getCell(rowIndex, 1).font = {
         bold: true,
-        color: { argb: 'FF334155' },
+        color: { argb: 'FF1E293B' },
       };
-      worksheet.mergeCells(rowIndex, 2, rowIndex, columns.length);
+      worksheet.getCell(rowIndex, 1).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFF1F5F9' },
+      };
+      worksheet.getCell(rowIndex, 1).alignment = {
+        vertical: 'middle',
+        horizontal: 'left',
+      };
+      worksheet.mergeCells(rowIndex, 2, rowIndex, totalColumns);
       worksheet.getCell(rowIndex, 2).value = values[1];
-      worksheet.getCell(rowIndex, 2).alignment = { wrapText: true };
+      worksheet.getCell(rowIndex, 2).alignment = {
+        vertical: 'middle',
+        horizontal: 'left',
+        wrapText: true,
+      };
+
+      for (let columnIndex = 1; columnIndex <= totalColumns; columnIndex += 1) {
+        const cell = worksheet.getCell(rowIndex, columnIndex);
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+          left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+          bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+          right: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        };
+      }
     });
 
-    const headerRowIndex = 6;
     const headerRow = worksheet.getRow(headerRowIndex);
     headerRow.values = columns.map((column) => column.header);
     headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-    headerRow.height = 22;
+    headerRow.height = 24;
 
-    for (let columnIndex = 1; columnIndex <= columns.length; columnIndex += 1) {
+    for (let columnIndex = 1; columnIndex <= totalColumns; columnIndex += 1) {
       const cell = headerRow.getCell(columnIndex);
       cell.fill = {
         type: 'pattern',
         pattern: 'solid',
-        fgColor: { argb: 'FF1E3A8A' },
+        fgColor: { argb: 'FF1D4ED8' },
       };
       cell.alignment = { vertical: 'middle', horizontal: 'center' };
       cell.border = {
@@ -429,58 +524,165 @@ export class AdminRequestsService {
       };
     }
 
-    items.forEach((item, index) => {
-      const row = worksheet.addRow([
-        index + 1,
-        item.requestNo,
-        this.formatTypeLabel(item.type),
-        this.formatStatusLabel(item.status),
-        this.formatUrgencyLabel(item.urgency),
-        item.employeeName,
-        this.formatPhoneForExcel(item.phone),
-        item.department.name,
-        this.formatThaiDateTime(item.createdAt),
-        this.formatThaiDateTime(item.latestActivityAt),
-        this.formatThaiDateTime(item.closedAt),
-      ]);
+    const dataStartRowIndex = headerRowIndex + 1;
+    let dataEndRowIndex = headerRowIndex;
 
-      const isAlternateRow = index % 2 === 1;
-      row.height = 20;
+    if (items.length === 0) {
+      worksheet.mergeCells(
+        dataStartRowIndex,
+        1,
+        dataStartRowIndex,
+        totalColumns,
+      );
+      const emptyCell = worksheet.getCell(dataStartRowIndex, 1);
+      emptyCell.value = 'No requests matched the current filters';
+      emptyCell.alignment = {
+        vertical: 'middle',
+        horizontal: 'center',
+      };
+      emptyCell.font = {
+        italic: true,
+        color: { argb: 'FF64748B' },
+      };
+      emptyCell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFF8FAFC' },
+      };
 
-      for (
-        let columnIndex = 1;
-        columnIndex <= columns.length;
-        columnIndex += 1
-      ) {
-        const cell = row.getCell(columnIndex);
-        cell.border = {
+      for (let columnIndex = 1; columnIndex <= totalColumns; columnIndex += 1) {
+        worksheet.getCell(dataStartRowIndex, columnIndex).border = {
           top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
           left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
           bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
           right: { style: 'thin', color: { argb: 'FFE2E8F0' } },
         };
+      }
+      worksheet.getRow(dataStartRowIndex).height = 24;
+      dataEndRowIndex = dataStartRowIndex;
+    } else {
+      items.forEach((item, index) => {
+        const row = worksheet.addRow([
+          index + 1,
+          item.requestNo,
+          this.formatTypeLabel(item.type),
+          this.formatStatusLabel(item.status),
+          this.formatUrgencyLabel(item.urgency),
+          item.employeeName,
+          this.formatPhoneForExcel(item.phone),
+          item.department.name,
+          this.formatThaiDateTime(item.createdAt),
+          this.formatThaiDateTime(item.latestActivityAt),
+          this.formatThaiDateTime(item.closedAt),
+        ]);
 
-        cell.alignment = {
-          vertical: 'middle',
-          horizontal:
-            columnIndex === 1 || columnIndex === 4 || columnIndex === 5
-              ? 'center'
-              : 'left',
+        const isAlternateRow = index % 2 === 1;
+        row.height = 21;
+
+        for (
+          let columnIndex = 1;
+          columnIndex <= totalColumns;
+          columnIndex += 1
+        ) {
+          const cell = row.getCell(columnIndex);
+          cell.border = {
+            top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+            left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+            bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+            right: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+          };
+
+          cell.alignment = {
+            vertical: 'middle',
+            horizontal:
+              columnIndex === 1 ||
+              columnIndex === 4 ||
+              columnIndex === 5 ||
+              columnIndex === 7
+                ? 'center'
+                : 'left',
+          };
+
+          if (isAlternateRow) {
+            cell.fill = {
+              type: 'pattern',
+              pattern: 'solid',
+              fgColor: { argb: 'FFF8FAFC' },
+            };
+          }
+        }
+
+        row.getCell(7).numFmt = '@';
+
+        const statusCell = row.getCell(4);
+        const statusStyle = STATUS_XLSX_BADGE_STYLE[item.status];
+        statusCell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: statusStyle.fill },
+        };
+        statusCell.font = {
+          bold: true,
+          color: { argb: statusStyle.font },
         };
 
-        if (isAlternateRow) {
-          cell.fill = {
-            type: 'pattern',
-            pattern: 'solid',
-            fgColor: { argb: 'FFF8FAFC' },
-          };
-        }
-      }
-    });
+        const urgencyCell = row.getCell(5);
+        const urgencyStyle = URGENCY_XLSX_BADGE_STYLE[item.urgency];
+        urgencyCell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: urgencyStyle.fill },
+        };
+        urgencyCell.font = {
+          bold: true,
+          color: { argb: urgencyStyle.font },
+        };
+      });
+
+      dataEndRowIndex = dataStartRowIndex + items.length - 1;
+    }
+
+    const summaryRowIndex = dataEndRowIndex + 1;
+    worksheet.mergeCells(summaryRowIndex, 1, summaryRowIndex, 2);
+    worksheet.getCell(summaryRowIndex, 1).value = 'Total';
+    worksheet.getCell(summaryRowIndex, 1).font = {
+      bold: true,
+      color: { argb: 'FF0F172A' },
+    };
+    worksheet.getCell(summaryRowIndex, 1).alignment = {
+      vertical: 'middle',
+      horizontal: 'left',
+    };
+    worksheet.getCell(summaryRowIndex, 3).value = items.length;
+    worksheet.getCell(summaryRowIndex, 3).numFmt = '#,##0';
+    worksheet.getCell(summaryRowIndex, 3).font = {
+      bold: true,
+      color: { argb: 'FF0F172A' },
+    };
+    worksheet.getCell(summaryRowIndex, 3).alignment = {
+      vertical: 'middle',
+      horizontal: 'center',
+    };
+
+    for (let columnIndex = 1; columnIndex <= totalColumns; columnIndex += 1) {
+      const cell = worksheet.getCell(summaryRowIndex, columnIndex);
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE2E8F0' },
+      };
+      cell.border = {
+        top: { style: 'medium', color: { argb: 'FF94A3B8' } },
+        left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+        bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+        right: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+      };
+    }
+    worksheet.getRow(summaryRowIndex).height = 22;
 
     worksheet.autoFilter = {
       from: { row: headerRowIndex, column: 1 },
-      to: { row: headerRowIndex, column: columns.length },
+      to: { row: headerRowIndex, column: totalColumns },
     };
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -492,35 +694,54 @@ export class AdminRequestsService {
   }
 
   async detail(id: string): Promise<AdminRequestDetailResponse> {
-    const req = await this.prisma.request.findUnique({
-      where: { id },
-      include: {
-        department: { select: { id: true, name: true } },
-        attachments: { orderBy: { createdAt: 'asc' } },
-        activityLogs: {
-          orderBy: { createdAt: 'asc' },
-          include: { operator: true },
+    return this.prisma.$transaction(async (tx) => {
+      const req = await tx.request.findUnique({
+        where: { id },
+        include: {
+          department: { select: { id: true, name: true } },
+          attachments: { orderBy: { createdAt: 'asc' } },
+          activityLogs: {
+            orderBy: { createdAt: 'asc' },
+            include: { operator: true },
+          },
+          buildingRepairDetail: { include: { problemCategory: true } },
+          vehicleRepairDetail: { include: { issueCategory: true } },
+          messengerBookingDetail: {
+            include: { senderAddress: true, receiverAddress: true },
+          },
+          documentRequestDetail: {
+            include: { deliveryAddress: true, digitalFileAttachment: true },
+          },
         },
-        buildingRepairDetail: { include: { problemCategory: true } },
-        vehicleRepairDetail: { include: { issueCategory: true } },
-        messengerBookingDetail: {
-          include: { senderAddress: true, receiverAddress: true },
-        },
-        documentRequestDetail: {
-          include: { deliveryAddress: true, digitalFileAttachment: true },
-        },
-        magicLink: true,
-      },
-    });
-
-    if (!req) {
-      throw new NotFoundException({
-        code: 'NOT_FOUND',
-        message: 'Request not found',
       });
-    }
 
-    return req;
+      if (!req) {
+        throw new NotFoundException({
+          code: 'NOT_FOUND',
+          message: 'Request not found',
+        });
+      }
+
+      let magicLink: { url: string; expiresAt: Date } | null = null;
+
+      if (
+        req.type === RequestType.MESSENGER &&
+        (req.status === RequestStatus.APPROVED ||
+          req.status === RequestStatus.IN_TRANSIT)
+      ) {
+        const generated =
+          await this.messengerService.createOrRotateMagicLinkForRequest(tx, id);
+        magicLink = {
+          url: generated.url,
+          expiresAt: generated.expiresAt,
+        };
+      }
+
+      return {
+        ...req,
+        magicLink,
+      };
+    });
   }
 
   async updateStatus(id: string, dto: AdminRequestActionDto) {

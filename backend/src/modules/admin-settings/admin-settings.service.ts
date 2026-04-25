@@ -110,6 +110,27 @@ export class AdminSettingsService {
     }
   }
 
+  async deleteDepartment(id: string) {
+    await this.assertDepartmentExists(id);
+
+    try {
+      return await this.prisma.department.delete({
+        where: { id },
+        select: {
+          id: true,
+          name: true,
+          isActive: true,
+        },
+      });
+    } catch (error) {
+      this.throwRelationInUseError(
+        error,
+        'DEPARTMENT_IN_USE',
+        'Department is in use and cannot be deleted',
+      );
+    }
+  }
+
   async listProblemCategories(q: AdminSettingsListQueryDto) {
     const search = normalizeOptionalSearch(q.q);
 
@@ -200,6 +221,28 @@ export class AdminSettingsService {
     }
   }
 
+  async deleteProblemCategory(id: string) {
+    await this.assertProblemCategoryExists(id);
+
+    try {
+      return await this.prisma.problemCategory.delete({
+        where: { id },
+        select: {
+          id: true,
+          name: true,
+          helperText: true,
+          isActive: true,
+        },
+      });
+    } catch (error) {
+      this.throwRelationInUseError(
+        error,
+        'PROBLEM_CATEGORY_IN_USE',
+        'Problem category is in use and cannot be deleted',
+      );
+    }
+  }
+
   async listVehicleIssueCategories(q: AdminSettingsListQueryDto) {
     const search = normalizeOptionalSearch(q.q);
 
@@ -282,6 +325,27 @@ export class AdminSettingsService {
         error,
         'VEHICLE_ISSUE_CATEGORY_NAME_EXISTS',
         'Vehicle issue category name already exists',
+      );
+    }
+  }
+
+  async deleteVehicleIssueCategory(id: string) {
+    await this.assertVehicleIssueCategoryExists(id);
+
+    try {
+      return await this.prisma.vehicleIssueCategory.delete({
+        where: { id },
+        select: {
+          id: true,
+          name: true,
+          isActive: true,
+        },
+      });
+    } catch (error) {
+      this.throwRelationInUseError(
+        error,
+        'VEHICLE_ISSUE_CATEGORY_IN_USE',
+        'Vehicle issue category is in use and cannot be deleted',
       );
     }
   }
@@ -372,6 +436,28 @@ export class AdminSettingsService {
     }
   }
 
+  async deleteOperator(id: string) {
+    await this.assertOperatorExists(id);
+
+    try {
+      return await this.prisma.operator.delete({
+        where: { id },
+        select: {
+          id: true,
+          displayName: true,
+          isActive: true,
+          createdAt: true,
+        },
+      });
+    } catch (error) {
+      this.throwRelationInUseError(
+        error,
+        'OPERATOR_IN_USE',
+        'Operator is in use and cannot be deleted',
+      );
+    }
+  }
+
   private buildActiveFilter(isActive?: boolean): { isActive?: boolean } {
     return isActive === undefined ? {} : { isActive };
   }
@@ -384,6 +470,21 @@ export class AdminSettingsService {
     if (
       error instanceof Prisma.PrismaClientKnownRequestError &&
       error.code === 'P2002'
+    ) {
+      throw new BadRequestException({ code, message });
+    }
+
+    throw error;
+  }
+
+  private throwRelationInUseError(
+    error: unknown,
+    code: string,
+    message: string,
+  ): never {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2003'
     ) {
       throw new BadRequestException({ code, message });
     }

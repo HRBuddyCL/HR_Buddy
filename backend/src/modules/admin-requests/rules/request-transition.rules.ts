@@ -25,9 +25,9 @@ const TRANSITIONS_BY_TYPE: Record<
   },
   MESSENGER: {
     NEW: ['APPROVED', 'REJECTED', 'CANCELED'],
-    APPROVED: ['IN_TRANSIT', 'CANCELED'],
+    APPROVED: [],
     IN_PROGRESS: [],
-    IN_TRANSIT: ['DONE', 'CANCELED'],
+    IN_TRANSIT: ['DONE'],
     DONE: [],
     REJECTED: [],
     CANCELED: [],

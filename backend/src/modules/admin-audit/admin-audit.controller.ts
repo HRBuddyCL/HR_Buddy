@@ -32,4 +32,20 @@ export class AdminAuditController {
 
     return result.csvContent;
   }
+
+  @Get('activity-logs/export/xlsx')
+  async exportXlsx(@Query() q: AdminAuditExportQueryDto, @Res() res: Response) {
+    const result = await this.svc.exportXlsx(q);
+
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${result.fileName}"`,
+    );
+    res.setHeader('X-Export-Row-Count', String(result.rowCount));
+    res.send(result.xlsxContent);
+  }
 }

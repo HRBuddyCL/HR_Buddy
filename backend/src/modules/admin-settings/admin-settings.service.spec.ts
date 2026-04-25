@@ -8,24 +8,28 @@ describe('AdminSettingsService', () => {
       findMany: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
+      delete: jest.fn(),
       findUnique: jest.fn(),
     },
     problemCategory: {
       findMany: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
+      delete: jest.fn(),
       findUnique: jest.fn(),
     },
     vehicleIssueCategory: {
       findMany: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
+      delete: jest.fn(),
       findUnique: jest.fn(),
     },
     operator: {
       findMany: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
+      delete: jest.fn(),
       findUnique: jest.fn(),
     },
   };
@@ -177,6 +181,46 @@ describe('AdminSettingsService', () => {
       expect(error).toBeInstanceOf(BadRequestException);
       expect((error as BadRequestException).getResponse()).toMatchObject({
         code: 'OPERATOR_NAME_EXISTS',
+      });
+    }
+  });
+
+  it('deletes department when id exists', async () => {
+    prisma.department.findUnique.mockResolvedValue({ id: 'dept-1' });
+    prisma.department.delete.mockResolvedValue({
+      id: 'dept-1',
+      name: 'Finance',
+      isActive: true,
+    });
+
+    const result = await service.deleteDepartment('dept-1');
+
+    expect(prisma.department.delete).toHaveBeenCalledWith({
+      where: { id: 'dept-1' },
+      select: {
+        id: true,
+        name: true,
+        isActive: true,
+      },
+    });
+    expect(result).toMatchObject({
+      id: 'dept-1',
+      name: 'Finance',
+      isActive: true,
+    });
+  });
+
+  it('maps relation-in-use error when deleting operator', async () => {
+    prisma.operator.findUnique.mockResolvedValue({ id: 'op-1' });
+    prisma.operator.delete.mockRejectedValue(createPrismaKnownError('P2003'));
+
+    try {
+      await service.deleteOperator('op-1');
+      fail('expected relation in use error');
+    } catch (error) {
+      expect(error).toBeInstanceOf(BadRequestException);
+      expect((error as BadRequestException).getResponse()).toMatchObject({
+        code: 'OPERATOR_IN_USE',
       });
     }
   });

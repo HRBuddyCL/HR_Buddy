@@ -471,7 +471,7 @@ describe('AdminRequestsService.updateStatus', () => {
     });
   });
 
-  it('revokes magic link when messenger reaches terminal status', async () => {
+  it('allows emergency close when admin marks messenger in transit as DONE', async () => {
     tx.request.findUnique.mockResolvedValue(
       makeRequest({
         type: RequestType.MESSENGER,

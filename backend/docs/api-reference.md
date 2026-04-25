@@ -127,17 +127,17 @@ Request DTO:
 
 ## 9) Admin Request Management
 
-| Method | Path                                                         | Auth          | Purpose                                      | Key input                                                                                        |
-| ------ | ------------------------------------------------------------ | ------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| GET    | `/admin/requests`                                            | Admin session | List requests with filters                   | Query: `type`, `status`, `dateFrom`, `dateTo`, `q`, `page`, `limit`                              |
-| GET    | `/admin/requests/report/summary`                             | Admin session | Summary report for dashboard                 | Query: `type`, `status`, `dateFrom`, `dateTo`, `q`                                               |
-| GET    | `/admin/requests/export/csv`                                 | Admin session | Export request list as CSV                   | Query: filter fields + `limit` (max 5000)                                                        |
-| GET    | `/admin/requests/:id`                                        | Admin session | Get request detail for admin                 | Path `id`                                                                                        |
-| PATCH  | `/admin/requests/:id/status`                                 | Admin session | Change request status                        | Path `id`, body `status`, `operatorId`, optional `note`, `pickupNote`, `digitalFileAttachmentId` |
-| POST   | `/admin/requests/:id/attachments/presign`                    | Admin session | Generate admin upload ticket/presigned URL   | Path `id`, body `fileKind`, `fileName`, `mimeType`, `fileSize`                                   |
-| POST   | `/admin/requests/:id/attachments/complete`                   | Admin session | Confirm admin upload by token                | Path `id`, body `uploadToken`                                                                    |
-| GET    | `/admin/requests/:id/attachments/:attachmentId/download-url` | Admin session | Generate admin attachment download URL       | Path `id`, `attachmentId`                                                                        |
-| POST   | `/admin/requests/:id/attachments`                            | Admin session | Legacy direct admin attachment record create | Path `id`, body `fileKind`, `fileName`, `mimeType`, `fileSize`, `storageKey`                     |
+| Method | Path                                                         | Auth          | Purpose                                      | Key input                                                                                                           |
+| ------ | ------------------------------------------------------------ | ------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/admin/requests`                                            | Admin session | List requests with filters                   | Query: `type`, `status`, `createdDateFrom`, `createdDateTo`, `closedDateFrom`, `closedDateTo`, `q`, `page`, `limit` |
+| GET    | `/admin/requests/report/summary`                             | Admin session | Summary report for dashboard                 | Query: `type`, `status`, `createdDateFrom`, `createdDateTo`, `closedDateFrom`, `closedDateTo`, `q`                  |
+| GET    | `/admin/requests/export/csv`                                 | Admin session | Export request list as CSV                   | Query: filter fields + `limit` (max 5000)                                                                           |
+| GET    | `/admin/requests/:id`                                        | Admin session | Get request detail for admin                 | Path `id`                                                                                                           |
+| PATCH  | `/admin/requests/:id/status`                                 | Admin session | Change request status                        | Path `id`, body `status`, `operatorId`, optional `note`, `pickupNote`, `digitalFileAttachmentId`                    |
+| POST   | `/admin/requests/:id/attachments/presign`                    | Admin session | Generate admin upload ticket/presigned URL   | Path `id`, body `fileKind`, `fileName`, `mimeType`, `fileSize`                                                      |
+| POST   | `/admin/requests/:id/attachments/complete`                   | Admin session | Confirm admin upload by token                | Path `id`, body `uploadToken`                                                                                       |
+| GET    | `/admin/requests/:id/attachments/:attachmentId/download-url` | Admin session | Generate admin attachment download URL       | Path `id`, `attachmentId`                                                                                           |
+| POST   | `/admin/requests/:id/attachments`                            | Admin session | Legacy direct admin attachment record create | Path `id`, body `fileKind`, `fileName`, `mimeType`, `fileSize`, `storageKey`                                        |
 
 Request DTOs:
 
@@ -153,15 +153,19 @@ Request DTOs:
 | GET    | `/admin/settings/departments`                  | Admin session | List departments              | Query `isActive`, `q`                                     |
 | POST   | `/admin/settings/departments`                  | Admin session | Create department             | Body `name`, optional `isActive`                          |
 | PATCH  | `/admin/settings/departments/:id`              | Admin session | Update department             | Path `id`, body optional `name`, `isActive`               |
+| DELETE | `/admin/settings/departments/:id`              | Admin session | Delete department             | Path `id`                                                  |
 | GET    | `/admin/settings/problem-categories`           | Admin session | List problem categories       | Query `isActive`, `q`                                     |
 | POST   | `/admin/settings/problem-categories`           | Admin session | Create problem category       | Body `name`, optional `helperText`, `isActive`            |
 | PATCH  | `/admin/settings/problem-categories/:id`       | Admin session | Update problem category       | Path `id`, body optional `name`, `helperText`, `isActive` |
+| DELETE | `/admin/settings/problem-categories/:id`       | Admin session | Delete problem category       | Path `id`                                                  |
 | GET    | `/admin/settings/vehicle-issue-categories`     | Admin session | List vehicle issue categories | Query `isActive`, `q`                                     |
 | POST   | `/admin/settings/vehicle-issue-categories`     | Admin session | Create vehicle issue category | Body `name`, optional `isActive`                          |
 | PATCH  | `/admin/settings/vehicle-issue-categories/:id` | Admin session | Update vehicle issue category | Path `id`, body optional `name`, `isActive`               |
+| DELETE | `/admin/settings/vehicle-issue-categories/:id` | Admin session | Delete vehicle issue category | Path `id`                                                  |
 | GET    | `/admin/settings/operators`                    | Admin session | List operators                | Query `isActive`, `q`                                     |
 | POST   | `/admin/settings/operators`                    | Admin session | Create operator               | Body `displayName`, optional `isActive`                   |
 | PATCH  | `/admin/settings/operators/:id`                | Admin session | Update operator               | Path `id`, body optional `displayName`, `isActive`        |
+| DELETE | `/admin/settings/operators/:id`                | Admin session | Delete operator               | Path `id`                                                  |
 
 ## 11) Admin Audit Endpoints
 

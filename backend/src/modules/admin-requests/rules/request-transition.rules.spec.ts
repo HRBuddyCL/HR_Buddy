@@ -7,7 +7,7 @@ describe('assertValidTransition', () => {
     ['BUILDING', 'NEW', 'APPROVED'],
     ['BUILDING', 'APPROVED', 'IN_PROGRESS'],
     ['VEHICLE', 'IN_PROGRESS', 'DONE'],
-    ['MESSENGER', 'APPROVED', 'IN_TRANSIT'],
+    ['MESSENGER', 'IN_TRANSIT', 'DONE'],
     ['DOCUMENT', 'APPROVED', 'DONE'],
   ])('allows %s transition %s -> %s', (type, from, to) => {
     expect(() => assertValidTransition(type, from, to)).not.toThrow();
@@ -15,7 +15,9 @@ describe('assertValidTransition', () => {
 
   it.each<[RequestType, RequestStatus, RequestStatus]>([
     ['BUILDING', 'APPROVED', 'IN_TRANSIT'],
+    ['MESSENGER', 'APPROVED', 'IN_TRANSIT'],
     ['MESSENGER', 'APPROVED', 'DONE'],
+    ['MESSENGER', 'IN_TRANSIT', 'CANCELED'],
     ['DOCUMENT', 'APPROVED', 'IN_PROGRESS'],
     ['BUILDING', 'DONE', 'CANCELED'],
     ['VEHICLE', 'NEW', 'NEW'],

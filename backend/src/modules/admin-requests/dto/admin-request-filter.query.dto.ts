@@ -1,4 +1,4 @@
-import { RequestStatus, RequestType } from '@prisma/client';
+import { RequestStatus, RequestType, Urgency } from '@prisma/client';
 import {
   IsDateString,
   IsEnum,
@@ -17,12 +17,37 @@ export class AdminRequestFilterQueryDto {
   status?: RequestStatus;
 
   @IsOptional()
+  @IsEnum(Urgency)
+  urgency?: Urgency;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  departmentId?: string;
+
+  @IsOptional()
   @IsDateString()
   dateFrom?: string;
 
   @IsOptional()
   @IsDateString()
   dateTo?: string;
+
+  @IsOptional()
+  @IsDateString()
+  createdDateFrom?: string;
+
+  @IsOptional()
+  @IsDateString()
+  createdDateTo?: string;
+
+  @IsOptional()
+  @IsDateString()
+  closedDateFrom?: string;
+
+  @IsOptional()
+  @IsDateString()
+  closedDateTo?: string;
 
   @IsOptional()
   @IsString()
