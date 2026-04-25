@@ -12,13 +12,29 @@ export type AuditAction =
   | "MESSENGER_PICKUP_EVENT";
 
 export type AuditActorRole = "EMPLOYEE" | "ADMIN" | "MESSENGER";
+export type AdminRequestType =
+  | "BUILDING"
+  | "VEHICLE"
+  | "MESSENGER"
+  | "DOCUMENT";
+export type AdminRequestStatus =
+  | "NEW"
+  | "APPROVED"
+  | "IN_PROGRESS"
+  | "IN_TRANSIT"
+  | "DONE"
+  | "REJECTED"
+  | "CANCELED";
+export type AdminUrgency = "NORMAL" | "HIGH" | "CRITICAL";
 
 export type AdminAuditLogItem = {
   id: string;
   requestId: string;
   requestNo: string;
+  departmentName: string | null;
   requestType: string;
   requestStatus: string;
+  requestUrgency: AdminUrgency | null;
   action: AuditAction;
   fromStatus: string | null;
   toStatus: string | null;
@@ -39,9 +55,13 @@ export type AdminAuditLogListResponse = {
 };
 
 export type AdminAuditListQuery = {
+  requestType?: AdminRequestType;
+  requestStatus?: AdminRequestStatus;
+  requestUrgency?: AdminUrgency;
   action?: AuditAction;
   actorRole?: AuditActorRole;
   operatorId?: string;
+  departmentId?: string;
   requestId?: string;
   requestNo?: string;
   dateFrom?: string;
@@ -79,9 +99,13 @@ export async function downloadAdminAuditCsv(
   query: Omit<AdminAuditListQuery, "page"> = {},
 ): Promise<{ fileName: string; csv: string }> {
   const queryString = toQueryString({
+    requestType: query.requestType,
+    requestStatus: query.requestStatus,
+    requestUrgency: query.requestUrgency,
     action: query.action,
     actorRole: query.actorRole,
     operatorId: query.operatorId,
+    departmentId: query.departmentId,
     requestId: query.requestId,
     requestNo: query.requestNo,
     dateFrom: query.dateFrom,
@@ -125,5 +149,65 @@ export async function downloadAdminAuditCsv(
   return {
     fileName,
     csv: await response.text(),
+  };
+}
+
+export async function downloadAdminAuditXlsx(
+  query: Omit<AdminAuditListQuery, "page"> = {},
+): Promise<{ fileName: string; xlsxBytes: Uint8Array }> {
+  const queryString = toQueryString({
+    requestType: query.requestType,
+    requestStatus: query.requestStatus,
+    requestUrgency: query.requestUrgency,
+    action: query.action,
+    actorRole: query.actorRole,
+    operatorId: query.operatorId,
+    departmentId: query.departmentId,
+    requestId: query.requestId,
+    requestNo: query.requestNo,
+    dateFrom: query.dateFrom,
+    dateTo: query.dateTo,
+    q: query.q,
+    limit: query.limit,
+  });
+
+  const response = await fetch(
+    `${API_BASE_URL}/admin/audit/activity-logs/export/xlsx${queryString ? `?${queryString}` : ""}`,
+    {
+      method: "GET",
+      headers: {
+        Accept:
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      },
+      credentials: "same-origin",
+    },
+  );
+
+  if (!response.ok) {
+    let message = `Failed to export xlsx (${response.status})`;
+
+    try {
+      const body = (await response.json()) as { message?: string | string[] };
+      if (Array.isArray(body.message)) {
+        message = body.message.join(", ");
+      } else if (typeof body.message === "string") {
+        message = body.message;
+      }
+    } catch {
+      // noop
+    }
+
+    throw new ApiError(response.status, null, message);
+  }
+
+  const disposition = response.headers.get("content-disposition") ?? "";
+  const match = disposition.match(/filename="([^"]+)"/i);
+  const fileName = match?.[1] ?? "audit-activity-export.xlsx";
+
+  const arrayBuffer = await response.arrayBuffer();
+
+  return {
+    fileName,
+    xlsxBytes: new Uint8Array(arrayBuffer),
   };
 }

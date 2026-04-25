@@ -49,6 +49,13 @@ export type AdminRequestSummaryResponse = {
 export type AdminRequestListQuery = {
   type?: AdminRequestType;
   status?: AdminRequestStatus;
+  urgency?: AdminUrgency;
+  departmentId?: string;
+  createdDateFrom?: string;
+  createdDateTo?: string;
+  closedDateFrom?: string;
+  closedDateTo?: string;
+  // Legacy fields kept for backward compatibility.
   dateFrom?: string;
   dateTo?: string;
   q?: string;
@@ -69,6 +76,10 @@ export type AdminRequestDetail = {
   closedAt: string | null;
   cancelReason: string | null;
   hrCloseNote: string | null;
+  magicLink: {
+    url: string;
+    expiresAt: string;
+  } | null;
   department: {
     id: string;
     name: string;
@@ -223,6 +234,29 @@ function toQueryString(query: Record<string, string | number | undefined>) {
   return params.toString();
 }
 
+function buildExportQuery(
+  query: Omit<AdminRequestListQuery, "page">,
+): Record<string, string | number | undefined> {
+  const createdDateFrom = query.createdDateFrom ?? query.dateFrom;
+  const createdDateTo = query.createdDateTo ?? query.dateTo;
+
+  return {
+    type: query.type,
+    status: query.status,
+    urgency: query.urgency,
+    departmentId: query.departmentId,
+    createdDateFrom,
+    createdDateTo,
+    closedDateFrom: query.closedDateFrom,
+    closedDateTo: query.closedDateTo,
+    // Keep legacy query fields for backward compatibility.
+    dateFrom: query.dateFrom,
+    dateTo: query.dateTo,
+    q: query.q,
+    limit: query.limit,
+  };
+}
+
 export async function getAdminRequests(query: AdminRequestListQuery = {}) {
   return apiFetch<AdminRequestListResponse>("/admin/requests", {
     method: "GET",
@@ -283,13 +317,14 @@ export async function issueAdminAttachmentUploadTicket(
 export async function completeAdminAttachmentUpload(
   requestId: string,
   uploadToken: string,
+  operatorId: string,
 ) {
   return apiFetch<{ id: string }>(
     `/admin/requests/${requestId}/attachments/complete`,
     {
       method: "POST",
       tokenType: "admin",
-      body: { uploadToken },
+      body: { uploadToken, operatorId },
     },
   );
 }
@@ -342,14 +377,7 @@ export async function uploadFileToPresignedUrl(
 export async function downloadAdminRequestsCsv(
   query: Omit<AdminRequestListQuery, "page"> = {},
 ): Promise<{ fileName: string; csvBytes: Uint8Array }> {
-  const queryString = toQueryString({
-    type: query.type,
-    status: query.status,
-    dateFrom: query.dateFrom,
-    dateTo: query.dateTo,
-    q: query.q,
-    limit: query.limit,
-  });
+  const queryString = toQueryString(buildExportQuery(query));
 
   const response = await fetch(
     `${API_BASE_URL}/admin/requests/export/csv${queryString ? `?${queryString}` : ""}`,
@@ -392,14 +420,7 @@ export async function downloadAdminRequestsCsv(
 export async function downloadAdminRequestsXlsx(
   query: Omit<AdminRequestListQuery, "page"> = {},
 ): Promise<{ fileName: string; xlsxBytes: Uint8Array }> {
-  const queryString = toQueryString({
-    type: query.type,
-    status: query.status,
-    dateFrom: query.dateFrom,
-    dateTo: query.dateTo,
-    q: query.q,
-    limit: query.limit,
-  });
+  const queryString = toQueryString(buildExportQuery(query));
 
   const response = await fetch(
     `${API_BASE_URL}/admin/requests/export/xlsx${queryString ? `?${queryString}` : ""}`,

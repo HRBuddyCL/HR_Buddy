@@ -58,6 +58,13 @@ export async function updateAdminDepartment(
   });
 }
 
+export async function deleteAdminDepartment(id: string) {
+  return apiFetch<AdminDepartment>(`/admin/settings/departments/${id}`, {
+    method: "DELETE",
+    tokenType: "admin",
+  });
+}
+
 export async function listAdminProblemCategories(query: AdminSettingsQuery = {}) {
   return apiFetch<{ items: AdminProblemCategory[] }>("/admin/settings/problem-categories", {
     method: "GET",
@@ -87,6 +94,16 @@ export async function updateAdminProblemCategory(
     tokenType: "admin",
     body: payload,
   });
+}
+
+export async function deleteAdminProblemCategory(id: string) {
+  return apiFetch<AdminProblemCategory>(
+    `/admin/settings/problem-categories/${id}`,
+    {
+      method: "DELETE",
+      tokenType: "admin",
+    },
+  );
 }
 
 export async function listAdminVehicleIssueCategories(query: AdminSettingsQuery = {}) {
@@ -119,6 +136,16 @@ export async function updateAdminVehicleIssueCategory(
   });
 }
 
+export async function deleteAdminVehicleIssueCategory(id: string) {
+  return apiFetch<AdminVehicleIssueCategory>(
+    `/admin/settings/vehicle-issue-categories/${id}`,
+    {
+      method: "DELETE",
+      tokenType: "admin",
+    },
+  );
+}
+
 export async function listAdminOperators(query: AdminSettingsQuery = {}) {
   return apiFetch<{ items: AdminOperator[] }>("/admin/settings/operators", {
     method: "GET",
@@ -146,6 +173,13 @@ export async function updateAdminOperator(
     method: "PATCH",
     tokenType: "admin",
     body: payload,
+  });
+}
+
+export async function deleteAdminOperator(id: string) {
+  return apiFetch<AdminOperator>(`/admin/settings/operators/${id}`, {
+    method: "DELETE",
+    tokenType: "admin",
   });
 }
 
