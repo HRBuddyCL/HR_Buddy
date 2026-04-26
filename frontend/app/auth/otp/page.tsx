@@ -368,7 +368,8 @@ function OtpPageContent() {
       setSessionExpiresAt("employee", result.expiresAt);
       setEmployeeContact({ phone: phoneDigits, email: email.trim() });
 
-      router.push(nextPath);
+      // Force a full navigation so HttpOnly session cookie is guaranteed for the next protected route.
+      window.location.replace(nextPath);
     } catch (error) {
       if (error instanceof ApiError) {
         showVerifyOtpError(toThaiOtpErrorMessage(error));
