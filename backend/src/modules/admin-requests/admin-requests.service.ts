@@ -722,20 +722,7 @@ export class AdminRequestsService {
         });
       }
 
-      let magicLink: { url: string; expiresAt: Date } | null = null;
-
-      if (
-        req.type === RequestType.MESSENGER &&
-        (req.status === RequestStatus.APPROVED ||
-          req.status === RequestStatus.IN_TRANSIT)
-      ) {
-        const generated =
-          await this.messengerService.createOrRotateMagicLinkForRequest(tx, id);
-        magicLink = {
-          url: generated.url,
-          expiresAt: generated.expiresAt,
-        };
-      }
+      const magicLink: { url: string; expiresAt: Date } | null = null;
 
       return {
         ...req,
