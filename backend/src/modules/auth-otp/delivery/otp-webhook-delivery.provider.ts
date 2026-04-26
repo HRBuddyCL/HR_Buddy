@@ -109,15 +109,52 @@ export class OtpWebhookDeliveryProvider implements OtpDeliveryProvider {
   private buildRequestBody(payload: OtpDeliveryPayload) {
     const includePhone =
       this.config.get<boolean>('otp.webhookIncludePhone') ?? false;
+    const expiresAtDate =
+      payload.expiresAt instanceof Date
+        ? payload.expiresAt
+        : new Date(payload.expiresAt);
 
     return {
       channel: 'email' as const,
       ...(includePhone ? { phone: payload.phone } : {}),
       email: payload.email,
       otpCode: payload.otpCode,
-      expiresAt: payload.expiresAt.toISOString(),
+      expiresAt: expiresAtDate.toISOString(),
+      expiresAtText: this.formatThaiDateTime(expiresAtDate),
     };
   }
+
+  private formatThaiDateTime(date: Date) {
+    if (!Number.isFinite(date.getTime())) {
+      return '';
+    }
+
+    const dateParts = new Intl.DateTimeFormat('th-TH', {
+      timeZone: 'Asia/Bangkok',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    }).formatToParts(date);
+    const timeParts = new Intl.DateTimeFormat('th-TH', {
+      timeZone: 'Asia/Bangkok',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).formatToParts(date);
+
+    const day = dateParts.find((part) => part.type === 'day')?.value;
+    const month = dateParts.find((part) => part.type === 'month')?.value;
+    const year = dateParts.find((part) => part.type === 'year')?.value;
+    const hour = timeParts.find((part) => part.type === 'hour')?.value;
+    const minute = timeParts.find((part) => part.type === 'minute')?.value;
+
+    if (!day || !month || !year || !hour || !minute) {
+      return '';
+    }
+
+    return `${day} ${month} ${year} เวลา ${hour}:${minute} น.`;
+  }
+
   private isRetryableStatus(statusCode: number) {
     return statusCode === 429 || statusCode >= 500;
   }

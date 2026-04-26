@@ -73,6 +73,11 @@ describe('OtpWebhookDeliveryProvider', () => {
 
     expect(body.channel).toBe('email');
     expect(body.email).toBe(payload.email);
+    expect(body.otpCode).toBe(payload.otpCode);
+    expect(body.expiresAt).toBe(payload.expiresAt.toISOString());
+    expect(body.expiresAtText).toMatch(
+      /^\d{1,2}\s.+\s\d{4}\sเวลา\s\d{2}:\d{2}\sน\.$/,
+    );
     expect(body.phone).toBeUndefined();
   });
 
