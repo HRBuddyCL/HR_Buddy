@@ -707,7 +707,11 @@ function AdminRequestDetailContent() {
           expiresAt: detailResult.magicLink.expiresAt,
         });
         setMagicLinkCopyState("idle");
-      } else {
+      } else if (
+        detailResult.type !== "MESSENGER" ||
+        (detailResult.status !== "APPROVED" && detailResult.status !== "IN_TRANSIT")
+      ) {
+        // Clear only when request is not messenger or has left active messenger statuses.
         setMessengerMagicLink(null);
         setMagicLinkCopyState("idle");
       }
